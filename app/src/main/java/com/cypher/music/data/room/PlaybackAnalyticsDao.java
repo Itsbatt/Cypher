@@ -13,15 +13,15 @@ public interface PlaybackAnalyticsDao {
     void insert(PlaybackAnalyticsEntity entity);
 
     @Query("INSERT INTO playback_analytics (trackId, title, artist, artworkUrl, listenDurationMs, playCount, lastListenedAt) " +
-           "VALUES (:trackId, :title, :artist, :artworkUrl, :durationMs, 1, :timestamp) " +
+           "VALUES (:trackId, :title, :artist, :artworkUrl, :durationMs, CASE WHEN :countPlay THEN 1 ELSE 0 END, :timestamp) " +
            "ON CONFLICT(trackId) DO UPDATE SET " +
            "listenDurationMs = listenDurationMs + :durationMs, " +
-           "playCount = playCount + 1, " +
+           "playCount = playCount + CASE WHEN :countPlay THEN 1 ELSE 0 END, " +
            "lastListenedAt = :timestamp, " +
            "title = :title, " +
            "artist = :artist, " +
            "artworkUrl = COALESCE(:artworkUrl, artworkUrl)")
-    void recordListeningDuration(String trackId, String title, String artist, String artworkUrl, long durationMs, long timestamp);
+    void recordPlayback(String trackId, String title, String artist, String artworkUrl, long durationMs, long timestamp, boolean countPlay);
 
     @Query("SELECT * FROM playback_analytics ORDER BY listenDurationMs DESC")
     List<PlaybackAnalyticsEntity> getAllAnalytics();

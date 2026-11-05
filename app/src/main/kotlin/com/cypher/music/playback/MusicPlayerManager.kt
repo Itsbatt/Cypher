@@ -1031,7 +1031,8 @@ class MusicPlayerManager(private val context: Context) {
                             onListeningTimeAccumulated?.invoke(track, elapsed, isNewPlay)
                         }
                     }
-                } else {
+                } else if (track == null) {
+                    // Keep the last track across pauses so resuming does not count as a new play.
                     lastReportedTrackId = null
                 }
                 lastTick = now

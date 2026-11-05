@@ -2,7 +2,7 @@
 
 **Cypher** es un reproductor de música de alta fidelidad para Android 13+ que combina tu biblioteca local (FLAC, WAV, ALAC, MP3, AAC) con streaming de YouTube Music. Está construido con **Jetpack Compose**, **Material 3**, **AndroidX Media3**, **Room v3** y shaders **AGSL** para la interfaz Liquid Glass.
 
-Esta actualización de parche (**1.0.1**, `versionCode 2`) no rediseña nada: añade dos mejoras incrementales sobre la arquitectura existente y elimina una acción de ajustes que no hacía nada.
+Esta actualización de parche (**1.0.1**, `versionCode 2`) no rediseña nada: añade dos mejoras incrementales sobre la arquitectura existente, corrige el conteo de reproducciones y elimina una acción de ajustes que no hacía nada.
 
 ---
 
@@ -24,6 +24,12 @@ Esta actualización de parche (**1.0.1**, `versionCode 2`) no rediseña nada: a�
 
 ### 🧹 Ajustes más limpios
 - Eliminado el botón **"Cambiar de cuenta / Cerrar sesión"**, que no realizaba ninguna acción.
+
+### 🔢 Conteo de reproducciones corregido
+- Las reproducciones ya no se suman en cada segundo de escucha: ahora se cuenta **una reproducción por canción**, al iniciar la pista.
+- El tiempo escuchado sigue acumulándose segundo a segundo, de forma independiente al contador de reproducciones.
+- Pausar y reanudar la misma canción no vuelve a contarla como una reproducción nueva.
+- Las estadísticas históricas ya infladas no se recalculan: la corrección se aplica a partir de esta build.
 
 ---
 

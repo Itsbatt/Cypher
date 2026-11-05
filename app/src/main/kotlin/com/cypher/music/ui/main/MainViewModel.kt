@@ -207,16 +207,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             musicRepository.refreshData()
         }
 
-        // Wire effective listening time analytics (strictly ms when player is PLAYING)
-        playerManager.onListeningTimeAccumulated = { track, elapsedMs, _ ->
+        // Wire effective listening time analytics (strictly ms when player is PLAYING).
+        // Elapsed time accumulates every tick, but a play is only counted when the track changes.
+        playerManager.onListeningTimeAccumulated = { track, elapsedMs, isNewPlay ->
             viewModelScope.launch(Dispatchers.IO) {
-                playlistRepository.roomDb.playbackAnalyticsDao().recordListeningDuration(
+                playlistRepository.roomDb.playbackAnalyticsDao().recordPlayback(
                     track.id,
                     track.title,
                     track.artist,
                     track.artworkUrl,
                     elapsedMs,
-                    System.currentTimeMillis()
+                    System.currentTimeMillis(),
+                    isNewPlay
                 )
                 refreshListeningStats()
             }

@@ -18,6 +18,7 @@ import com.cypher.music.data.ThemePreferencesManager
 import com.cypher.music.data.UnifiedSearchResults
 import com.cypher.music.data.User
 import com.cypher.music.data.UserListeningStats
+import com.cypher.music.data.UserProfileStore
 import com.cypher.music.data.room.toStat
 import com.cypher.music.model.Track
 import com.cypher.music.network.YouTubeAccountManager
@@ -70,10 +71,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val shareViewModel: ShareViewModel by lazy { ShareViewModel(application, playlistRepository) }
     val lyricsSettingsManager: LyricsSettingsManager by lazy { LyricsSettingsManager(application) }
 
-    // Single Personal User Profile (Cypher Personal App)
-    private val personalUser = User("personal", "Cypher User", 0xFF9D7BB0L)
-    val currentUser: StateFlow<User?> = MutableStateFlow<User?>(personalUser).asStateFlow()
-    val allUsers: StateFlow<List<User>> = MutableStateFlow(listOf(personalUser)).asStateFlow()
+    // Single Personal User Profile (persisted locally, reactive across the app)
+    private val userProfileStore = UserProfileStore(application)
+    val currentUser: StateFlow<User?> = userProfileStore.user
+    val allUsers: StateFlow<List<User>> = userProfileStore.user
+        .map { listOf(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(userProfileStore.user.value))
     val youtubeAccountSession: StateFlow<YouTubeAccountSession> = youtubeAccountManager.session
 
     val playerState: StateFlow<PlayerState> = playerManager.state
@@ -253,9 +256,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loginUser(username: String): Boolean = true
 
-    fun registerUser(username: String, displayName: String, avatarColor: Long): User? = personalUser
+    fun registerUser(username: String, displayName: String, avatarColor: Long): User? {
+        userProfileStore.updateDisplayName(displayName.ifBlank { username })
+        return currentUser.value
+    }
 
-    fun logoutUser() {}
+    /** Persists the local name; all collectors update immediately. */
+    fun updateUsername(name: String) {
+        userProfileStore.updateDisplayName(name)
+    }
 
     fun setSettingsOpen(open: Boolean) {
         _isSettingsOpen.value = open

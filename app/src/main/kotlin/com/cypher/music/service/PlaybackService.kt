@@ -4,14 +4,18 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -58,12 +62,42 @@ class PlaybackService : MediaLibraryService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var lastArtworkUrl: String? = null
     private var lastArtworkBitmap: Bitmap? = null
+    private var isNoisyReceiverRegistered = false
+
+    /**
+     * Pauses playback when headphones/Bluetooth are disconnected. ExoPlayer already
+     * handles this natively for local/offline audio; this receiver stops the YouTube
+     * IFrame engine, whose audio does not go through ExoPlayer.
+     */
+    private val audioBecomingNoisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                MusicPlayerManager.activeInstance?.pauseForHeadphoneDisconnect()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         val session = MusicPlayerManager.getInstance(this).mediaLibrarySession
         if (session !in sessions) { try { addSession(session) } catch (e: Exception) {} }
+        registerAudioBecomingNoisyReceiver()
+    }
+
+    private fun registerAudioBecomingNoisyReceiver() {
+        if (isNoisyReceiverRegistered) return
+        try {
+            ContextCompat.registerReceiver(
+                this,
+                audioBecomingNoisyReceiver,
+                IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            isNoisyReceiverRegistered = true
+        } catch (e: Exception) {
+            isNoisyReceiverRegistered = false
+        }
     }
 
     private fun createNotificationChannel() {
@@ -222,7 +256,15 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        if (isNoisyReceiverRegistered) {
+            try {
+                unregisterReceiver(audioBecomingNoisyReceiver)
+            } catch (e: IllegalArgumentException) {
+                // Already unregistered
+            }
+            isNoisyReceiverRegistered = false
+        }
         ScrobbleManager.getInstance(this).onTrackStopped()
+        super.onDestroy()
     }
 }

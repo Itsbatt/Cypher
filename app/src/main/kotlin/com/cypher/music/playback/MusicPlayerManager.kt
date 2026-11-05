@@ -1201,6 +1201,26 @@ class MusicPlayerManager(private val context: Context) {
         PlaybackService.updateService(context)
     }
 
+    /**
+     * Handles ACTION_AUDIO_BECOMING_NOISY (cable unplugged / Bluetooth disconnected).
+     *
+     * Local and offline playback is paused by ExoPlayer itself through
+     * setHandleAudioBecomingNoisy(true), so this only stops the YouTube IFrame engine,
+     * whose audio bypasses ExoPlayer. Guarded to avoid duplicate pauses and service
+     * updates when nothing is actually playing.
+     */
+    fun pauseForHeadphoneDisconnect() {
+        val snapshot = _state.value
+        val track = snapshot.currentTrack ?: return
+        if (!snapshot.isPlaying) return
+        if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) return
+
+        youTubePlayer?.pause()
+        if (exoPlayer.isPlaying) exoPlayer.pause()
+        _state.update { it.copy(isPlaying = false) }
+        PlaybackService.updateService(context)
+    }
+
     fun seekToProgress(fraction: Float) {
         val track = _state.value.currentTrack ?: return
         val clampedFrac = fraction.coerceIn(0f, 1f)

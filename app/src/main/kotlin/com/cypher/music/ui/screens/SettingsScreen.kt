@@ -27,12 +27,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Palette
@@ -64,7 +64,9 @@ import com.cypher.music.data.CardTones
 import com.cypher.music.data.ThemePreferences
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.filled.FormatQuote
 import com.cypher.music.data.LyricFontSize
 import com.cypher.music.data.LyricAlignment
@@ -88,6 +90,7 @@ import com.cypher.music.data.CrossfadeOptions
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.network.YouTubeAccountSession
+import com.cypher.music.ui.components.UsernameDialog
 import com.cypher.music.ui.theme.ResolvedThemeColors
 import com.cypher.music.ui.utils.AppHaptics
 
@@ -103,7 +106,7 @@ fun SettingsScreen(
     themeColors: ResolvedThemeColors,
     onUpdatePrefs: ((ThemePreferences) -> ThemePreferences) -> Unit,
     onResetDefaults: () -> Unit,
-    onLogout: () -> Unit,
+    onUpdateUsername: (String) -> Unit = {},
     onOpenYouTubeLogin: () -> Unit = {},
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
@@ -121,6 +124,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val lyricsSettingsManager = remember { LyricsSettingsManager(context) }
     val lyricsSettings by lyricsSettingsManager.settings.collectAsState()
+    var isUsernameDialogOpen by remember { mutableStateOf(false) }
 
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -240,33 +244,27 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(
-                    color = themeColors.separator,
-                    modifier = Modifier.padding(vertical = 14.dp)
-                )
-
-                Button(
-                    onClick = {
-                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                        onLogout()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.background),
-                    shape = RoundedCornerShape(12.dp),
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
-                        .border(1.dp, themeColors.separator, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            isUsernameDialogOpen = true
+                        }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                        imageVector = Icons.Filled.Edit,
                         contentDescription = null,
-                        tint = Color(0xFFFF453A),
+                        tint = themeColors.accent,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Cambiar de cuenta / Cerrar sesión",
-                        color = Color(0xFFFF453A),
+                        text = "Cambiar nombre",
+                        color = themeColors.accent,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -1250,6 +1248,19 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(60.dp))
         }
+    }
+
+    if (isUsernameDialogOpen) {
+        UsernameDialog(
+            currentName = user?.displayName.orEmpty(),
+            themeColors = themeColors,
+            isOnboarding = false,
+            onConfirm = { name ->
+                onUpdateUsername(name)
+                isUsernameDialogOpen = false
+            },
+            onDismiss = { isUsernameDialogOpen = false }
+        )
     }
 }
 

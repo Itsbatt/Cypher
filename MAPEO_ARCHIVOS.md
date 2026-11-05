@@ -11,22 +11,15 @@
 
 ---
 
-## 2. Base de Datos y Persistencia (Room Nativo)
-- `CypherDatabase.java`: Base de datos Room abstracta (versión 3) con migraciones destructivas y registro de los 6 DAOs y entidades.
-- `CypherDatabase.kt`: Extensiones y helpers Kotlin para acceso tipado e idiomático a la instancia Room de `CypherDatabase`.
-- `Converters.java`: `TypeConverters` de Room para serialización de marcas de tiempo y fechas.
-- `PlaylistEntity.java`: Tabla `playlists`; metadatos de listas de reproducción personales (id, nombre, descripción, portada, timestamps).
-- `TrackEntity.java`: Tabla `tracks`; almacena canciones (id, título, artista, álbum, streamUrl, sourceType, flags de favoritos y descargas).
-- `PlaylistTrackCrossRef.java`: Tabla de unión `playlist_tracks_crossref`; modela la relación N:M entre playlists y tracks con posición y fecha de adición.
-- `PlaylistWithTracks.java`: Clase de relación `@Relation` y `@Junction` que une nativamente una playlist con su lista ordenada de `TrackEntity`.
-- `RecentlyPlayedEntity.java`: Tabla `recently_played`; almacena el historial de reproducciones recientes con timestamps.
-- `PlaybackAnalyticsEntity.java`: Tabla `playback_analytics`; recopila tiempo escuchado acumulado y conteo de reproducciones por pista y artista.
-- `SearchQueryEntity.java`: Tabla `search_queries`; historial de términos de búsqueda del usuario.
-- `PlaylistDao.java`: DAO de playlists con transacciones relacionales (`getPlaylistWithTracks`), cross-refs y búsquedas.
-- `TrackDao.java`: DAO de tracks con consultas de favoritos, descargas, inserción por lotes y búsqueda textual.
-- `RecentlyPlayedDao.java`: DAO para registrar y consultar las pistas reproducidas recientemente con límite configurable.
-- `PlaybackAnalyticsDao.java`: DAO para upsert atómico de duración escuchada, conteo de plays y agregaciones de top artistas/canciones.
-- `SearchQueryDao.java`: DAO para persistir, listar y limpiar las búsquedas recientes.
+## 2. Base de Datos y Persistencia (Room Nativo 100% Kotlin)
+- `CypherDatabase.kt`: Base de datos Room abstracta (versión 3) con soporte Singleton thread-safe, migraciones y registro de los 6 DAOs y entidades.
+- `Converters.kt`: `TypeConverters` de Room para serialización y persistencia de marcas de tiempo y fechas.
+- `TrackEntities.kt`: Entidad `TrackEntity` y DAO `TrackDao`; almacena canciones (id, título, artista, álbum, streamUrl, sourceType, favoritos y descargas).
+- `PlaylistEntities.kt`: Entidades `PlaylistEntity`, `PlaylistTrackCrossRef`, modelo relacional `PlaylistWithTracks` (@Relation) y DAO `PlaylistDao`.
+- `RecentlyPlayedEntities.kt`: Entidad `RecentlyPlayedEntity` y DAO `RecentlyPlayedDao`; historial reactivo de reproducciones recientes.
+- `PlaybackAnalyticsEntities.kt`: Entidad `PlaybackAnalyticsEntity` y DAO `PlaybackAnalyticsDao`; métricas acumuladas y agregaciones de tiempo y reproducciones.
+- `PlaybackDailyEntities.kt`: Entidad `PlaybackDailyEntity` y DAO `PlaybackDailyDao`; métricas diarias para estadísticas avanzadas y Wrapped.
+- `SearchQueryEntities.kt`: Entidad `SearchQueryEntity` y DAO `SearchQueryDao`; historial de búsquedas recientes.
 - `RoomMappers.kt`: Funciones de extensión bidireccionales para mapear entidades y relaciones de Room a los modelos de dominio.
 
 ---
@@ -61,23 +54,16 @@
 
 ---
 
-## 5. Reproducción y Caché de Audio (Media3 / ExoPlayer)
-- `MusicPlayerManager.kt`: Orquestador central de audio (Singleton); gestiona ExoPlayer, IFrame YouTube Player, cola, crossfade y MediaLibrarySession (Android Auto).
+## 5. Reproducción y Caché de Audio (Media3 / ExoPlayer / DSP)
+- `MusicPlayerManager.kt`: Orquestador central de audio (Singleton); gestiona ExoPlayer, IFrame YouTube Player, cola de reproducción, pre-caching gapless, normalización de volumen (-14 LUFS con LoudnessEnhancer) y MediaLibrarySession.
 - `MediaCacheManager.kt`: Gestor de caché LRU y Bóveda Offline en Scoped Storage (con soporte MicroSD y archivo `.nomedia`); ejecuta descargas nativas con yt-dlp.
 - `AudioVolumeManager.kt`: Gestor de volumen y atenuación de audio del sistema.
-- `EqualizerManager.kt`: Controlador de efectos de audio en tiempo real (ecualizador gráfico de bandas y BassBoost).
+- `EqualizerManager.kt`: Controlador de efectos de audio DSP en tiempo real (ecualizador gráfico de bandas y BassBoost).
 - `PlaybackService.kt`: `MediaLibraryService` en primer plano; mantiene la reproducción activa en background y enlaza notificaciones multimedia del sistema.
 
 ---
 
-## 6. Scrobbling y Last.fm
-- `ScrobbleManager.kt`: Gestor de scrobbling de pistas a Last.fm tras superar umbrales de tiempo de reproducción.
-- `ScrobbleApiService.kt`: Servicio de autenticación y llamadas firmadas a la API REST de Last.fm.
-- `ScrobbleModel.kt`: Modelos de estado de sesión y metadatos de scrobble.
-
----
-
-## 7. Interfaz de Usuario: Pantallas (Screens)
+## 6. Interfaz de Usuario: Pantallas (Screens)
 - `MainScreen.kt`: Pantalla contenedora principal; alberga la barra de navegación, mini-reproductor dockeado, vistas y el WebView de YouTube oculto.
 - `ListenNowScreen.kt`: Pantalla de inicio con carruseles de pistas recomendadas, playlists destacadas y accesos directos.
 - `BrowseScreen.kt`: Pantalla de exploración por categorías musicales, estados de ánimo y listas editoriales.

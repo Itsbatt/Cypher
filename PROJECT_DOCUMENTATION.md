@@ -82,6 +82,18 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 - Validació de compilació i desplegament en dispositiu físic real (**Samsung Galaxy S22**, Android 16 / SDK 36).
 - Preparació del repositori obert a GitHub sota la llicència GPL-3.0.
 
+### Fase 10: Cypher Wrapped i Resum Anual Estil Stories (v1.0.2)
+- **Ventana de Disponibilitat Estacional:** Resum anual restringit del 1 de desembre al 7 de gener per a màxima rellevància i netedat d'interfície.
+- **Pop-up Automàtic i Alarma del 31 de Desembre:** Desplegament automàtic en obrir l'app en temporada (amb control anti-intrusiu a `SharedPreferences`) i recordatori d'alarma exacta mitjançant `AlarmManager`.
+- **Interfície d'Històries Interactiva:** Disseny inspirat en Spotify Stories amb fons cinemàtic OLED dinàmic, podi de Top 5 cançons escalonat, targeta de dia pico d'escolta i diapositiva final consolidada amb controls tàctils i vibració hàptica.
+
+### Fase 11: Suite DSP d'Àudio, Gapless Pre-caching, Migració 100% Kotlin de Room i Resolució d'Auto-Pausa
+- **Normalització de Volum (-14 LUFS):** Calibració amb `LoudnessEnhancer` a 600 mB a la sessió d'àudio activa, amb switch configurable a Ajustos.
+- **Equalitzador Gràfic DSP:** 5 bandes interactives, 8 presets calibrats i reforç de greus (`BassBoost`).
+- **Pre-caching Gapless:** Resolució automàtica en background de la URL d'InnerTube de la pista següent en arribar als 25s finals de la cançó en curs per a salts instantanis.
+- **Persistència 100% Kotlin:** Eliminació total de `app/src/main/java` i reescriptura nativa de totes les entitats i DAOs de Room a Kotlin pur sense intermediaris.
+- **Correcció del Bug d'Auto-Pausa:** Filtratge d'estats transitoris `PAUSED` emesos per l'iframe de YouTube durant la descàrrega/càrrega de vídeo (finestra de 3000 ms) i watchdog de buffer proactiu a 4s.
+
 ---
 
 ## 3. Arquitectura del Sistema i Tecnologies

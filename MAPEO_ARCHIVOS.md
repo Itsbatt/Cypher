@@ -11,16 +11,17 @@
 
 ---
 
-## 2. Base de Datos y Persistencia (Room Nativo 100% Kotlin)
-- `CypherDatabase.kt`: Base de datos Room abstracta (versión 3) con soporte Singleton thread-safe, migraciones y registro de los 6 DAOs y entidades.
-- `Converters.kt`: `TypeConverters` de Room para serialización y persistencia de marcas de tiempo y fechas.
-- `TrackEntities.kt`: Entidad `TrackEntity` y DAO `TrackDao`; almacena canciones (id, título, artista, álbum, streamUrl, sourceType, favoritos y descargas).
-- `PlaylistEntities.kt`: Entidades `PlaylistEntity`, `PlaylistTrackCrossRef`, modelo relacional `PlaylistWithTracks` (@Relation) y DAO `PlaylistDao`.
-- `RecentlyPlayedEntities.kt`: Entidad `RecentlyPlayedEntity` y DAO `RecentlyPlayedDao`; historial reactivo de reproducciones recientes.
-- `PlaybackAnalyticsEntities.kt`: Entidad `PlaybackAnalyticsEntity` y DAO `PlaybackAnalyticsDao`; métricas acumuladas y agregaciones de tiempo y reproducciones.
-- `PlaybackDailyEntities.kt`: Entidad `PlaybackDailyEntity` y DAO `PlaybackDailyDao`; métricas diarias para estadísticas avanzadas y Wrapped.
-- `SearchQueryEntities.kt`: Entidad `SearchQueryEntity` y DAO `SearchQueryDao`; historial de búsquedas recientes.
-- `RoomMappers.kt`: Funciones de extensión bidireccionales para mapear entidades y relaciones de Room a los modelos de dominio.
+## 2. Base de Datos y Persistencia (Room Nativo con compatibilidad AGP 9)
+- `CypherDatabase.java`: Base de datos Room abstracta (versión 4) con registro de los 6 DAOs, entidades y soporte para el compilador de Room en AGP 9.
+- `CypherDatabase.kt`: Extensiones y helpers Kotlin para acceso tipado e idiomático a la instancia Room de `CypherDatabase`.
+- `Converters.java`: `TypeConverters` de Room para serialización y persistencia de marcas de tiempo y fechas.
+- `TrackEntity.java` & `TrackDao.java`: Tabla `tracks` y DAO; almacena canciones (id, título, artista, álbum, streamUrl, sourceType, favoritos y descargas).
+- `PlaylistEntity.java`, `PlaylistTrackCrossRef.java`, `PlaylistWithTracks.java` & `PlaylistDao.java`: Tablas de playlists, relaciones N:M `@Relation` y DAO de playlists.
+- `RecentlyPlayedEntity.java` & `RecentlyPlayedDao.java`: Tabla e historial reactivo de reproducciones recientes.
+- `PlaybackAnalyticsEntity.java` & `PlaybackAnalyticsDao.java`: Tabla y DAO de analíticas acumuladas de tiempo de escucha y conteo de reproducciones.
+- `PlaybackDailyEntity.java` & `PlaybackDailyDao.java`: Tabla y DAO de agregaciones diarias para estadísticas estacionales y Cypher Wrapped.
+- `SearchQueryEntity.java` & `SearchQueryDao.java`: Tabla y DAO del historial de búsquedas recientes del usuario.
+- `RoomMappers.kt`: Funciones de extensión bidireccionales en Kotlin para mapear entidades y relaciones de Room a los modelos de dominio.
 
 ---
 

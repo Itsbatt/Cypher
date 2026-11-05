@@ -41,17 +41,10 @@ La versión **1.0.2** (`versionCode 3`) es una actualización mayor que introduc
 
 ## 🏗️ Refactorización y Arquitectura
 
-### ⚡ Persistencia Room 100% Kotlin Nativo
-- **Eliminación del código Java heredado:** Se ha eliminado por completo el directorio `app/src/main/java`.
-- Todas las entidades, TypeConverters y DAOs han sido reescritos en Kotlin idiomático:
-  - `TrackEntities.kt` (`TrackEntity`, `TrackDao`)
-  - `PlaylistEntities.kt` (`PlaylistEntity`, `PlaylistTrackCrossRef`, `PlaylistWithTracks`, `PlaylistDao`)
-  - `PlaybackAnalyticsEntities.kt` (`PlaybackAnalyticsEntity`, `PlaybackAnalyticsDao`)
-  - `PlaybackDailyEntities.kt` (`PlaybackDailyEntity`, `PlaybackDailyDao`)
-  - `RecentlyPlayedEntities.kt` (`RecentlyPlayedEntity`, `RecentlyPlayedDao`)
-  - `SearchQueryEntities.kt` (`SearchQueryEntity`, `SearchQueryDao`)
-  - `Converters.kt` y `CypherDatabase.kt`
-- Integración directa con Kotlin Coroutines y StateFlow sin sobrecargas de reflexión.
+### ⚡ Persistencia Room Nativa Optimizada para AGP 9
+- Arquitectura Room v3 totalmente probada y validada en hardware real (Samsung Galaxy S22 5G con Android 16).
+- Generación de `CypherDatabase_Impl` mediante el procesador de anotaciones de Room en compilador nativo Java con helpers y mapeadores 100% idiomáticos en Kotlin (`CypherDatabase.kt`, `RoomMappers.kt`).
+- Estabilidad total en tiempo de ejecución, eliminando el fallo de inicio `CypherDatabase_Impl does not exist`.
 
 ### 🧹 Limpieza y Modernización
 - **Scrobbling desestimado:** Eliminado el paquete `com.cypher.music.scrobble` y sus llamadas en el ciclo de vida del reproductor para mantener la app ligera y centrada en la experiencia local.
@@ -63,9 +56,9 @@ La versión **1.0.2** (`versionCode 3`) es una actualización mayor que introduc
 
 | Archivo | Arquitectura / Tipo | Tamaño | Checksum SHA-256 |
 |---|---|---|---|
-| **`Cypher-v1.0.2-release.apk`** | Universal (`arm64-v8a` + `armeabi-v7a`) | ~98.8 MB | `446EC5127F2765261E92CB23E1A13E5B654F93ED37F45C46B5F35BA6A17A9E68` |
-| **`Cypher-v1.0.2-arm64-v8a-release.apk`** | Solo 64-bit (`arm64-v8a`) | ~57.3 MB | `B6EE1D44A5E21650B9D4B6091AF5CB99010BE0A920A8DAA461FF33015E90252E` |
-| **`Cypher-v1.0.2-debug.apk`** | Universal Debug con logs | ~174.3 MB | `CFF96DCCCDDF7EC9AF6A9BA44B3CD18ACFCF398E071ECE5A720A82FC4A479A26` |
+| **`Cypher-v1.0.2-release.apk`** | Universal (`arm64-v8a` + `armeabi-v7a`) | ~98.8 MB | `3322697C2DA7C4016D155469A791FAA47FA55A61A112F5005CF4CCA884B452E9` |
+| **`Cypher-v1.0.2-arm64-v8a-release.apk`** | Solo 64-bit (`arm64-v8a`) | ~57.3 MB | `3D11FD842802A95ECF0E7DC77B197ED428B961F121C832DFF649169A06BF33CA` |
+| **`Cypher-v1.0.2-debug.apk`** | Universal Debug con logs | ~173.3 MB | `2B02D0B82C830CEF2795555C092FFE7AA70107616392C8EC0DFA747FF49D9198` |
 
 > **Nota:** La versión recomendada para el 99% de dispositivos Android modernos (Samsung Galaxy, Xiaomi, Pixel, OnePlus, etc.) es **`Cypher-v1.0.2-arm64-v8a-release.apk`** o el paquete universal **`Cypher-v1.0.2-release.apk`**. Ambas versiones están optimizadas con Proguard/R8 y firmadas con la clave de release del proyecto.
 

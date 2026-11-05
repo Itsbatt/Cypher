@@ -13,6 +13,13 @@ val keystoreProperties = Properties().apply {
   }
 }
 val debugSignRelease = providers.gradleProperty("cypherDebugSigning").orNull == "true"
+// The emulator runs x86_64; shipping APKs stay ARM-only unless this flag is passed.
+val emulatorAbi = providers.gradleProperty("cypherEmulatorAbi").orNull == "true"
+val supportedAbis = buildList {
+  add("arm64-v8a")
+  add("armeabi-v7a")
+  if (emulatorAbi) add("x86_64")
+}
 
 android {
   namespace = "com.cypher.music"
@@ -21,11 +28,11 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 33
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.0.1"
+    versionCode = 3
+    versionName = "1.0.2"
 
     ndk {
-      abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+      abiFilters.addAll(supportedAbis)
     }
   }
 
@@ -44,7 +51,7 @@ android {
     abi {
       isEnable = true
       reset()
-      include("arm64-v8a", "armeabi-v7a")
+      include(*supportedAbis.toTypedArray())
       isUniversalApk = true
     }
   }

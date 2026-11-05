@@ -62,9 +62,13 @@ import com.cypher.music.ui.screens.ListenNowScreen
 import com.cypher.music.ui.screens.SearchScreen
 import com.cypher.music.ui.screens.SettingsScreen
 import com.cypher.music.ui.theme.AmbientArtworkColors
+import com.cypher.music.ui.theme.CypherDeepPlum
+import com.cypher.music.ui.theme.CypherLavender
+import com.cypher.music.ui.theme.CypherLavenderDark
 import com.cypher.music.ui.theme.PaletteExtractor
 import com.cypher.music.ui.theme.ThemeResolver
 import com.cypher.music.ui.utils.AppHaptics
+import com.cypher.music.ui.wrapped.WrappedScreen
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -129,6 +133,8 @@ fun MainScreen(
     val trackForPlaylistSheet by viewModel.trackForPlaylistSheet.collectAsState()
 
     val userListeningStats by viewModel.userListeningStats.collectAsState()
+    val isWrappedOpen by viewModel.isWrappedOpen.collectAsState()
+    val wrappedStats by viewModel.wrappedStats.collectAsState()
     val ytSession by viewModel.youtubeAccountSession.collectAsState()
     val isYouTubeLoginOpen by viewModel.isYouTubeLoginOpen.collectAsState()
     val isSyncingYouTube by viewModel.isSyncingYouTube.collectAsState()
@@ -557,6 +563,7 @@ fun MainScreen(
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 onOpenSleepTimer = { viewModel.setSleepTimerSheetOpen(true) },
                 onOpenLiquidGlassSettings = { viewModel.openLiquidGlassSettings() },
+                onOpenWrapped = { viewModel.openWrapped() },
                 sleepTimerMode = sleepTimerMode,
                 sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
                 onExportBackup = { viewModel.exportDatabaseBackup() },
@@ -676,6 +683,21 @@ fun MainScreen(
                 isOnboarding = true,
                 onConfirm = { viewModel.updateUsername(it) },
                 onDismiss = {}
+            )
+        }
+
+        // Cypher Wrapped: full-screen stories recap (notification deep link or Settings).
+        if (isWrappedOpen) {
+            WrappedScreen(
+                stats = wrappedStats,
+                year = wrappedStats.year,
+                themePrefs = themePrefs,
+                artworkColors = artworkPalette ?: AmbientArtworkColors(
+                    dominant = CypherLavenderDark,
+                    secondary = CypherDeepPlum,
+                    accent = CypherLavender
+                ),
+                onClose = { viewModel.closeWrapped() }
             )
         }
     }

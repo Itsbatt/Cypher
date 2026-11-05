@@ -1,12 +1,14 @@
 package com.cypher.music
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.cypher.music.ui.main.MainViewModel
 import com.cypher.music.ui.theme.CypherTheme
+import com.cypher.music.wrapped.WrappedScheduler
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         requestRequiredPermissions()
+        requestExactAlarmAccessIfNeeded()
         handleIncomingIntent(intent)
 
         setContent {
@@ -57,8 +61,27 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Re-arms the Wrapped alarm: upgrades an inexact fallback to an exact alarm
+        // as soon as the user grants "Alarms & reminders".
+        WrappedScheduler.schedule(this)
+    }
+
     private fun handleIncomingIntent(intent: Intent?) {
-        val action = intent?.action ?: return
+        if (intent == null) return
+
+        // Deep link from the Wrapped notification: cypher://wrapped?year=2026
+        val isWrappedLink = intent.action == WrappedScheduler.ACTION_OPEN_WRAPPED ||
+            (intent.data?.scheme == WrappedScheduler.DEEP_LINK_SCHEME &&
+                intent.data?.host == WrappedScheduler.DEEP_LINK_HOST)
+        if (isWrappedLink) {
+            val year = intent.getIntExtra(WrappedScheduler.EXTRA_YEAR, WrappedScheduler.YEAR)
+            viewModel.openWrapped(year)
+            return
+        }
+
+        val action = intent.action ?: return
         if (action == Intent.ACTION_VIEW || action == "android.intent.action.MUSIC_PLAYER") {
             val dataUri = intent.data ?: return
             val displayName = queryDisplayName(dataUri) ?: "Canción de audio"
@@ -77,6 +100,28 @@ class MainActivity : ComponentActivity() {
             } else {
                 uri.lastPathSegment
             }
+        }
+    }
+
+    /**
+     * SCHEDULE_EXACT_ALARM is a special access, not a runtime permission. Ask once
+     * through system settings so the 31 Dec 20:00 notification is exact.
+     */
+    private fun requestExactAlarmAccessIfNeeded() {
+        val alarmManager = getSystemService(AlarmManager::class.java) ?: return
+        if (alarmManager.canScheduleExactAlarms()) return
+
+        val prefs = getSharedPreferences("cypher_wrapped", MODE_PRIVATE)
+        if (prefs.getBoolean("exact_alarm_requested", false)) return
+        prefs.edit().putBoolean("exact_alarm_requested", true).apply()
+
+        runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:$packageName")
+                )
+            )
         }
     }
 

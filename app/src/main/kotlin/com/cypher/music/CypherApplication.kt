@@ -14,6 +14,7 @@ class CypherApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.cypher.music.wrapped.WrappedScheduler.schedule(this)
         appScope.launch {
             try {
                 YoutubeDL.getInstance().init(this@CypherApplication)

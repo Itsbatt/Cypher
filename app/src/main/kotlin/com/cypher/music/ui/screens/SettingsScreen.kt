@@ -1,5 +1,7 @@
 package com.cypher.music.ui.screens
 
+import com.cypher.music.wrapped.WrappedAvailability
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,12 +30,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -113,6 +117,7 @@ fun SettingsScreen(
     onOpenEqualizer: () -> Unit = {},
     onOpenSleepTimer: () -> Unit = {},
     onOpenLiquidGlassSettings: () -> Unit = {},
+    onOpenWrapped: () -> Unit = {},
     sleepTimerMode: SleepTimerMode = SleepTimerMode.OFF,
     sleepTimerRemainingSeconds: Long? = null,
     onExportBackup: () -> String = { "" },
@@ -124,6 +129,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val lyricsSettingsManager = remember { LyricsSettingsManager(context) }
     val lyricsSettings by lyricsSettingsManager.settings.collectAsState()
+    val wrappedYear = WrappedAvailability.activeYear()
     var isUsernameDialogOpen by remember { mutableStateOf(false) }
 
 
@@ -313,6 +319,52 @@ fun SettingsScreen(
                             color = themeColors.textPrimary,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // The recap is an end-of-year event: only listed while it is live.
+                if (wrappedYear != null) {
+                    HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                onOpenWrapped()
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 10.dp)
+                        ) {
+                            Text(
+                                text = "Cypher Wrapped $wrappedYear",
+                                color = themeColors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Tu año en música, en stories",
+                                color = themeColors.textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowRight,
+                            contentDescription = "Abrir Wrapped",
+                            tint = themeColors.textSecondary
                         )
                     }
                 }

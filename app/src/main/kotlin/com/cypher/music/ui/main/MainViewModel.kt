@@ -19,6 +19,11 @@ import com.cypher.music.data.UnifiedSearchResults
 import com.cypher.music.data.User
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.data.UserProfileStore
+import com.cypher.music.data.WrappedArtistStat
+import com.cypher.music.data.WrappedPeakDay
+import com.cypher.music.data.WrappedPreferences
+import com.cypher.music.data.WrappedStats
+import com.cypher.music.data.WrappedTrackStat
 import com.cypher.music.data.room.toStat
 import com.cypher.music.model.Track
 import com.cypher.music.network.YouTubeAccountManager
@@ -36,6 +41,8 @@ import com.cypher.music.ui.main.viewmodels.PlayerViewModel
 import com.cypher.music.ui.main.viewmodels.LibraryViewModel
 import com.cypher.music.ui.main.viewmodels.YouTubeViewModel
 import com.cypher.music.ui.main.viewmodels.ShareViewModel
+import com.cypher.music.wrapped.WrappedAvailability
+import com.cypher.music.wrapped.WrappedScheduler
 import com.cypher.music.data.LiquidGlassConfig
 import com.cypher.music.data.LyricsSettingsManager
 import com.cypher.music.data.SearchCategory
@@ -52,6 +59,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -99,6 +110,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Playback Analytics & User Listening Stats
     private val _userListeningStats = MutableStateFlow(UserListeningStats())
     val userListeningStats: StateFlow<UserListeningStats> = _userListeningStats.asStateFlow()
+
+    // Cypher Wrapped: annual recap data and full-screen stories state
+    private val _wrappedStats = MutableStateFlow(WrappedStats())
+    val wrappedStats: StateFlow<WrappedStats> = _wrappedStats.asStateFlow()
+
+    private val _isWrappedOpen = MutableStateFlow(false)
+    val isWrappedOpen: StateFlow<Boolean> = _isWrappedOpen.asStateFlow()
+
+    private val wrappedPreferences = WrappedPreferences(application)
+    private var wrappedStatsJob: Job? = null
 
     // Real Dynamic Recommendations
     private val _dynamicRecommendations = MutableStateFlow<List<RecommendationSection>>(emptyList())
@@ -211,13 +232,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Elapsed time accumulates every tick, but a play is only counted when the track changes.
         playerManager.onListeningTimeAccumulated = { track, elapsedMs, isNewPlay ->
             viewModelScope.launch(Dispatchers.IO) {
+                val now = System.currentTimeMillis()
                 playlistRepository.roomDb.playbackAnalyticsDao().recordPlayback(
                     track.id,
                     track.title,
                     track.artist,
                     track.artworkUrl,
                     elapsedMs,
-                    System.currentTimeMillis(),
+                    now,
+                    isNewPlay
+                )
+                // Same tick folded into the daily rollup that powers Wrapped.
+                val day = Instant.ofEpochMilli(now)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+                    .toString()
+                playlistRepository.roomDb.playbackDailyDao().recordDailyPlayback(
+                    day,
+                    track.id,
+                    track.title,
+                    track.artist,
+                    track.artworkUrl,
+                    elapsedMs,
+                    now,
                     isNewPlay
                 )
                 refreshListeningStats()
@@ -239,6 +276,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playerManager.setCrossfadeDuration(prefs.crossfadeSeconds)
             }
         }
+
+        // End-of-year recap: offer it automatically once per season.
+        maybeOfferWrappedOnLaunch()
     }
 
     fun refreshListeningStats() {
@@ -254,6 +294,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Ignore
             }
         }
+    }
+
+    fun openWrapped(year: Int = WrappedAvailability.activeYear() ?: WrappedScheduler.YEAR) {
+        _isWrappedOpen.value = true
+        if (WrappedAvailability.activeYear() == year) {
+            wrappedPreferences.markShown(year)
+        }
+        loadWrappedStats(year)
+    }
+
+    fun closeWrapped() {
+        _isWrappedOpen.value = false
+    }
+
+    /**
+     * Shows the full-screen recap the first time the app opens during the
+     * end-of-year window. It waits for the home screen to settle, skips first
+     * onboarding and never interrupts a recap opened from a deep link.
+     */
+    private fun maybeOfferWrappedOnLaunch() {
+        viewModelScope.launch {
+            delay(1200)
+            if (_isWrappedOpen.value || userProfileStore.needsOnboarding) return@launch
+            val year = WrappedAvailability.activeYear() ?: return@launch
+            if (wrappedPreferences.hasShown(year)) return@launch
+
+            val stats = withContext(Dispatchers.IO) { queryWrappedStats(year) }
+            if (!stats.hasData) return@launch
+
+            wrappedPreferences.markShown(year)
+            _wrappedStats.value = stats
+            _isWrappedOpen.value = true
+        }
+    }
+
+    /** Loads the annual recap from the daily rollup (top 5, top 3 and peak day). */
+    fun loadWrappedStats(year: Int = WrappedScheduler.YEAR) {
+        wrappedStatsJob?.cancel()
+        wrappedStatsJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _wrappedStats.value = queryWrappedStats(year)
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Unable to load Wrapped $year", e)
+            }
+        }
+    }
+
+    /** Blocking Room query: always call it from an IO dispatcher. */
+    private fun queryWrappedStats(year: Int): WrappedStats {
+        val startDay = LocalDate.of(year, 1, 1).toString()
+        val endDay = LocalDate.of(year, 12, 31).toString()
+        val dao = playlistRepository.roomDb.playbackDailyDao()
+
+        val topTracks = dao.getTopTracks(startDay, endDay, 5).mapIndexed { index, row ->
+            WrappedTrackStat(
+                rank = index + 1,
+                title = row.title ?: "Desconocido",
+                artist = row.artist ?: "Desconocido",
+                artworkUrl = row.artworkUrl,
+                playCount = row.playCount,
+                totalTimeMs = row.totalTimeMs
+            )
+        }
+        val topArtists = dao.getTopArtists(startDay, endDay, 3).mapIndexed { index, row ->
+            WrappedArtistStat(
+                rank = index + 1,
+                name = row.artist ?: "Desconocido",
+                playCount = row.playCount,
+                totalTimeMs = row.totalTimeMs
+            )
+        }
+        val peakDay = dao.getPeakDay(startDay, endDay)?.let { row ->
+            WrappedPeakDay(
+                day = runCatching { LocalDate.parse(row.day) }.getOrNull(),
+                totalTimeMs = row.totalTimeMs
+            )
+        }
+
+        return WrappedStats(
+            year = year,
+            totalListeningMs = dao.getTotalListeningMs(startDay, endDay),
+            totalPlays = dao.getTotalPlays(startDay, endDay),
+            topTracks = topTracks,
+            topArtists = topArtists,
+            peakDay = peakDay
+        )
     }
 
     fun loginUser(username: String): Boolean = true

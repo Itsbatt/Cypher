@@ -1,0 +1,228 @@
+package com.cypher.music.service
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.os.Build
+import androidx.annotation.OptIn
+import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import com.cypher.music.MainActivity
+import com.cypher.music.R
+import com.cypher.music.playback.MusicPlayerManager
+import com.cypher.music.scrobble.ScrobbleManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+@OptIn(UnstableApi::class)
+class PlaybackService : MediaLibraryService() {
+
+    companion object {
+        const val CHANNEL_ID = "cypher_playback"
+        const val NOTIFICATION_ID = 1001
+
+        const val ACTION_PLAY = "com.cypher.music.ACTION_PLAY"
+        const val ACTION_PAUSE = "com.cypher.music.ACTION_PAUSE"
+        const val ACTION_TOGGLE = "com.cypher.music.ACTION_TOGGLE"
+        const val ACTION_NEXT = "com.cypher.music.ACTION_NEXT"
+        const val ACTION_PREV = "com.cypher.music.ACTION_PREV"
+        const val ACTION_UPDATE = "com.cypher.music.ACTION_UPDATE"
+
+        fun updateService(context: Context) {
+            try {
+                val intent = Intent(context, PlaybackService::class.java).apply {
+                    action = ACTION_UPDATE
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                // Ignore if service cannot be contacted
+            }
+        }
+    }
+
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var lastArtworkUrl: String? = null
+    private var lastArtworkBitmap: Bitmap? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        val session = MusicPlayerManager.getInstance(this).mediaLibrarySession
+        if (session !in sessions) { try { addSession(session) } catch (e: Exception) {} }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Cypher Playback",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Apple Music Audio Controls"
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            val nm = getSystemService(NotificationManager::class.java)
+            nm?.createNotificationChannel(channel)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_TOGGLE -> MusicPlayerManager.activeInstance?.togglePlayPause()
+            ACTION_PLAY -> {
+                if (MusicPlayerManager.activeInstance?.state?.value?.isPlaying == false) {
+                    MusicPlayerManager.activeInstance?.togglePlayPause()
+                }
+            }
+            ACTION_PAUSE -> {
+                if (MusicPlayerManager.activeInstance?.state?.value?.isPlaying == true) {
+                    MusicPlayerManager.activeInstance?.togglePlayPause()
+                }
+            }
+            ACTION_NEXT -> MusicPlayerManager.activeInstance?.playNext()
+            ACTION_PREV -> MusicPlayerManager.activeInstance?.playPrevious()
+        }
+
+        // Attach MediaSession to MediaSessionService
+        MusicPlayerManager.activeMediaSession?.let { session ->
+            if (session !in sessions) {
+                try {
+                    addSession(session)
+                } catch (e: Exception) {
+                    // Ignored
+                }
+            }
+        }
+
+        buildAndPostNotification()
+
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun buildAndPostNotification() {
+        val playerManager = MusicPlayerManager.activeInstance
+        val currentTrack = playerManager?.state?.value?.currentTrack
+        val isPlaying = playerManager?.state?.value?.isPlaying ?: false
+
+        val title = currentTrack?.title ?: "Apple Music"
+        val artist = currentTrack?.artist ?: "Reproduciendo música"
+        val album = currentTrack?.album ?: ""
+
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // PendingIntents for Media Actions
+        val prevPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_PREV),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val togglePendingIntent = PendingIntent.getService(
+            this,
+            2,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_TOGGLE),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val nextPendingIntent = PendingIntent.getService(
+            this,
+            3,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_NEXT),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val mediaStyle = MediaStyle()
+            .setShowActionsInCompactView(0, 1, 2)
+
+        MusicPlayerManager.activeMediaSession?.let { session ->
+            mediaStyle.setMediaSession(session.sessionCompatToken)
+        }
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_apple_music_note)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setSubText(album.ifEmpty { null })
+            .setContentIntent(contentPendingIntent)
+            .setStyle(mediaStyle)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(isPlaying)
+            .addAction(R.drawable.ic_skip_previous, "Previous", prevPendingIntent)
+            .addAction(
+                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow,
+                if (isPlaying) "Pause" else "Play",
+                togglePendingIntent
+            )
+            .addAction(R.drawable.ic_skip_next, "Next", nextPendingIntent)
+
+        if (lastArtworkBitmap != null) {
+            builder.setLargeIcon(lastArtworkBitmap)
+        }
+
+        val notification = builder.build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+
+        // Asynchronously load high-res album artwork if needed
+        val artUrl = currentTrack?.artworkUrl
+        if (!artUrl.isNullOrEmpty() && artUrl != lastArtworkUrl) {
+            lastArtworkUrl = artUrl
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    val loader = ImageLoader(this@PlaybackService)
+                    val req = ImageRequest.Builder(this@PlaybackService)
+                        .data(artUrl)
+                        .allowHardware(false)
+                        .build()
+                    val result = (loader.execute(req) as? SuccessResult)?.drawable
+                    val bmp = (result as? BitmapDrawable)?.bitmap
+                    if (bmp != null) {
+                        lastArtworkBitmap = bmp
+                        val nm = getSystemService(NotificationManager::class.java)
+                        builder.setLargeIcon(bmp)
+                        nm?.notify(NOTIFICATION_ID, builder.build())
+                    }
+                } catch (e: Exception) {
+                    // Ignore art load failure
+                }
+            }
+        }
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
+        return MusicPlayerManager.getInstance(this).mediaLibrarySession
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ScrobbleManager.getInstance(this).onTrackStopped()
+    }
+}

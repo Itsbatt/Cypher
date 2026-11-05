@@ -1,0 +1,15 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+app/build/
+*.apk
+*.ap_
+*.dex
+*.log
+.externalNativeBuild
+.cxx
+local.properties
+yt_music_page.html

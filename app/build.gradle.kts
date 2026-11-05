@@ -1,0 +1,143 @@
+plugins {
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.kotlin.serialization)
+}
+
+android {
+  namespace = "com.cypher.music"
+  compileSdk = 36
+  defaultConfig {
+    applicationId = "com.cypher.music"
+    minSdk = 33
+    targetSdk = 36
+    versionCode = 1
+    versionName = "1.0.0"
+
+    ndk {
+      abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+    }
+  }
+
+  buildTypes {
+    release {
+      isMinifyEnabled = false
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      signingConfig = signingConfigs.getByName("debug")
+    }
+  }
+  compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+  }
+  buildFeatures {
+    compose = true
+    aidl = false
+    buildConfig = false
+    shaders = false
+  }
+
+  packaging {
+    resources {
+      excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+    jniLibs {
+      useLegacyPackaging = true
+    }
+  }
+
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+  }
+}
+
+kotlin {
+  jvmToolchain(17)
+}
+
+dependencies {
+  val composeBom = platform(libs.androidx.compose.bom)
+  implementation(composeBom)
+  androidTestImplementation(composeBom)
+
+  // Core Android dependencies
+  implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.lifecycle.runtime.ktx)
+  implementation(libs.androidx.activity.compose)
+  implementation("androidx.fragment:fragment-ktx:1.8.5")
+
+  // Arch Components
+  implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+  // Compose
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation(libs.androidx.compose.material3)
+  // Tooling
+  debugImplementation(libs.androidx.compose.ui.tooling)
+  // Instrumented tests
+  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+  // Local tests: jUnit, coroutines, Android runner
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
+
+  // Instrumented tests: jUnit rules and runners
+  androidTestImplementation(libs.androidx.test.core)
+  androidTestImplementation(libs.androidx.test.ext.junit)
+  androidTestImplementation(libs.androidx.test.runner)
+  androidTestImplementation(libs.androidx.test.espresso.core)
+
+  // Navigation
+  implementation(libs.androidx.navigation3.ui)
+  implementation(libs.androidx.navigation3.runtime)
+  implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+  // Media3 & Background Audio
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.session)
+  implementation(libs.media3.ui)
+  implementation(libs.media3.common)
+  implementation("androidx.media3:media3-datasource:1.5.1")
+  implementation("androidx.media3:media3-database:1.5.1")
+  implementation("androidx.media:media:1.7.0")
+  implementation("com.google.guava:guava:33.3.1-android")
+  implementation("androidx.palette:palette-ktx:1.0.0")
+
+  // Image Loading
+  implementation(libs.coil.compose)
+
+  // YouTube Player Engine (Official IFrame audio/video stream)
+  implementation(libs.youtube.player)
+
+  // Networking
+  implementation(libs.okhttp)
+
+  // Extended Icons
+  implementation(libs.androidx.compose.material.icons.extended)
+
+  // Security & Crypto
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+  // Google Code Scanner (Play Services)
+  implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
+  // Room Database
+  implementation("androidx.room:room-runtime:2.6.1")
+  implementation("androidx.room:room-ktx:2.6.1")
+  annotationProcessor("androidx.room:room-compiler:2.6.1")
+
+  // QR Code Generation (ZXing)
+  implementation("com.google.zxing:core:3.5.3")
+
+  // yt-dlp on Android (Native Engine & FFmpeg)
+  implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+  implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+}
+
+tasks.withType<JavaCompile>().configureEach {
+  options.encoding = "UTF-8"
+}

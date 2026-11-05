@@ -55,8 +55,11 @@ Build debug APK:
 
 Install onto your connected Android device:
 ```powershell
-adb install -r -d app\build\outputs\apk\debug\app-debug.apk
+adb install -r -d app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 ```
+
+### Release signing
+Release builds are signed with the keystore declared in `keystore.properties` (both the keystore and the properties file are git-ignored). Create them once and **back them up**: losing the keystore means no installed release can ever be updated again. Without `keystore.properties`, `assembleRelease` produces an unsigned APK. For local minified testing only, `-PcypherDebugSigning=true` signs the release variant with the debug key.
 
 ---
 

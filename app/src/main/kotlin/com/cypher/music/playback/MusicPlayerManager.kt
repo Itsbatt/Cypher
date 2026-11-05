@@ -16,6 +16,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionError
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
@@ -732,7 +733,7 @@ class MusicPlayerManager(private val context: Context) {
                     Futures.immediateFuture(LibraryResult.ofItem(item, null))
                 } catch (e: Exception) {
                     android.util.Log.e("CypherAA", "Error onGetItem for $mediaId", e)
-                    Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
+                    Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
                 }
             }
 

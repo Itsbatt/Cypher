@@ -85,7 +85,6 @@
 - `SearchScreen.kt`: Pantalla de búsqueda unificada (local + YouTube), búsqueda por voz e historial reciente.
 - `PlaylistDetailScreen.kt`: Vista detallada de una lista de reproducción con cabecera dinámica, edición y lista de pistas reordenable.
 - `SettingsScreen.kt`: Pantalla de ajustes de personalización (Color Picker lavanda, ROMs custom, shaders, ecualizador, backups y cuenta YouTube).
-- `AuthScreen.kt`: Pantalla de autenticación heredada (deprecada tras migración a app personal monousuario).
 
 ---
 

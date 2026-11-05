@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+  if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { load(it) }
+  }
+}
+val debugSignRelease = providers.gradleProperty("cypherDebugSigning").orNull == "true"
 
 android {
   namespace = "com.cypher.music"
@@ -19,11 +29,36 @@ android {
     }
   }
 
+  signingConfigs {
+    if (keystorePropertiesFile.exists()) {
+      create("release") {
+        storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+        storePassword = keystoreProperties.getProperty("storePassword")
+        keyAlias = keystoreProperties.getProperty("keyAlias")
+        keyPassword = keystoreProperties.getProperty("keyPassword")
+      }
+    }
+  }
+
+  splits {
+    abi {
+      isEnable = true
+      reset()
+      include("arm64-v8a", "armeabi-v7a")
+      isUniversalApk = true
+    }
+  }
+
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("debug")
+      signingConfig = when {
+        debugSignRelease -> signingConfigs.getByName("debug")
+        keystorePropertiesFile.exists() -> signingConfigs.getByName("release")
+        else -> null
+      }
     }
   }
   compileOptions {
@@ -46,10 +81,6 @@ android {
     }
   }
 
-  lint {
-    checkReleaseBuilds = false
-    abortOnError = false
-  }
 }
 
 kotlin {
@@ -65,7 +96,8 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
-  implementation("androidx.fragment:fragment-ktx:1.8.5")
+  // Required transitively by appcompat (yt-dlp); pinned so lint accepts the ActivityResult APIs.
+  implementation("androidx.fragment:fragment:1.8.5")
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)

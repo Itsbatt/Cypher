@@ -57,7 +57,6 @@ import com.cypher.music.ui.components.CypherTab
 import com.cypher.music.ui.components.CreatePlaylistDialog
 import com.cypher.music.ui.components.YouTubeLoginDialog
 import com.cypher.music.ui.components.UsernameDialog
-import com.cypher.music.ui.screens.AuthScreen
 import com.cypher.music.ui.screens.LibraryScreen
 import com.cypher.music.ui.screens.ListenNowScreen
 import com.cypher.music.ui.screens.SearchScreen

@@ -141,6 +141,7 @@ fun MainScreen(
     val syncStatusMsg by viewModel.syncStatusMsg.collectAsState()
     val equalizerState by viewModel.equalizerState.collectAsState()
     val isEqualizerSheetOpen by viewModel.isEqualizerSheetOpen.collectAsState()
+    val isLoudnessNormalizationEnabled by viewModel.isLoudnessNormalizationEnabled.collectAsState()
     val sleepTimerMode by viewModel.sleepTimerMode.collectAsState()
     val sleepTimerRemainingSeconds by viewModel.sleepTimerRemainingSeconds.collectAsState()
     val isSleepTimerSheetOpen by viewModel.isSleepTimerSheetOpen.collectAsState()
@@ -561,6 +562,8 @@ fun MainScreen(
                 onSyncYouTube = { viewModel.syncYouTubeMusic() },
                 onUnlinkYouTube = { viewModel.unlinkYouTubeAccount() },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
+                isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,
+                onToggleLoudnessNormalization = { viewModel.setLoudnessNormalizationEnabled(it) },
                 onOpenSleepTimer = { viewModel.setSleepTimerSheetOpen(true) },
                 onOpenLiquidGlassSettings = { viewModel.openLiquidGlassSettings() },
                 onOpenWrapped = { viewModel.openWrapped() },
@@ -617,6 +620,8 @@ fun MainScreen(
             CypherEqualizerSheet(
                 state = equalizerState,
                 themeColors = themeColors,
+                isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,
+                onToggleLoudnessNormalization = { viewModel.setLoudnessNormalizationEnabled(it) },
                 onToggleEnabled = { viewModel.setEqualizerEnabled(it) },
                 onSelectPreset = { viewModel.applyEqualizerPreset(it) },
                 onSetBandLevel = { idx, lvl -> viewModel.setEqualizerBandLevel(idx, lvl) },

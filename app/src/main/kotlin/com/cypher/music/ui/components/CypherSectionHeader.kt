@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +38,7 @@ fun CypherSectionHeader(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         if (showDivider) {
-            Divider(color = IosDarkSeparator, thickness = 0.5.dp, modifier = Modifier.padding(bottom = 12.dp))
+            HorizontalDivider(color = IosDarkSeparator, thickness = 0.5.dp, modifier = Modifier.padding(bottom = 12.dp))
         }
 
         if (subtitle != null) {

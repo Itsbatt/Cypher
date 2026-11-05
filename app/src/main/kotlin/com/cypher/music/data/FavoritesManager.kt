@@ -31,8 +31,8 @@ class FavoritesManager(
     fun loadFavorites() {
         scope.launch(Dispatchers.IO) {
             try {
-                val list = roomDb.trackDao().favoriteTracks.map { it.toDomain() }
-                val idSet = roomDb.trackDao().favoriteTrackIds.toSet()
+                val list = roomDb.trackDao().getFavoriteTracks().map { it.toDomain() }
+                val idSet = roomDb.trackDao().getFavoriteTrackIds().toSet()
                 _favoriteTracks.value = list
                 _favoriteTrackIds.value = idSet
             } catch (e: Exception) {

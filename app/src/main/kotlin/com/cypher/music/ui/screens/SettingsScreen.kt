@@ -37,7 +37,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -115,6 +115,8 @@ fun SettingsScreen(
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
+    isLoudnessNormalizationEnabled: Boolean = true,
+    onToggleLoudnessNormalization: (Boolean) -> Unit = {},
     onOpenSleepTimer: () -> Unit = {},
     onOpenLiquidGlassSettings: () -> Unit = {},
     onOpenWrapped: () -> Unit = {},
@@ -362,7 +364,7 @@ fun SettingsScreen(
                             )
                         }
                         Icon(
-                            imageVector = Icons.Filled.KeyboardArrowRight,
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = "Abrir Wrapped",
                             tint = themeColors.textSecondary
                         )
@@ -903,6 +905,63 @@ fun SettingsScreen(
                         color = themeColors.accent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+
+                HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
+
+                // Normalización de Volumen (-14 LUFS)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f).padding(end = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(themeColors.accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.GraphicEq,
+                                contentDescription = null,
+                                tint = themeColors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Normalización de Volumen",
+                                color = themeColors.textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Equipara el volumen sonoro (-14 LUFS) entre pistas",
+                                color = themeColors.textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isLoudnessNormalizationEnabled,
+                        onCheckedChange = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onToggleLoudnessNormalization(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = themeColors.accent
+                        )
                     )
                 }
 

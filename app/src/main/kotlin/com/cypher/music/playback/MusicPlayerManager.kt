@@ -27,7 +27,6 @@ import com.cypher.music.MainActivity
 import com.cypher.music.data.room.toDomain
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
-import com.cypher.music.scrobble.ScrobbleManager
 import com.cypher.music.service.PlaybackService
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
@@ -99,15 +98,25 @@ class MusicPlayerManager(private val context: Context) {
     private var sleepTimerJob: Job? = null
     private var fadeInJob: Job? = null
 
-    // Native DSP Loudness Enhancer
+    // Native DSP Loudness Enhancer (ReplayGain / Loudness Normalization)
+    private val audioPrefs = context.getSharedPreferences("cypher_audio_prefs", Context.MODE_PRIVATE)
     private var loudnessEnhancer: android.media.audiofx.LoudnessEnhancer? = null
-    private var isLoudnessEnhancerEnabled: Boolean = true
+    private var isLoudnessEnhancerEnabled: Boolean = audioPrefs.getBoolean("loudness_normalization", true)
+    private val _isLoudnessNormalizationEnabled = MutableStateFlow(isLoudnessEnhancerEnabled)
+    val isLoudnessNormalizationEnabled: StateFlow<Boolean> = _isLoudnessNormalizationEnabled.asStateFlow()
+
+    // Intelligent Pre-caching / Gapless Playback Map
+    private val streamUrlPrecacheMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private var precacheJob: Job? = null
+
+    // Track transition guard (prevents spurious pauses during track skipping)
+    @Volatile
+    private var isTransitioningTrack = false
+    @Volatile
+    private var lastTrackChangeTime = 0L
 
     // Native DSP Equalizer Manager
     val equalizerManager = EqualizerManager(context)
-
-    // Background Native Scrobbler (Last.fm & ListenBrainz)
-    val scrobbleManager = ScrobbleManager.getInstance(context)
 
     // Sleep Timer states
     private val _sleepTimerMode = MutableStateFlow(SleepTimerMode.OFF)
@@ -445,7 +454,7 @@ class MusicPlayerManager(private val context: Context) {
                             )
                         }
                         "cat_playlists" -> {
-                            val allPlaylists = roomDb.playlistDao().allPlaylistsWithTracks.map { it.toDomain() }
+                            val allPlaylists = roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
                             // Sort playlists with tracks first so empty playlists don't show at the top
                             val sortedPlaylists = allPlaylists.sortedByDescending { it.tracks.size }
                             for (pl in sortedPlaylists) {
@@ -468,7 +477,7 @@ class MusicPlayerManager(private val context: Context) {
                             }
                         }
                         "cat_favorites" -> {
-                            val favs = roomDb.trackDao().favoriteTracks.map { it.toDomain() }
+                            val favs = roomDb.trackDao().getFavoriteTracks().map { it.toDomain() }
                             for (t in favs) {
                                 allMatchedItems.add(createMediaItemFromTrack(t))
                             }
@@ -779,7 +788,7 @@ class MusicPlayerManager(private val context: Context) {
 
                             if (track != null) {
                                 scope.launch(Dispatchers.Main) {
-                                    val allPlaylists = roomDb.playlistDao().allPlaylistsWithTracks.map { it.toDomain() }
+                                    val allPlaylists = roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
                                     val containingPlaylist = allPlaylists.firstOrNull { p ->
                                         p.tracks.any { it.id == track.id }
                                     }
@@ -883,6 +892,10 @@ class MusicPlayerManager(private val context: Context) {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+                    if (isTransitioningTrack) {
+                        Log.d("AppleMusicPlayer", "onPlayWhenReadyChanged: skipped because track is transitioning")
+                        return
+                    }
                     if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST ||
                         reason == Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE) {
                         if (!playWhenReady) {
@@ -939,16 +952,24 @@ class MusicPlayerManager(private val context: Context) {
                     if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE) {
                         when (state) {
                             PlayerConstants.PlayerState.PLAYING -> {
+                                isTransitioningTrack = false
                                 bufferingWatchdogJob?.cancel()
                                 _state.update { it.copy(isPlaying = true, isBuffering = false) }
                                 if (!exoPlayer.isPlaying) exoPlayer.play()
                                 PlaybackService.updateService(context)
+                                precacheNextTrack()
                             }
                             PlayerConstants.PlayerState.PAUSED -> {
-                                bufferingWatchdogJob?.cancel()
-                                _state.update { it.copy(isPlaying = false, isBuffering = false) }
-                                if (exoPlayer.isPlaying) exoPlayer.pause()
-                                PlaybackService.updateService(context)
+                                val timeSinceChange = System.currentTimeMillis() - lastTrackChangeTime
+                                if (isTransitioningTrack || timeSinceChange < 3000L) {
+                                    Log.d("AppleMusicPlayer", "YouTubePlayer intermediate PAUSED ignored during track transition ($timeSinceChange ms)")
+                                    // Spurious pause from previous video teardown: do NOT stop playback!
+                                } else {
+                                    bufferingWatchdogJob?.cancel()
+                                    _state.update { it.copy(isPlaying = false, isBuffering = false) }
+                                    if (exoPlayer.isPlaying) exoPlayer.pause()
+                                    PlaybackService.updateService(context)
+                                }
                             }
                             PlayerConstants.PlayerState.BUFFERING -> {
                                 _state.update { it.copy(isBuffering = true) }
@@ -956,6 +977,8 @@ class MusicPlayerManager(private val context: Context) {
                             PlayerConstants.PlayerState.VIDEO_CUED -> {
                                 Log.d("AppleMusicPlayer", "Video cued -> forcing play()")
                                 youTubePlayer.play()
+                                if (!exoPlayer.isPlaying) exoPlayer.play()
+                                _state.update { it.copy(isPlaying = true) }
                             }
                             PlayerConstants.PlayerState.ENDED -> {
                                 bufferingWatchdogJob?.cancel()
@@ -999,6 +1022,9 @@ class MusicPlayerManager(private val context: Context) {
                         _state.update { it.copy(currentPositionMs = pos) }
 
                         checkVolumeTransitions(pos, dur)
+                        if (dur > 0 && (dur - pos) in 1000L..25000L) {
+                            precacheNextTrack()
+                        }
                     }
                 }
 
@@ -1022,10 +1048,6 @@ class MusicPlayerManager(private val context: Context) {
                 if (curState.isPlaying && track != null) {
                     val isNewPlay = track.id != lastReportedTrackId
                     lastReportedTrackId = track.id
-                    if (isNewPlay) {
-                        scrobbleManager.onTrackStarted(track)
-                    }
-                    scrobbleManager.onPlaybackTick(track, curState.currentPositionMs, curState.durationMs)
                     val elapsed = (now - lastTick).coerceIn(0L, 2500L)
                     if (elapsed > 0) {
                         withContext(Dispatchers.Main) {
@@ -1050,11 +1072,39 @@ class MusicPlayerManager(private val context: Context) {
             .trim()
     }
 
+    private fun precacheNextTrack() {
+        val q = _state.value.queue
+        val curIdx = _state.value.queueIndex
+        val nextIdx = curIdx + 1
+        if (nextIdx !in q.indices) return
+        val nextTrack = q[nextIdx]
+        if (nextTrack.sourceType == AudioSourceType.YOUTUBE) {
+            val videoId = extractVideoId(nextTrack.streamUrl.ifEmpty { nextTrack.id })
+            if (videoId.isNotEmpty() && !streamUrlPrecacheMap.containsKey(videoId)) {
+                precacheJob?.cancel()
+                precacheJob = scope.launch(Dispatchers.IO) {
+                    try {
+                        Log.d("AppleMusicPlayer", "Gapless Pre-cache: Resolving next track stream: '${nextTrack.title}' ($videoId)")
+                        val url = com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                        if (!url.isNullOrEmpty()) {
+                            streamUrlPrecacheMap[videoId] = url
+                            Log.i("AppleMusicPlayer", "Gapless Pre-cache: Stream ready for $videoId")
+                        }
+                    } catch (e: Exception) {
+                        Log.w("AppleMusicPlayer", "Gapless Pre-cache failed for $videoId", e)
+                    }
+                }
+            }
+        }
+    }
+
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
         val index = newQueue.indexOfFirst { it.id == track.id }.let { if (it == -1) 0 else it }
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
-        scrobbleManager.onTrackStarted(track)
+
+        isTransitioningTrack = true
+        lastTrackChangeTime = System.currentTimeMillis()
 
         _playbackPositionMs.value = 0L
         _playbackProgress.value = 0f
@@ -1065,22 +1115,30 @@ class MusicPlayerManager(private val context: Context) {
                 queue = newQueue,
                 queueIndex = index,
                 isBuffering = true,
+                isPlaying = true,
                 currentPositionMs = 0L,
                 durationMs = track.durationMs
             )
         }
 
-        // Watchdog to guarantee UI never gets stuck in buffering
+        // Trigger pre-caching for subsequent queue tracks
+        precacheNextTrack()
+
+        // Watchdog to guarantee UI never gets stuck in buffering or intermediate cued state
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = scope.launch {
-            delay(8000)
-            if (_state.value.isBuffering && !_state.value.isPlaying) {
-                Log.w("AppleMusicPlayer", "Buffering watchdog: re-triggering play()")
-                youTubePlayer?.play()
+            delay(4000)
+            if (_state.value.isBuffering || !_state.value.isPlaying) {
+                Log.w("AppleMusicPlayer", "Buffering watchdog: forcing play on transition")
+                if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+                    youTubePlayer?.play()
+                    if (!exoPlayer.isPlaying) exoPlayer.play()
+                }
                 delay(2000)
-                if (_state.value.isBuffering && !_state.value.isPlaying) {
-                    Log.w("AppleMusicPlayer", "Buffering watchdog: clearing isBuffering flag")
-                    _state.update { it.copy(isBuffering = false) }
+                if (_state.value.isBuffering || !_state.value.isPlaying) {
+                    Log.w("AppleMusicPlayer", "Buffering watchdog: finalizing state")
+                    _state.update { it.copy(isPlaying = true, isBuffering = false) }
+                    PlaybackService.updateService(context)
                 }
             }
         }
@@ -1437,6 +1495,9 @@ class MusicPlayerManager(private val context: Context) {
                     _state.update { it.copy(currentPositionMs = pos) }
 
                     checkVolumeTransitions(pos, dur)
+                    if (dur > 0 && (dur - pos) in 1000L..25000L) {
+                        precacheNextTrack()
+                    }
                 }
                 delay(250)
             }
@@ -1454,10 +1515,10 @@ class MusicPlayerManager(private val context: Context) {
             loudnessEnhancer = null
             if (sessionId != C.AUDIO_SESSION_ID_UNSET && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
                 val enhancer = android.media.audiofx.LoudnessEnhancer(sessionId)
-                enhancer.setTargetGain(800) // 800 mB normalization target boost
+                enhancer.setTargetGain(600) // 600 mB normalization target boost for -14 LUFS balance
                 enhancer.enabled = isLoudnessEnhancerEnabled
                 loudnessEnhancer = enhancer
-                Log.d("MusicPlayerManager", "Attached LoudnessEnhancer to audioSessionId: $sessionId")
+                Log.d("MusicPlayerManager", "Attached LoudnessEnhancer to audioSessionId: $sessionId (enabled=$isLoudnessEnhancerEnabled)")
             }
         } catch (e: Exception) {
             Log.w("MusicPlayerManager", "Could not attach LoudnessEnhancer", e)
@@ -1466,6 +1527,8 @@ class MusicPlayerManager(private val context: Context) {
 
     fun setLoudnessEnhancerEnabled(enabled: Boolean) {
         isLoudnessEnhancerEnabled = enabled
+        audioPrefs.edit().putBoolean("loudness_normalization", enabled).apply()
+        _isLoudnessNormalizationEnabled.value = enabled
         try {
             loudnessEnhancer?.enabled = enabled
         } catch (e: Exception) {

@@ -40,7 +40,7 @@ class PlaylistRepository(
         scope.launch(Dispatchers.IO) {
             try {
                 // 1. Query Room using @Relation (PlaylistWithTracks)
-                val playlistsWithTracks = roomDb.playlistDao().allPlaylistsWithTracks
+                val playlistsWithTracks = roomDb.playlistDao().getAllPlaylistsWithTracks()
                 val domainPlaylists = playlistsWithTracks.map { it.toDomain() }
 
                 // 2. Query Room for recently played items

@@ -53,6 +53,8 @@ import com.cypher.music.ui.theme.ResolvedThemeColors
 fun CypherEqualizerSheet(
     state: EqualizerState,
     themeColors: ResolvedThemeColors,
+    isLoudnessNormalizationEnabled: Boolean = true,
+    onToggleLoudnessNormalization: (Boolean) -> Unit = {},
     onToggleEnabled: (Boolean) -> Unit,
     onSelectPreset: (Short) -> Unit,
     onSetBandLevel: (Short, Short) -> Unit,
@@ -372,6 +374,58 @@ fun CypherEqualizerSheet(
                             )
                         }
                     }
+                }
+            }
+
+            // Loudness Normalization Section (DSP ReplayGain)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "NORMALIZACIÓN DE VOLUMEN (DSP)",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF2C2C2E))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Equiparar volumen (-14 LUFS)",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Evita cambios bruscos de volumen entre canciones locales y streaming.",
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Switch(
+                        checked = isLoudnessNormalizationEnabled,
+                        onCheckedChange = onToggleLoudnessNormalization,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = themeColors.accent
+                        )
+                    )
                 }
             }
         }

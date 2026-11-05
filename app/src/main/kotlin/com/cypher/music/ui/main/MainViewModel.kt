@@ -285,8 +285,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val dao = playlistRepository.roomDb.playbackAnalyticsDao()
-                val totalMs = dao.totalListeningMs
-                val totalPlays = dao.totalPlays
+                val totalMs = dao.getTotalListeningMs()
+                val totalPlays = dao.getTotalPlays()
                 val topArtists = dao.getTopArtists(10).map { it.toStat() }
                 val topTracks = dao.getTopTracks(10).map { it.toStat() }
                 _userListeningStats.value = UserListeningStats(totalMs, totalPlays, topArtists, topTracks)
@@ -958,6 +958,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerManager.equalizerManager.setBassBoostStrength(strength)
     }
 
+    // Loudness Normalization (-14 LUFS / ReplayGain)
+    val isLoudnessNormalizationEnabled: StateFlow<Boolean> = playerManager.isLoudnessNormalizationEnabled
+
+    fun setLoudnessNormalizationEnabled(enabled: Boolean) {
+        playerManager.setLoudnessEnhancerEnabled(enabled)
+    }
+
     // Sleep Timer
     val sleepTimerMode: StateFlow<SleepTimerMode> = playerManager.sleepTimerMode
     val sleepTimerRemainingSeconds: StateFlow<Long?> = playerManager.sleepTimerRemainingSeconds
@@ -976,8 +983,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Backup & Restore Database
     fun exportDatabaseBackup(): String {
         return try {
-            val playlists = playlistRepository.roomDb.playlistDao().allPlaylistsWithTracks
-            val favs = playlistRepository.roomDb.trackDao().favoriteTracks
+            val playlists = playlistRepository.roomDb.playlistDao().getAllPlaylistsWithTracks()
+            val favs = playlistRepository.roomDb.trackDao().getFavoriteTracks()
 
             val root = org.json.JSONObject()
             root.put("version", 3)

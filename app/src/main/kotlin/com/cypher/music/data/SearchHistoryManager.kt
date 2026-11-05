@@ -35,7 +35,7 @@ class SearchHistoryManager(
     private fun reloadFromDatabase() {
         scope.launch {
             try {
-                val list = dao.recentQueries
+                val list = dao.getRecentQueries()
                 _recentSearches.value = list
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -54,7 +54,7 @@ class SearchHistoryManager(
         scope.launch {
             try {
                 dao.insertQuery(SearchQueryEntity(cleanQuery, System.currentTimeMillis()))
-                val updated = dao.recentQueries
+                val updated = dao.getRecentQueries()
                 _recentSearches.value = updated
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -72,7 +72,7 @@ class SearchHistoryManager(
         scope.launch {
             try {
                 dao.deleteQuery(cleanQuery)
-                val updated = dao.recentQueries
+                val updated = dao.getRecentQueries()
                 _recentSearches.value = updated
             } catch (e: Exception) {
                 e.printStackTrace()

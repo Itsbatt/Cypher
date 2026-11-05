@@ -27,7 +27,6 @@ import coil.request.SuccessResult
 import com.cypher.music.MainActivity
 import com.cypher.music.R
 import com.cypher.music.playback.MusicPlayerManager
-import com.cypher.music.scrobble.ScrobbleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -264,7 +263,6 @@ class PlaybackService : MediaLibraryService() {
             }
             isNoisyReceiverRegistered = false
         }
-        ScrobbleManager.getInstance(this).onTrackStopped()
         super.onDestroy()
     }
 }

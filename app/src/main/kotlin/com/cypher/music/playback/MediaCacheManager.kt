@@ -106,7 +106,7 @@ object MediaCacheManager {
             }
             // Also merge with Room database entries
             val roomDb = CypherDatabase.getInstance(context)
-            val entities = roomDb.trackDao().downloadedTracks
+            val entities = roomDb.trackDao().getDownloadedTracks()
             for (e in entities) {
                 if (isTrackDownloaded(context, e.id)) {
                     validIds.add(e.id)
@@ -286,7 +286,7 @@ object MediaCacheManager {
      */
     suspend fun getDownloadedTracks(context: Context): List<Track> = withContext(Dispatchers.IO) {
         val roomDb = CypherDatabase.getInstance(context)
-        val entities = roomDb.trackDao().downloadedTracks
+        val entities = roomDb.trackDao().getDownloadedTracks()
         val validTracks = mutableListOf<Track>()
         val validIds = mutableSetOf<String>()
 

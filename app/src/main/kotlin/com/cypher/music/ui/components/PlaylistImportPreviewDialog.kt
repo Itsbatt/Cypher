@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -99,7 +99,7 @@ fun PlaylistImportPreviewDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.QueueMusic,
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                             contentDescription = null,
                             tint = themeColors.accent,
                             modifier = Modifier.size(20.dp)

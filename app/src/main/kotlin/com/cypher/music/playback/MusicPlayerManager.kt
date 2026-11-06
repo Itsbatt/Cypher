@@ -116,6 +116,10 @@ class MusicPlayerManager(private val context: Context) {
     @Volatile
     private var loadedYouTubeVideoId: String? = null
 
+    // True when the user paused while the track was still loading.
+    @Volatile
+    private var userPausedDuringLoad = false
+
     // Native DSP Equalizer Manager
     val equalizerManager = EqualizerManager(context)
 
@@ -1113,6 +1117,7 @@ class MusicPlayerManager(private val context: Context) {
         val index = newQueue.indexOfFirst { it.id == track.id }.let { if (it == -1) 0 else it }
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
+        userPausedDuringLoad = false
 
         _playbackPositionMs.value = 0L
         _playbackProgress.value = 0f
@@ -1136,19 +1141,23 @@ class MusicPlayerManager(private val context: Context) {
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = scope.launch {
             delay(4000)
-            if (_state.value.isBuffering || !_state.value.isPlaying) {
-                Log.w("AppleMusicPlayer", "Buffering watchdog: forcing play on transition")
-                if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
-                    youTubePlayer?.play()
-                    if (!exoPlayer.isPlaying) exoPlayer.play()
-                }
-                delay(2000)
-                if (_state.value.isBuffering || !_state.value.isPlaying) {
-                    Log.w("AppleMusicPlayer", "Buffering watchdog: finalizing state")
-                    _state.update { it.copy(isPlaying = true, isBuffering = false) }
-                    PlaybackService.updateService(context)
-                }
+            if (!ResumePolicy.shouldForcePlay(userPausedDuringLoad, _state.value.isBuffering, _state.value.isPlaying)) {
+                Log.d("AppleMusicPlayer", "Buffering watchdog: user paused during load, not forcing play")
+                return@launch
             }
+            Log.w("AppleMusicPlayer", "Buffering watchdog: forcing play on transition")
+            if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+                youTubePlayer?.play()
+                if (!exoPlayer.isPlaying) exoPlayer.play()
+            }
+            delay(2000)
+            if (!ResumePolicy.shouldForcePlay(userPausedDuringLoad, _state.value.isBuffering, _state.value.isPlaying)) {
+                Log.d("AppleMusicPlayer", "Buffering watchdog: user paused, leaving state untouched")
+                return@launch
+            }
+            Log.w("AppleMusicPlayer", "Buffering watchdog: finalizing state")
+            _state.update { it.copy(isPlaying = true, isBuffering = false) }
+            PlaybackService.updateService(context)
         }
 
         // Start background PlaybackService
@@ -1247,10 +1256,12 @@ class MusicPlayerManager(private val context: Context) {
             }
         } else {
             if (_state.value.isPlaying) {
+                userPausedDuringLoad = true
                 youTubePlayer?.pause()
                 if (exoPlayer.isPlaying) exoPlayer.pause()
                 _state.update { it.copy(isPlaying = false) }
             } else {
+                userPausedDuringLoad = false
                 youTubePlayer?.play()
                 if (!exoPlayer.isPlaying) exoPlayer.play()
                 _state.update { it.copy(isPlaying = true) }
@@ -1264,6 +1275,7 @@ class MusicPlayerManager(private val context: Context) {
         if (track?.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
             exoPlayer.pause()
         } else {
+            userPausedDuringLoad = true
             youTubePlayer?.pause()
             if (exoPlayer.isPlaying) exoPlayer.pause()
             _state.update { it.copy(isPlaying = false) }

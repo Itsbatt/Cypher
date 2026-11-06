@@ -1,6 +1,7 @@
 package com.cypher.music.network
 
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,10 @@ object StreamingTelemetry {
 
     private val _health = MutableStateFlow(StreamingHealth())
     val health: StateFlow<StreamingHealth> = _health.asStateFlow()
+
+    // Which fallback tier resolved each track, plus aggregate usage counters.
+    private val lastResolvedTier = ConcurrentHashMap<String, Int>()
+    private val tierUsage = ConcurrentHashMap<Int, Int>()
 
     fun recordSuccess(tier: Int = 1) {
         _health.update {
@@ -67,6 +72,24 @@ object StreamingTelemetry {
         }
 
         Log.w(TAG, "Streaming anomaly detected: code=$errorCode, endpoint=$endpoint, msg=$msg. Consecutive failures=${_health.value.consecutiveFailures}")
+    }
+
+    /** Records which tier resolved a concrete track, so failures can be measured per level. */
+    fun recordTrackResolution(videoId: String, tier: Int) {
+        if (videoId.isBlank()) return
+        lastResolvedTier[videoId] = tier
+        tierUsage.merge(tier, 1) { a, b -> a + b }
+        Log.i(TAG, "Track $videoId resolved via Tier $tier")
+    }
+
+    fun lastTierFor(videoId: String): Int? = lastResolvedTier[videoId]
+
+    /** Snapshot of how often each fallback tier was needed. */
+    fun tierUsageSnapshot(): Map<Int, Int> = tierUsage.toMap()
+
+    fun resetTrackResolutions() {
+        lastResolvedTier.clear()
+        tierUsage.clear()
     }
 
     fun getSuggestedFallbackTier(): Int {

@@ -246,6 +246,7 @@ class YouTubeRepository {
             val directUrl = res.out.trim().lines().firstOrNull { it.startsWith("http") }
             if (!directUrl.isNullOrBlank()) {
                 StreamingTelemetry.recordSuccess(tier = 1)
+                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 1)
                 return@withContext directUrl
             }
         } catch (e: Exception) {
@@ -267,6 +268,7 @@ class YouTubeRepository {
             val directUrl2 = res2.out.trim().lines().firstOrNull { it.startsWith("http") }
             if (!directUrl2.isNullOrBlank()) {
                 StreamingTelemetry.recordSuccess(tier = 2)
+                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 2)
                 return@withContext directUrl2
             }
         } catch (e2: Exception) {
@@ -279,6 +281,7 @@ class YouTubeRepository {
             val directInnerTubeUrl = resolveInnerTubeStreamUrl(cleanVid)
             if (!directInnerTubeUrl.isNullOrBlank()) {
                 StreamingTelemetry.recordSuccess(tier = 3)
+                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 3)
                 return@withContext directInnerTubeUrl
             }
         } catch (e3: Exception) {

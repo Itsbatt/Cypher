@@ -105,8 +105,8 @@ class MusicPlayerManager(private val context: Context) {
     private val _isLoudnessNormalizationEnabled = MutableStateFlow(isLoudnessEnhancerEnabled)
     val isLoudnessNormalizationEnabled: StateFlow<Boolean> = _isLoudnessNormalizationEnabled.asStateFlow()
 
-    // Intelligent Pre-caching / Gapless Playback Map
-    private val streamUrlPrecacheMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    // Intelligent Pre-caching / Gapless Playback Map (url + resolution timestamp)
+    private val streamUrlPrecacheMap = java.util.concurrent.ConcurrentHashMap<String, CachedStreamUrl>()
     private var precacheJob: Job? = null
 
     // Track transition guard (prevents spurious pauses during track skipping)
@@ -845,11 +845,18 @@ class MusicPlayerManager(private val context: Context) {
                 if (track != null && is403) {
                     com.cypher.music.network.StreamingTelemetry.recordError(403, error.message, "ExoPlayer:StreamPlayback")
                     scope.launch {
-                        try {
-                            val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
-                            Log.w("MusicPlayerManager", "Refreshing expired 403 stream URL for video: $videoId")
-                            val freshUrl = com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                        val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+                        var attempt = 0
+                        while (StreamUrlPolicy.shouldRetry(attempt)) {
+                            Log.w("MusicPlayerManager", "Refreshing expired 403 stream URL for $videoId (attempt ${attempt + 1})")
+                            val freshUrl = try {
+                                com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                            } catch (e: Exception) {
+                                Log.e("MusicPlayerManager", "Failed to refresh 403 stream URL", e)
+                                null
+                            }
                             if (!freshUrl.isNullOrEmpty()) {
+                                val tier = com.cypher.music.network.StreamingTelemetry.lastTierFor(videoId)
                                 val savedPos = _playbackPositionMs.value
                                 val metadata = MediaMetadata.Builder()
                                     .setTitle(track.title)
@@ -864,18 +871,15 @@ class MusicPlayerManager(private val context: Context) {
                                 exoPlayer.setMediaItem(mediaItem, savedPos)
                                 exoPlayer.prepare()
                                 exoPlayer.play()
-                                Log.i("MusicPlayerManager", "Successfully resumed playback with fresh stream URL at ${savedPos}ms")
-                                return@launch
-                            } else {
-                                // Tier 4 Fallback: YouTube IFrame player fallback to prevent playback disruption
-                                Log.w("MusicPlayerManager", "Direct stream unavailable. Switching to official IFrame player engine.")
-                                youTubePlayer?.loadVideo(videoId, (_playbackPositionMs.value / 1000f))
+                                Log.i("MusicPlayerManager", "Resumed with fresh URL at ${savedPos}ms (tier=$tier)")
+                                streamUrlPrecacheMap[videoId] = CachedStreamUrl(freshUrl, System.currentTimeMillis())
                                 return@launch
                             }
-                        } catch (e: Exception) {
-                            Log.e("MusicPlayerManager", "Failed to refresh 403 stream URL", e)
+                            delay(StreamUrlPolicy.retryDelayMs(attempt))
+                            attempt++
                         }
-                        playNext()
+                        Log.w("MusicPlayerManager", "Direct stream unavailable. Switching to official IFrame player engine.")
+                        youTubePlayer?.loadVideo(videoId, (_playbackPositionMs.value / 1000f))
                     }
                 } else {
                     _state.update { it.copy(isBuffering = false, isPlaying = false) }
@@ -1080,15 +1084,18 @@ class MusicPlayerManager(private val context: Context) {
         val nextTrack = q[nextIdx]
         if (nextTrack.sourceType == AudioSourceType.YOUTUBE) {
             val videoId = extractVideoId(nextTrack.streamUrl.ifEmpty { nextTrack.id })
-            if (videoId.isNotEmpty() && !streamUrlPrecacheMap.containsKey(videoId)) {
+            val cached = streamUrlPrecacheMap[videoId]
+            val hasFreshUrl = cached != null &&
+                StreamUrlPolicy.isFresh(cached.resolvedAtMs, System.currentTimeMillis())
+            if (videoId.isNotEmpty() && !hasFreshUrl) {
                 precacheJob?.cancel()
                 precacheJob = scope.launch(Dispatchers.IO) {
                     try {
                         Log.d("AppleMusicPlayer", "Gapless Pre-cache: Resolving next track stream: '${nextTrack.title}' ($videoId)")
                         val url = com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
                         if (!url.isNullOrEmpty()) {
-                            streamUrlPrecacheMap[videoId] = url
-                            Log.i("AppleMusicPlayer", "Gapless Pre-cache: Stream ready for $videoId")
+                            streamUrlPrecacheMap[videoId] = CachedStreamUrl(url, System.currentTimeMillis())
+                            Log.i("AppleMusicPlayer", "Gapless Pre-cache: Stream ready for $videoId (tier=${com.cypher.music.network.StreamingTelemetry.lastTierFor(videoId)})")
                         }
                     } catch (e: Exception) {
                         Log.w("AppleMusicPlayer", "Gapless Pre-cache failed for $videoId", e)

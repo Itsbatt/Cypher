@@ -1186,7 +1186,7 @@ class MusicPlayerManager(private val context: Context) {
             val isDownloaded = offlineFile != null && offlineFile.exists() && offlineFile.length() > 10000
             isPlayingOffline = isDownloaded
 
-            if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+            if (PlaybackOutputPolicy.usesExoPlayer(track.sourceType == AudioSourceType.LOCAL, isPlayingOffline)) {
                 youTubePlayer?.pause()
                 startLocalProgressTracker()
 
@@ -1197,7 +1197,12 @@ class MusicPlayerManager(private val context: Context) {
                         .build(),
                     true
                 )
+                exoPlayer.volume = 1f
                 exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
+                // The silent carrier used for streaming sets ExoPlayer volume to 0.
+                // Restore it here, otherwise offline/local tracks stay muted while the
+                // UI keeps advancing (the downloaded-track silence bug).
+                exoPlayer.volume = 1f
                 val fileUri = if (isPlayingOffline && offlineFile != null) Uri.fromFile(offlineFile) else Uri.parse(track.streamUrl)
                 val mediaItem = MediaItem.Builder()
                     .setUri(fileUri)
@@ -1417,7 +1422,14 @@ class MusicPlayerManager(private val context: Context) {
     // Master volume setter handling both Local ExoPlayer and YouTube WebView
     fun setMasterPlaybackVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, 1f)
-        if (_state.value.currentTrack?.sourceType == AudioSourceType.LOCAL) {
+        val track = _state.value.currentTrack
+        // Offline downloads are YouTube tracks but play through ExoPlayer, so they
+        // must be routed here too; otherwise fade-in/volume changes never touch them.
+        val ownsAudio = PlaybackOutputPolicy.usesExoPlayer(
+            isLocalSource = track?.sourceType == AudioSourceType.LOCAL,
+            isOfflineDownload = isPlayingOffline
+        )
+        if (ownsAudio) {
             exoPlayer.volume = clamped
         } else {
             youTubePlayer?.setVolume((clamped * 100).toInt())

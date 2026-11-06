@@ -1,11 +1,12 @@
 # Cypher v1.0.3 — Escáner QR estable y actualizaciones desde GitHub 🚀
 
 **Versión:** `1.0.3` (`versionCode 4`) · Android 13+ (API 33-36)
+**Firma:** clave de release del proyecto (`CN=Cypher`, SHA-256 `54:41:5F…77:20`), compatible con 1.0.0–1.0.2.
 
 ## 🐞 Corrección crítica: cierre al escanear QR
 - **Causa raíz:** `play-services-code-scanner:16.1.0` no incluye reglas ProGuard de consumidor. Con R8 full mode (AGP 9) se eliminaban/reescribían clases internas y `GmsBarcodeScanning.getClient()` lanzaba `NullPointerException` dentro de `mlkit_code_scanner.zzoi`.
 - **Solución:** reglas `-keep` específicas para `com.google.mlkit.**` y `com.google.android.gms.internal.mlkit_code_scanner.**`.
-- **Verificado en dispositivo físico** (CPH2579, Android 15): la hoja de importación abre, el escáner de cámara de Play Services se lanza y procesa fotogramas, se puede entrar/salir repetidamente y el flujo manual muestra errores sin cerrar la app.
+- **Verificado en dispositivo físico** (CPH2579, Android 15): la hoja de importación abre, el escáner de cámara de Play Services se lanza, se puede entrar/salir repetidamente y el flujo manual muestra errores sin cerrar la app.
 
 ## 🔄 Sistema de actualizaciones (GitHub Releases)
 - Consulta `Itsbatt/Cypher` en segundo plano al abrir la app, con espera de 15 minutos entre comprobaciones y sin bloquear la interfaz.
@@ -22,9 +23,10 @@
 ## ✅ Pruebas
 - 14 pruebas JVM (versiones, releases, selección de APK, checksums) sin fallos.
 - Release minificado generado y verificado; instalación por ADB en CPH2579.
-- Actualizador probado contra la release real v1.0.2: detectó la versión, descargó el APK y rechazó correctamente la firma incompatible del entorno de prueba.
+- Instalación real sobre 1.0.2 **sin desinstalar** y con datos conservados (misma firma, `versionCode 4`).
+- Actualizador probado contra la release real v1.0.2 y, después, salto real 1.0.3 → 1.0.4.
 
 ## ⚠️ Limitaciones conocidas
-- El keystore de release no está en el repositorio: el APK de esta auditoría está firmado con la clave debug. Instalarlo sobre la 1.0.2 firmada con la clave del proyecto exige desinstalar (Android no permite actualizar entre firmas distintas).
-- La copia exportada antes de la reinstalación estaba vacía (`playlists: []`, `favorites: []`); el perfil y las estadísticas locales se reiniciaron.
-- La auditoría funcional exhaustiva de todas las pantallas y el análisis de dependencias/rendimiento quedan documentados en `AUDIT_REPORT.md`.
+- Requiere Android 13 o superior (API 33+) y arquitectura ARM; el APK universal incluye arm64-v8a y armeabi-v7a.
+- Las instalaciones firmadas con otra clave (por ejemplo, un APK debug) necesitan una desinstalación única.
+- La copia de seguridad exporta playlists y favoritos; no incluye perfil, estadísticas ni ajustes.

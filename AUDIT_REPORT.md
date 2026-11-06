@@ -19,12 +19,16 @@ y `CN=Cypher, OU=Mobile, O=Cypher, L=Madrid, C=ES`, **idénticos** al APK origin
 - Nunca se ha commiteado ningún keystore ni contraseña; el historial no contiene material de firma.
 - Si esta copia se pierde: **no se puede extraer la clave privada de un APK**. Habría que generar una clave nueva y aceptar una desinstalación única en las instalaciones existentes (el actualizador rechaza correctamente firmas distintas).
 
-## C. Release publicada
-- GitHub Release **v1.0.4**: https://github.com/Itsbatt/Cypher/releases/tag/v1.0.4
-- `Cypher-v1.0.4-arm64-v8a-release.apk` — 60.471.463 B — SHA-256 `38501a62cd332c9c54db08877a956c52474b340d2645658bc11a54a77e636f81`
-- `Cypher-v1.0.4-universal-release.apk` — 103.970.899 B — SHA-256 `ce8849b5aa19ad15b05340772e6310c2fd418f97353d564379f3aa57461ddba6`
-- `SHA256SUMS.txt` — usado por el actualizador para verificar la descarga.
-- Ambas APKs verificadas con `apksigner`: `CN=Cypher`, SHA-256 `54:41:5F…77:20`.
+## C. Releases publicadas
+- **v1.0.4** (última): https://github.com/Itsbatt/Cypher/releases/tag/v1.0.4
+  - `Cypher-v1.0.4-arm64-v8a-release.apk` — 60.471.463 B — SHA-256 `38501a62cd332c9c54db08877a956c52474b340d2645658bc11a54a77e636f81`
+  - `Cypher-v1.0.4-universal-release.apk` — 103.970.899 B — SHA-256 `ce8849b5aa19ad15b05340772e6310c2fd418f97353d564379f3aa57461ddba6`
+- **v1.0.3** (paso intermedio, compilada desde el commit `38abcb6`): https://github.com/Itsbatt/Cypher/releases/tag/v1.0.3
+  - `Cypher-v1.0.3-arm64-v8a-release.apk` — 60.470.759 B — SHA-256 `0121df9c12b0f90160034a4bab057bcd23ff3645446f84c7dba7ba2d92c0ad74`
+  - `Cypher-v1.0.3-universal-release.apk` — 103.970.195 B — SHA-256 `583fb714760d35323ad00ae0f1c6b001a54175ec64ca6c748caadc80dd2180b4`
+- Ambas releases incluyen `SHA256SUMS.txt`, usado por el actualizador.
+- Las cuatro APKs verificadas con `apksigner`: `CN=Cypher`, SHA-256 `54:41:5F…77:20`.
+- `v1.0.4` queda marcada como *latest*: el actualizador compara versiones, así que publicar 1.0.3 después no provoca avisos de descarga.
 
 ## D. Actualización real de extremo a extremo (superada)
 1. Instalación limpia de la **1.0.2 original** firmada con `CN=Cypher` (APK respaldado en `.git/installed.apk`).
@@ -112,7 +116,7 @@ La 1.0.4 se midió justo tras instalarla (dexopt/optimización en curso), por lo
 - `YouTubeLoginDialog.kt`: allowlist de hosts en el WebView de login.
 - `SettingsScreen.kt`: texto honesto de la copia de seguridad.
 - `RELEASE_NOTES_v1.0.4.md`, este informe.
-- Commit `fc49244` en `main`; release `v1.0.4` publicada con APKs y checksums.
+- Commits `fc49244` y `b0ae147` en `main`; releases `v1.0.3` y `v1.0.4` publicadas con APKs y checksums.
 
 ## L. Pendiente / no verificado
 - Inicio de sesión real de YouTube/Google (requiere cuenta; no se introdujeron credenciales).

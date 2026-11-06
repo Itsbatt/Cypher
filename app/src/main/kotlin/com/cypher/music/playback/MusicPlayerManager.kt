@@ -120,6 +120,9 @@ class MusicPlayerManager(private val context: Context) {
     @Volatile
     private var userPausedDuringLoad = false
 
+    // Play-count policy: 30 s (or half of a short track) per session.
+    private val playCountTracker = PlayCountTracker()
+
     // Native DSP Equalizer Manager
     val equalizerManager = EqualizerManager(context)
 
@@ -1051,24 +1054,24 @@ class MusicPlayerManager(private val context: Context) {
         // 5. Effective Listening Time Tracker
         listeningTrackerJob = scope.launch(Dispatchers.Default) {
             var lastTick = System.currentTimeMillis()
-            var lastReportedTrackId: String? = null
             while (isActive) {
                 delay(1000)
                 val now = System.currentTimeMillis()
                 val curState = _state.value
                 val track = curState.currentTrack
                 if (curState.isPlaying && track != null) {
-                    val isNewPlay = track.id != lastReportedTrackId
-                    lastReportedTrackId = track.id
                     val elapsed = (now - lastTick).coerceIn(0L, 2500L)
                     if (elapsed > 0) {
+                        val countPlay = playCountTracker.onTick(
+                            trackId = track.id,
+                            positionMs = curState.currentPositionMs,
+                            durationMs = curState.durationMs,
+                            elapsedMs = elapsed
+                        )
                         withContext(Dispatchers.Main) {
-                            onListeningTimeAccumulated?.invoke(track, elapsed, isNewPlay)
+                            onListeningTimeAccumulated?.invoke(track, elapsed, countPlay)
                         }
                     }
-                } else if (track == null) {
-                    // Keep the last track across pauses so resuming does not count as a new play.
-                    lastReportedTrackId = null
                 }
                 lastTick = now
             }
@@ -1118,6 +1121,7 @@ class MusicPlayerManager(private val context: Context) {
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
         userPausedDuringLoad = false
+        playCountTracker.startSession(track.id)
 
         _playbackPositionMs.value = 0L
         _playbackProgress.value = 0f

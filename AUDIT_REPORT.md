@@ -1,51 +1,125 @@
-# Auditoría Cypher — Informe
+# Auditoría Cypher — Informe (fase 2, v1.0.4)
 
-## A. Resumen
-- **Estado inicial:** v1.0.2 instalada en CPH2579 (Android 15, arm64). El escáner QR cerraba la app; el proyecto no estaba en el workspace y se clonó desde GitHub.
-- **Trabajo realizado:** reproducción y corrección del crash QR con stack desofuscado (mapping R8), sistema de actualizaciones GitHub Releases, auditoría de seguridad básica, build release, instalación real y pruebas.
-- **Estado final:** v1.0.3 instalada y funcionando en el teléfono; QR operativo; actualizador implementado y probado contra la release real.
+## A. Estado de partida
+- Repositorio limpio en `38abcb6` (`main`), sin cambios pendientes.
+- Dispositivo CPH2579 (Android 15, SDK 35, arm64-v8a) con `1.0.3` (`versionCode 4`) firmada con clave debug.
+- Copia de seguridad previa conservada en `.backups/Cypher-pre-audit-20261106-0100.zip`.
 
-## B. Funcionalidades
-| Funcionalidad | Estado | Prueba | Resultado |
-|---|---|---|---|
-| Escáner QR (cámara) | Corregido | CPH2579 + emulador | Abre ActivityProxy de ML Kit y procesa fotogramas |
-| Importación manual por código | Correcto | Código inválido `ZZZZZ` | Error en español, sin cierre |
-| Abrir/cerrar escáner repetidamente | Correcto | 2 ciclos | Mismo proceso, sin crash |
-| Aviso de actualización | Nuevo | Emulador contra GitHub v1.0.2 | Aviso, descarga y rechazo de firma |
-| Descarte persistente | Nuevo | Preferencias + relanzado | No vuelve a avisar para 1.0.2 |
-| Reproducción / biblioteca / ajustes | Smoke test | Navegación real | Sin crashes en el recorrido realizado |
+## B. Firma: recuperada la clave original
+Se localizó una copia del keystore de release en el directorio de desarrollo anterior:
+`C:\Users\bat\.gemini\antigravity\scratch\cypher\keystore\cypher-release.jks`
+junto a `keystore.properties` (alias `cypher`).
 
-## C. Errores
-1. **QR (prioritario):** NPE en `mlkit_code_scanner.zzoi` solo con R8. Causa: consumer rules ausentes en `play-services-code-scanner:16.1.0`. Solución: keep rules. Verificado en dispositivo físico.
-2. **Instalación:** `INSTALL_FAILED_UPDATE_INCOMPATIBLE` al cambiar de firma; `INSTALL_FAILED_VERSION_DOWNGRADE` por versionCode. Se resolvió con desinstalación completa y build 1.0.3 (versionCode 4).
-3. **Entorno:** caché de transforms de Gradle corrupta y `local.properties` ausente; limpiada/creada, sin cambios de código.
+Verificación criptográfica: el certificado del keystore tiene
+`SHA-256 54:41:5F:F1:75:1B:71:D0:D1:54:30:B9:0C:44:CF:04:B5:8F:46:52:F9:C6:83:8D:15:78:E9:29:2B:C1:77:20`
+y `CN=Cypher, OU=Mobile, O=Cypher, L=Madrid, C=ES`, **idénticos** al APK original instalado (`.git/installed.apk`). No es una clave nueva: es la clave real del proyecto.
 
-## D. Seguridad
-- Revisión de manifiesto: permisos justificados; se añadió `REQUEST_INSTALL_PACKAGES` solo para el instalador.
-- `FileProvider` no exportado y restringido a `cache/updates`.
-- Actualizador: HTTPS, límite de checksums, verificación de paquete/versión/firma, sin instalación silenciosa.
-- `PlaybackService` sigue exportado para integración con el sistema multimedia (Android Auto/Asistente); revisar si se restringe en el futuro.
-- No se encontraron secretos en el código ni claves en el repositorio.
+- Se copió a `keystore/cypher-release.jks` + `keystore.properties`, ambos ignorados por git (`.gitignore`).
+- El `build.gradle.kts` ya leía ese archivo; con él, `assembleRelease` firma con la clave original. El flag `-PcypherDebugSigning=true` sigue disponible solo para pruebas.
+- Nunca se ha commiteado ningún keystore ni contraseña; el historial no contiene material de firma.
+- Si esta copia se pierde: **no se puede extraer la clave privada de un APK**. Habría que generar una clave nueva y aceptar una desinstalación única en las instalaciones existentes (el actualizador rechaza correctamente firmas distintas).
 
-## E. Rendimiento
-- Sin regresiones observadas en arranque, navegación ni escáner.
-- La comprobación de actualizaciones es asíncrona, con timeout y cooldown; no bloquea la UI.
-- No se realizó perfilado profundo de CPU/RAM.
+## C. Release publicada
+- GitHub Release **v1.0.4**: https://github.com/Itsbatt/Cypher/releases/tag/v1.0.4
+- `Cypher-v1.0.4-arm64-v8a-release.apk` — 60.471.463 B — SHA-256 `38501a62cd332c9c54db08877a956c52474b340d2645658bc11a54a77e636f81`
+- `Cypher-v1.0.4-universal-release.apk` — 103.970.899 B — SHA-256 `ce8849b5aa19ad15b05340772e6310c2fd418f97353d564379f3aa57461ddba6`
+- `SHA256SUMS.txt` — usado por el actualizador para verificar la descarga.
+- Ambas APKs verificadas con `apksigner`: `CN=Cypher`, SHA-256 `54:41:5F…77:20`.
 
-## F. GitHub
-- Archivos: nuevo paquete `update/`, `UpdateBanner.kt`, `file_paths.xml`, reglas ProGuard, manifiesto, `MainScreen`, tests y documentación.
-- Commit y push: ver estado al final de la sesión.
+## D. Actualización real de extremo a extremo (superada)
+1. Instalación limpia de la **1.0.2 original** firmada con `CN=Cypher` (APK respaldado en `.git/installed.apk`).
+2. Exportación desde la app a `/sdcard/Download/cypher_backup_alex_1793947165054.json` (645 B) con 2 playlists; importación posterior verificada (2 playlists restauradas).
+3. Instalación de una **1.0.3 firmada con la clave original** sobre la 1.0.2 (`versionCode 4 > 3`, misma firma): actualización sin desinstalar y datos intactos.
+4. La 1.0.3 detectó `v1.0.4` desde la API de GitHub (`UpdateViewModel: Actualización disponible 1.0.4`), mostró el aviso discreto con resumen.
+5. «Actualizar» → descarga del APK arm64 + `SHA256SUMS.txt` → verificación SHA-256 y de firma → apertura del instalador oficial → ajuste «Instalar apps desconocidas» → Play Protect («This app looks safe») → instalar.
+6. Resultado: **1.0.4 (`versionCode 5`) instalada**, sin desinstalar, con las 2 playlists conservadas y sin crashes.
+   - Nota: la 1.0.2 no contenía el actualizador (se añadió en 1.0.3), por eso el salto probado es 1.0.3 → 1.0.4.
 
-## G. Pruebas
-- Dispositivo: CPH2579, Android 15 (SDK 35), arm64-v8a.
-- 14 pruebas unitarias JVM, 0 fallos.
-- Release minificado compilado; instalación ADB verificada.
-- Escáner QR validado en hardware real (cámara abierta y frames procesados).
-- Actualizador validado en emulador contra la API real de GitHub.
+## E. Auditoría funcional (dispositivo real)
+Método: navegación con ADB + `uiautomator dump` sobre cada pantalla, comprobando textos, estados y `logcat` (crash/ANR) tras cada bloque.
 
-## H. Pendientes / limitaciones
-- Barrido funcional exhaustivo de todas las pantallas y ajustes (no completado al 100%).
-- Auditoría de dependencias y vulnerabilidades no automatizada.
-- Firma: falta el keystore de release; el APK entregado usa firma debug.
-- Instalación de una actualización real no probada de extremo a extremo por incompatibilidad de firma del entorno.
-- Publicación de una GitHub Release v1.0.3 pendiente (no se creó ninguna release).
+| Pantalla / función | Comprobación | Resultado |
+|---|---|---|
+| Inicio | Saludo, Top Picks, carruseles, playlists, «Nueva» | Correcto |
+| Crear playlist | Diálogo, título, creación y persistencia tras reinicio | Correcto (la playlist sobrevive al `force-stop`) |
+| Biblioteca | Secciones Playlists/Álbumes/Artistas/Canciones/Favoritos/Descargadas/Local | Correcto |
+| Detalle de playlist | Cabecera, estado vacío, compartir QR, menú de opciones | Correcto |
+| Buscar | Categorías, resultados globales de YouTube Music, opciones por pista | Correcto |
+| Reproducción | Pista de YouTube, mini‑reproductor, pausa, siguiente, favorito, volumen | Correcto |
+| Now Playing | Aleatorio, letras, repetir, scrubbing/volumen visibles | Correcto |
+| Letras | Letras sincronizadas reales de la pista y cierre | Correcto |
+| Ajustes | Perfil, cambiar nombre, estadísticas, YouTube, acentos, fondos, tarjetas, bordes, háptica | Correcto |
+| Ecualizador | Hoja DSP con presets predefinidos | Correcto |
+| Temporizador | Opciones 15/30/45/60 minutos | Correcto |
+| Liquid Glass | Hoja AGSL con modo de paleta, velocidad, distorsión y opacidad | Correcto |
+| Copia de seguridad | Exportar (JSON 645 B) e importar (2 playlists) | Correcto; ver limitación de contenido |
+| Escáner QR | Hoja de importación + cámara (`BarcodeScanningActivityProxy`) | Correcto, sin crash en 1.0.4 |
+
+Sin `FATAL EXCEPTION` ni ANR durante el recorrido. `logcat -b crash` vacío al final.
+
+## F. Seguridad
+Revisión de manifiesto fusionado, permisos, componentes, red, almacenamiento y logs.
+
+- **Permisos**: INTERNET, ACCESS_NETWORK_STATE, READ_MEDIA_AUDIO, RECORD_AUDIO, FOREGROUND_SERVICE(+MEDIA_PLAYBACK), POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, REQUEST_INSTALL_PACKAGES, WAKE_LOCK, VIBRATE. Todos tienen uso real en la app.
+- **Componentes exportados**: `MainActivity` (launcher, VIEW audio, MEDIA_PLAY_FROM_SEARCH, deep link `cypher://wrapped`, MUSIC_PLAYER) y `PlaybackService` (`MediaLibraryService`, necesario para Android Auto/Asistente). `FileProvider` (`exported=false`, solo `cache/updates`), `WrappedAlarmReceiver` (`exported=false`) y los componentes de librerías están correctamente cerrados.
+- **Corregido**: el WebView de inicio de sesión de Google aceptaba cualquier URL; ahora solo navega a `google.com`, `youtube.com`, `gstatic.com` y `googleusercontent.com`.
+- **Corregido**: la descarga de actualizaciones no tenía tope; ahora 300 MB comprobados en metadatos y durante la escritura.
+- **Sin tráfico cleartext**: `targetSdk 36` y no se declara `usesCleartextTraffic` (por defecto `false`).
+- **Credenciales**: cookies de YouTube en `EncryptedSharedPreferences` (AES256-GCM, clave en Android Keystore); no hay secretos en el repositorio ni en logs (revisadas 150 llamadas a `Log`; no se registran cookies, tokens ni contraseñas).
+- **Aceptado/documentado**: `allowBackup=true` incluye la base Room en la copia del sistema; `PlaybackService` exportado es requisito de Media3 para controles externos; `ResilientDns` usa IPs fijas de dpaste/c-net y DoH de Google/Cloudflare, y considera «secuestro» IPs privadas (puede forzar DoH en redes locales). No se modificó para no romper el bypass del ISP del usuario; se recomienda hacerlo configurable.
+
+## G. Dependencias
+Resolución de `releaseRuntimeClasspath` sin conflictos ni duplicados: todas las Media3 en `1.5.1`, OkHttp único `4.12.0`, Kotlin `2.3.20`.
+
+| Dependencia | Versión | Estado |
+|---|---|---|
+| `androidx.security:security-crypto` | `1.1.0-alpha06` → **`1.1.0`** | Actualizada (alpha obsoleta desde 2023) |
+| `androidx.media3:*` | `1.5.1` | Obsoleta (última 1.11.1). Salto mayor con migraciones de API; no se actualiza en esta fase |
+| `okhttp` | `4.12.0` | Sin CVEs directas conocidas; 5.x es un cambio mayor |
+| `room` | `2.6.1` | Funcional; actualización mayor pendiente |
+| `navigation3` | `1.0.1` | Correcta |
+| `coil-compose` | `2.7.0` | Correcta |
+| `play-services-code-scanner` | `16.1.0` | Requiere keep rules (ya aplicadas) |
+| `youtubedl-android` / `ffmpeg` | `0.18.1` | Correcta |
+| `zxing`, `guava`, `media`, `fragment` | `3.5.3`, `33.3.1-android`, `1.7.0`, `1.8.5` | Sin incidencias |
+
+## H. Rendimiento (medido, no estimado)
+| Métrica | 1.0.3 | 1.0.4 |
+|---|---|---|
+| Arranque en frío (`am start -W`) | 1045 / 1152 / 1643 ms | 1763 / 1557 / 1829 ms |
+| PSS tras 15–20 s | 112,2 MB | 112,4 MB |
+| Frames perdidos (`gfxinfo`) | 4/109 (3,67 %) | 3/77 (3,90 %) |
+| Frametime p50 / p90 / p95 | 19 / 27 / 29 ms | 19 / 25 / 28 ms |
+| CPU en segundo plano | 3,3 % | 3,3 % |
+| Batería | — | 1,37 % de pantalla + 219 mAs de CPU en ~47 s de uso registrado |
+| ANR / crashes | 0 | 0 |
+
+La 1.0.4 se midió justo tras instalarla (dexopt/optimización en curso), por lo que su arranque es más lento; no se declara mejora ni regresión de rendimiento. No se usó un perfilador (Studio Profiler/Perfetto), así que no hay datos de fugas de memoria ni de bloqueos del hilo principal más allá de los ANR.
+
+## I. Calidad de código
+- `lintRelease`: **BUILD SUCCESSFUL**, 0 errores (se corrigió el escapado de `local.properties`); 123 avisos, principalmente `UseKtx`, `GradleDependency`, `UseTomlInstead`, `ObsoleteSdkInt` y versiones más nuevas disponibles.
+- `testDebugUnitTest`: 14 pruebas, 0 fallos, 0 omitidas.
+- `assembleRelease` con R8 + resource shrinking correcto.
+
+## J. Datos
+- Exportación real: `.backups/backup-1.0.3.json` (645 B) con 2 playlists; importación verificada en la instalación limpia.
+- La copia incluye **solo playlists y favoritos**. No incluye perfil, estadísticas, tema, ecualizador ni cookies de YouTube. Antes la interfaz prometía «analíticas» y JSON «firmado»; el texto se corrigió para reflejarlo.
+- Antes de desinstalar se exportó y validó el JSON; después de la actualización se comprobó que las playlists seguían presentes.
+
+## K. Cambios de esta fase
+- `app/build.gradle.kts`: `security-crypto 1.1.0`; versión `1.0.4` (`versionCode 5`).
+- `UpdateInstaller.kt`: límite de 300 MB en metadatos y en bytes escritos.
+- `YouTubeLoginDialog.kt`: allowlist de hosts en el WebView de login.
+- `SettingsScreen.kt`: texto honesto de la copia de seguridad.
+- `RELEASE_NOTES_v1.0.4.md`, este informe.
+- Commit `fc49244` en `main`; release `v1.0.4` publicada con APKs y checksums.
+
+## L. Pendiente / no verificado
+- Inicio de sesión real de YouTube/Google (requiere cuenta; no se introdujeron credenciales).
+- Búsqueda por voz (requiere micrófono y permisos en primer plano; no se probó el reconocimiento).
+- Wrapped (evento estacional; fuera de temporada no se muestra).
+- Compartición real a dpaste/c-net y descarga offline/yt-dlp (dependen de servicios externos y de tiempo de descarga).
+- Biblioteca de música local (no hay audio local en el dispositivo de prueba).
+- Actualización de Media3/OkHttp/Room a versiones mayores (requiere migración y regresión específica).
+- Perfilado con Perfetto/Studio Profiler y pruebas en otros fabricantes/tablets.
+- Duplicar playlists con el mismo nombre está permitido (no hay restricción de unicidad); se observaron dos entradas idénticas creadas en pruebas.

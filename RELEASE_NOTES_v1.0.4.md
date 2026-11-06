@@ -19,8 +19,9 @@
 ## ✅ Verificación
 - 14 pruebas JVM sin fallos.
 - Release minificado firmado y verificado con `apksigner`.
-- Recorrido funcional de Inicio, Biblioteca, Buscar, Ajustes, diálogos, ecualizador, temporizador y copia de seguridad en CPH2579 (Android 15).
+- Recorrido funcional en CPH2579 (Android 15): Inicio, Biblioteca, Buscar, Ajustes, creación de playlists persistente, detalle de playlist, reproducción, Now Playing, letras sincronizadas, ecualizador, temporizador, Liquid Glass, copia de seguridad y escáner QR.
+- Actualización real 1.0.3 → 1.0.4 desde la propia app, con las playlists conservadas.
 
 ## ⚠️ Limitaciones
-- Las instalaciones firmadas con una clave distinta (por ejemplo, el APK debug de la auditoría 1.0.3) requieren una desinstalación única.
+- Las instalaciones firmadas con una clave distinta (por ejemplo, el APK debug de la auditoría 1.0.3) requieren una desinstalación única. Esta release usa la clave original del proyecto.
 - La copia de seguridad no incluye perfil, estadísticas ni preferencias.

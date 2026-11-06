@@ -4,6 +4,10 @@ import android.util.Log
 import com.cypher.music.data.ArtistNormalizer
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
+import com.cypher.music.network.innertube.InnerTubePageParser
+import com.cypher.music.network.innertube.InnerTubePager
+import com.cypher.music.network.innertube.PagedResult
+import com.cypher.music.network.innertube.RemotePlaylist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Dns
@@ -440,377 +444,152 @@ class YouTubeRepository {
     // InnerTube Authenticated Sync (Google / YouTube Music)
     // -----------------------------------------------------------------------------------
 
-    data class RemotePlaylist(
-        val id: String,
-        val title: String,
-        val description: String = "",
-        val coverUrl: String? = null,
-        val tracks: List<Track> = emptyList()
+    private class InnerTubeAuth(val cookie: String, val authorization: String?)
+
+    suspend fun fetchLikedMusic(
+        accountManager: YouTubeAccountManager,
+        onProgress: (processed: Int, totalCount: Int?) -> Unit = { _, _ -> }
+    ): List<Track> = withContext(Dispatchers.IO) {
+        val session = accountManager.session.value
+        if (!session.isLoggedIn || session.cookie.isNullOrBlank()) return@withContext emptyList()
+        val auth = innerTubeAuth(accountManager)
+
+        for (browseId in listOf("VLLM", "FEmusic_liked_videos", "VLSE")) {
+            val result = pagedTracks(browseId, auth, onProgress)
+            if (result.items.isNotEmpty()) {
+                Log.d(
+                    "AppleMusicPlayer",
+                    "fetchLikedMusic '$browseId': ${result.items.size} tracks in ${result.pagesFetched} pages (complete=${result.complete})"
+                )
+                return@withContext result.items
+            }
+        }
+        emptyList()
+    }
+
+    /**
+     * Library playlist metadata only. Tracks are fetched later, page by page, so a large
+     * playlist never blocks the listing and every page can report its own progress.
+     */
+    suspend fun fetchUserPlaylists(accountManager: YouTubeAccountManager): List<RemotePlaylist> =
+        withContext(Dispatchers.IO) {
+            val session = accountManager.session.value
+            if (!session.isLoggedIn || session.cookie.isNullOrBlank()) return@withContext emptyList()
+            val auth = innerTubeAuth(accountManager)
+
+            for (browseId in listOf("FEmusic_liked_playlists", "FEmusic_library_playlists")) {
+                val result = pagedPlaylists(browseId, auth)
+                if (result.items.isNotEmpty()) {
+                    Log.d(
+                        "AppleMusicPlayer",
+                        "fetchUserPlaylists '$browseId': ${result.items.size} playlists in ${result.pagesFetched} pages (complete=${result.complete})"
+                    )
+                    return@withContext result.items
+                }
+            }
+            Log.d("AppleMusicPlayer", "fetchUserPlaylists found 0 playlists")
+            emptyList()
+        }
+
+    suspend fun fetchPlaylistTracks(
+        browseId: String,
+        accountManager: YouTubeAccountManager?,
+        onProgress: (processed: Int, totalCount: Int?) -> Unit = { _, _ -> }
+    ): List<Track> = fetchPlaylistTracksPaged(browseId, accountManager, onProgress).items
+
+    /**
+     * Walks every continuation page of a playlist. The returned [PagedResult] says whether
+     * the sync completed; a partial result still carries the pages that were fetched.
+     */
+    suspend fun fetchPlaylistTracksPaged(
+        browseId: String,
+        accountManager: YouTubeAccountManager?,
+        onProgress: (processed: Int, totalCount: Int?) -> Unit = { _, _ -> }
+    ): PagedResult<Track> = withContext(Dispatchers.IO) {
+        val formattedBrowseId = if (browseId.startsWith("VL")) browseId else "VL$browseId"
+        val result = pagedTracks(formattedBrowseId, innerTubeAuth(accountManager), onProgress)
+        Log.d(
+            "AppleMusicPlayer",
+            "fetchPlaylistTracks $formattedBrowseId: ${result.items.size} tracks in ${result.pagesFetched} pages" +
+                " (complete=${result.complete}${result.error?.let { ", error=$it" } ?: ""})"
+        )
+        result
+    }
+
+    private suspend fun pagedTracks(
+        browseId: String,
+        auth: InnerTubeAuth,
+        onProgress: (Int, Int?) -> Unit
+    ): PagedResult<Track> = InnerTubePager().paginate(
+        fetchPage = { continuation ->
+            InnerTubePageParser.parseTracksPage(executeInnerTubeBrowse(browseId, continuation, auth))
+        },
+        idOf = { it.id },
+        onProgress = onProgress
     )
 
-    suspend fun fetchLikedMusic(accountManager: YouTubeAccountManager): List<Track> = withContext(Dispatchers.IO) {
-        val session = accountManager.session.value
-        if (!session.isLoggedIn || session.cookie.isNullOrBlank()) return@withContext emptyList()
-        val authHeader = accountManager.getInnerTubeAuthHeader() ?: return@withContext emptyList()
+    private suspend fun pagedPlaylists(browseId: String, auth: InnerTubeAuth): PagedResult<RemotePlaylist> =
+        InnerTubePager().paginate(
+            fetchPage = { continuation ->
+                InnerTubePageParser.parsePlaylistPage(executeInnerTubeBrowse(browseId, continuation, auth))
+            },
+            idOf = { it.id }
+        )
 
-        // 1. Try VLLM (Liked Music canonical playlist ID)
-        val likedVLLM = executeInnerTubeBrowse("VLLM", session.cookie, authHeader)
-        if (likedVLLM.isNotEmpty()) {
-            Log.d("AppleMusicPlayer", "fetchLikedMusic retrieved ${likedVLLM.size} tracks from VLLM")
-            return@withContext likedVLLM
-        }
-
-        // 2. Try FEmusic_liked_videos
-        val likedVideos = executeInnerTubeBrowse("FEmusic_liked_videos", session.cookie, authHeader)
-        if (likedVideos.isNotEmpty()) {
-            Log.d("AppleMusicPlayer", "fetchLikedMusic retrieved ${likedVideos.size} tracks from FEmusic_liked_videos")
-            return@withContext likedVideos
-        }
-
-        // 3. Try VLSE (Secondary liked videos list)
-        executeInnerTubeBrowse("VLSE", session.cookie, authHeader)
-    }
-
-    suspend fun fetchUserPlaylists(accountManager: YouTubeAccountManager): List<RemotePlaylist> = withContext(Dispatchers.IO) {
-        val session = accountManager.session.value
-        if (!session.isLoggedIn || session.cookie.isNullOrBlank()) return@withContext emptyList()
-        val authHeader = accountManager.getInnerTubeAuthHeader() ?: return@withContext emptyList()
-
-        val playlists = mutableListOf<RemotePlaylist>()
-
-        // 1. Try FEmusic_liked_playlists (Primary for modern YouTube Music)
-        val list1 = executeInnerTubeBrowsePlaylists("FEmusic_liked_playlists", session.cookie, authHeader)
-        playlists.addAll(list1)
-
-        // 2. Try FEmusic_library_playlists
-        if (playlists.isEmpty()) {
-            val list2 = executeInnerTubeBrowsePlaylists("FEmusic_library_playlists", session.cookie, authHeader)
-            playlists.addAll(list2)
-        }
-
-        Log.d("AppleMusicPlayer", "fetchUserPlaylists found ${playlists.size} playlists")
-
-        // 3. For each playlist, fetch tracks
-        val fullPlaylists = mutableListOf<RemotePlaylist>()
-        for (item in playlists.distinctBy { it.id }) {
-            val tracks = fetchPlaylistTracks(item.id, accountManager)
-            Log.d("AppleMusicPlayer", "fetchPlaylistTracks for '${item.title}' (${item.id}): ${tracks.size} tracks")
-            fullPlaylists.add(item.copy(tracks = tracks))
-        }
-
-        fullPlaylists
-    }
-
-    private fun executeInnerTubeBrowse(browseId: String, cookie: String, authHeader: String): List<Track> {
-        try {
-            var cookieToSend = cookie
-            if (!cookieToSend.contains("SOCS=")) {
-                cookieToSend = "$cookieToSend; $CONSENT_COOKIE"
-            }
-
-            val bodyJson = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "WEB_REMIX")
-                        put("clientVersion", "1.20240901.01.00")
-                        put("hl", "es")
-                        put("gl", "ES")
-                    })
-                })
-                put("browseId", browseId)
-            }
-
-            val request = Request.Builder()
-                .url("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false")
-                .header("Content-Type", "application/json")
-                .header("Origin", "https://music.youtube.com")
-                .header("Referer", "https://music.youtube.com/")
-                .header("X-Origin", "https://music.youtube.com")
-                .header("Cookie", cookieToSend)
-                .header("Authorization", authHeader)
-                .header("X-YouTube-Client-Name", "67")
-                .header("X-YouTube-Client-Version", "1.20240901.01.00")
-                .header("X-Goog-AuthUser", "0")
-                .header("User-Agent", ANDROID_USER_AGENT)
-                .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val respBody = response.body?.string() ?: ""
-                val root = JSONObject(respBody)
-                return parseInnerTubeTrackList(root)
-            } else {
-                Log.w("AppleMusicPlayer", "InnerTube browse $browseId returned HTTP ${response.code}")
-            }
-        } catch (e: Exception) {
-            Log.e("AppleMusicPlayer", "InnerTube browse $browseId failed", e)
-        }
-        return emptyList()
-    }
-
-    private fun executeInnerTubeBrowsePlaylists(browseId: String, cookie: String, authHeader: String): List<RemotePlaylist> {
-        try {
-            var cookieToSend = cookie
-            if (!cookieToSend.contains("SOCS=")) {
-                cookieToSend = "$cookieToSend; $CONSENT_COOKIE"
-            }
-
-            val bodyJson = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "WEB_REMIX")
-                        put("clientVersion", "1.20240901.01.00")
-                        put("hl", "es")
-                        put("gl", "ES")
-                    })
-                })
-                put("browseId", browseId)
-            }
-
-            val request = Request.Builder()
-                .url("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false")
-                .header("Content-Type", "application/json")
-                .header("Origin", "https://music.youtube.com")
-                .header("Referer", "https://music.youtube.com/")
-                .header("X-Origin", "https://music.youtube.com")
-                .header("Cookie", cookieToSend)
-                .header("Authorization", authHeader)
-                .header("X-YouTube-Client-Name", "67")
-                .header("X-YouTube-Client-Version", "1.20240901.01.00")
-                .header("X-Goog-AuthUser", "0")
-                .header("User-Agent", ANDROID_USER_AGENT)
-                .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val respBody = response.body?.string() ?: ""
-                val root = JSONObject(respBody)
-                return parseInnerTubePlaylistList(root)
-            } else {
-                Log.w("AppleMusicPlayer", "InnerTube browse playlists $browseId returned HTTP ${response.code}")
-            }
-        } catch (e: Exception) {
-            Log.e("AppleMusicPlayer", "InnerTube browse playlists $browseId failed", e)
-        }
-        return emptyList()
-    }
-
-    suspend fun fetchPlaylistTracks(browseId: String, accountManager: YouTubeAccountManager?): List<Track> = withContext(Dispatchers.IO) {
+    private fun innerTubeAuth(accountManager: YouTubeAccountManager?): InnerTubeAuth {
         val session = accountManager?.session?.value
-        val reqBuilder = Request.Builder()
+        if (session != null && session.isLoggedIn && !session.cookie.isNullOrBlank()) {
+            var cookie = session.cookie
+            if (!cookie.contains("SOCS=")) cookie = "$cookie; $CONSENT_COOKIE"
+            return InnerTubeAuth(cookie, accountManager.getInnerTubeAuthHeader())
+        }
+        return InnerTubeAuth(CONSENT_COOKIE, null)
+    }
+
+    private fun executeInnerTubeBrowse(browseId: String, continuation: String?, auth: InnerTubeAuth): JSONObject {
+        val bodyJson = JSONObject().apply {
+            put("context", innerTubeContext())
+            if (continuation != null) {
+                put("continuation", continuation)
+            } else {
+                put("browseId", browseId)
+            }
+        }
+
+        val builder = Request.Builder()
             .url("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false")
             .header("Content-Type", "application/json")
             .header("Origin", "https://music.youtube.com")
             .header("Referer", "https://music.youtube.com/")
             .header("X-Origin", "https://music.youtube.com")
+            .header("Cookie", auth.cookie)
             .header("X-YouTube-Client-Name", "67")
             .header("X-YouTube-Client-Version", "1.20240901.01.00")
             .header("X-Goog-AuthUser", "0")
             .header("User-Agent", ANDROID_USER_AGENT)
+            .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+        auth.authorization?.let { builder.header("Authorization", it) }
 
-        if (session != null && session.isLoggedIn && !session.cookie.isNullOrBlank()) {
-            val authHeader = accountManager.getInnerTubeAuthHeader()
-            if (authHeader != null) {
-                var cookieToSend = session.cookie
-                if (!cookieToSend.contains("SOCS=")) {
-                    cookieToSend = "$cookieToSend; $CONSENT_COOKIE"
-                }
-                reqBuilder.header("Cookie", cookieToSend)
-                reqBuilder.header("Authorization", authHeader)
+        val response = client.newCall(builder.build()).execute()
+        response.use { res ->
+            if (!res.isSuccessful) {
+                throw java.io.IOException("InnerTube browse HTTP ${res.code}")
             }
-        } else {
-            reqBuilder.header("Cookie", CONSENT_COOKIE)
-        }
-
-        val formattedBrowseId = if (browseId.startsWith("VL")) browseId else "VL$browseId"
-        val bodyJson = JSONObject().apply {
-            put("context", JSONObject().apply {
-                put("client", JSONObject().apply {
-                    put("clientName", "WEB_REMIX")
-                    put("clientVersion", "1.20240901.01.00")
-                    put("hl", "es")
-                    put("gl", "ES")
-                })
-            })
-            put("browseId", formattedBrowseId)
-        }
-
-        try {
-            val req = reqBuilder.post(bodyJson.toString().toRequestBody("application/json".toMediaType())).build()
-            val res = client.newCall(req).execute()
-            if (res.isSuccessful) {
-                val respBody = res.body?.string() ?: ""
-                val root = JSONObject(respBody)
-                return@withContext parseInnerTubeTrackList(root)
+            val body = res.body?.string().orEmpty()
+            if (body.isBlank()) {
+                throw java.io.IOException("InnerTube browse devolvió una respuesta vacía")
             }
-        } catch (e: Exception) {
-            Log.w("AppleMusicPlayer", "Failed to fetch tracks for playlist $browseId", e)
-        }
-        emptyList()
-    }
-
-    private fun findJsonObjectsByKey(json: Any?, key: String, action: (JSONObject) -> Unit) {
-        when (json) {
-            is JSONObject -> {
-                val target = json.optJSONObject(key)
-                if (target != null) {
-                    action(target)
-                }
-                val keys = json.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    findJsonObjectsByKey(json.opt(k), key, action)
-                }
-            }
-            is org.json.JSONArray -> {
-                for (i in 0 until json.length()) {
-                    findJsonObjectsByKey(json.opt(i), key, action)
-                }
-            }
+            return JSONObject(body)
         }
     }
 
-    private fun parseInnerTubeTrackList(root: JSONObject): List<Track> {
-        val tracks = mutableListOf<Track>()
-        try {
-            findJsonObjectsByKey(root, "musicResponsiveListItemRenderer") { renderer ->
-                val vid = renderer.optJSONObject("playlistItemData")?.optString("videoId")
-                    ?: renderer.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
-                    ?: ""
-
-                if (vid.isNotBlank()) {
-                    val flexCols = renderer.optJSONArray("flexColumns")
-                    var title = ""
-                    var artist = ""
-
-                    if (flexCols != null && flexCols.length() > 0) {
-                        val col0 = flexCols.optJSONObject(0)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-                        val runs0 = col0?.optJSONObject("text")?.optJSONArray("runs")
-                        title = runs0?.optJSONObject(0)?.optString("text") ?: ""
-
-                        if (flexCols.length() > 1) {
-                            val col1 = flexCols.optJSONObject(1)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-                            val runs1 = col1?.optJSONObject("text")?.optJSONArray("runs")
-                            artist = runs1?.optJSONObject(0)?.optString("text") ?: ""
-                        }
-                    }
-
-                    if (title.isNotBlank()) {
-                        tracks.add(
-                            Track(
-                                id = "yt_$vid",
-                                title = cleanTitle(title),
-                                artist = ArtistNormalizer.normalize(if (artist.isNotBlank()) artist else "YouTube Music"),
-                                album = "YouTube Music",
-                                durationMs = 210000L,
-                                artworkUrl = "https://i.ytimg.com/vi/$vid/hqdefault.jpg",
-                                streamUrl = vid,
-                                sourceType = AudioSourceType.YOUTUBE
-                            )
-                        )
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AppleMusicPlayer", "parseInnerTubeTrackList JSON traversal error", e)
-        }
-
-        // Fallback: If structured traversal didn't catch, use regex
-        if (tracks.isEmpty()) {
-            try {
-                val textStr = root.toString()
-                val regex = Regex("\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"runs\":\\[\\{\"text\":\"([^\"]+)\"\\}\\].*?\"runs\":\\[\\{\"text\":\"([^\"]+)\"\\}\\]")
-                val matches = regex.findAll(textStr)
-                for (m in matches) {
-                    val vid = m.groupValues[1]
-                    val title = m.groupValues[2]
-                    val artist = m.groupValues[3]
-                    if (vid.isNotBlank() && title.isNotBlank()) {
-                        tracks.add(
-                            Track(
-                                id = "yt_$vid",
-                                title = cleanTitle(title),
-                                artist = ArtistNormalizer.normalize(artist),
-                                album = "YouTube Music",
-                                durationMs = 210000L,
-                                artworkUrl = "https://i.ytimg.com/vi/$vid/hqdefault.jpg",
-                                streamUrl = vid,
-                                sourceType = AudioSourceType.YOUTUBE
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("AppleMusicPlayer", "parseInnerTubeTrackList regex fallback error", e)
-            }
-        }
-
-        return tracks.distinctBy { it.id }
-    }
-
-    private fun parseInnerTubePlaylistList(root: JSONObject): List<RemotePlaylist> {
-        val playlists = mutableListOf<RemotePlaylist>()
-        try {
-            findJsonObjectsByKey(root, "musicTwoRowItemRenderer") { renderer ->
-                val nav = renderer.optJSONObject("navigationEndpoint")
-                val browseEndpoint = nav?.optJSONObject("browseEndpoint")
-                val browseId = browseEndpoint?.optString("browseId") ?: ""
-
-                val titleRuns = renderer.optJSONObject("title")?.optJSONArray("runs")
-                val title = titleRuns?.optJSONObject(0)?.optString("text") ?: ""
-
-                val thumbList = renderer.optJSONObject("thumbnailRenderer")
-                    ?.optJSONObject("musicThumbnailRenderer")
-                    ?.optJSONObject("thumbnail")
-                    ?.optJSONArray("thumbnails")
-                val coverUrl = if (thumbList != null && thumbList.length() > 0) {
-                    thumbList.optJSONObject(thumbList.length() - 1)?.optString("url")
-                } else null
-
-                if (browseId.isNotBlank() && title.isNotBlank() && !title.equals("Nueva lista", true) && !title.equals("New playlist", true)) {
-                    playlists.add(
-                        RemotePlaylist(
-                            id = browseId,
-                            title = title,
-                            description = "Sincronizada desde YouTube Music",
-                            coverUrl = coverUrl
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("AppleMusicPlayer", "parseInnerTubePlaylistList JSON traversal error", e)
-        }
-
-        if (playlists.isEmpty()) {
-            try {
-                findJsonObjectsByKey(root, "musicResponsiveListItemRenderer") { renderer ->
-                    val nav = renderer.optJSONObject("navigationEndpoint")
-                    val browseEndpoint = nav?.optJSONObject("browseEndpoint")
-                    val browseId = browseEndpoint?.optString("browseId") ?: ""
-
-                    val flexCols = renderer.optJSONArray("flexColumns")
-                    val col0 = flexCols?.optJSONObject(0)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-                    val title = col0?.optJSONObject("text")?.optJSONArray("runs")?.optJSONObject(0)?.optString("text") ?: ""
-
-                    if (browseId.isNotBlank() && title.isNotBlank() && (browseId.startsWith("VLPL") || browseId.startsWith("FEmusic_"))) {
-                        playlists.add(
-                            RemotePlaylist(
-                                id = browseId,
-                                title = title,
-                                description = "Sincronizada desde YouTube Music"
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-
-        return playlists.distinctBy { it.id }
+    private fun innerTubeContext(): JSONObject = JSONObject().apply {
+        put("client", JSONObject().apply {
+            put("clientName", "WEB_REMIX")
+            put("clientVersion", "1.20240901.01.00")
+            put("hl", "es")
+            put("gl", "ES")
+        })
     }
 
     suspend fun getSmartRecommendations(

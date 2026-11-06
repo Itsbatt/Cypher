@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         PlaybackDailyEntity.class,
         SearchQueryEntity.class
     },
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters({Converters.class})
@@ -56,6 +56,18 @@ public abstract class CypherDatabase extends RoomDatabase {
         }
     };
 
+    /**
+     * Adds the YouTube Music playlist id used to update a synced playlist in place.
+     * Existing rows keep their data; their sourceId stays null until the next sync.
+     */
+    private static final Migration MIGRATION_4_5 = new Migration(4, 5) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE `playlists` ADD COLUMN `sourceId` TEXT");
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_playlists_sourceId` ON `playlists` (`sourceId`)");
+        }
+    };
+
     public abstract PlaylistDao playlistDao();
     public abstract TrackDao trackDao();
     public abstract RecentlyPlayedDao recentlyPlayedDao();
@@ -72,7 +84,7 @@ public abstract class CypherDatabase extends RoomDatabase {
                         CypherDatabase.class,
                         DATABASE_NAME
                     )
-                    .addMigrations(MIGRATION_3_4)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .allowMainThreadQueries()
                     .build();

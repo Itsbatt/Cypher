@@ -2,10 +2,11 @@ package com.cypher.music.data.room;
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.Index;
 import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "playlists")
+@Entity(tableName = "playlists", indices = {@Index("sourceId")})
 public class PlaylistEntity {
     @PrimaryKey
     @NonNull
@@ -16,6 +17,8 @@ public class PlaylistEntity {
     public long createdAt;
     public long updatedAt;
     public boolean isPrivate;
+    /** YouTube Music playlist id (VLPL...) for synced playlists; null for local ones. */
+    public String sourceId;
 
     public PlaylistEntity() {
         this.id = "";

@@ -1,7 +1,35 @@
 # Cypher v1.0.5 — Descargas que suenan y listas limpias 🎧
 
 Versión de estabilización: corrige la reproducción de las canciones descargadas
-desde Cypher y el indicador Wave que aparecía en todas las filas.
+desde Cypher, el indicador Wave que aparecía en todas las filas y la importación
+de playlists de YouTube Music, que se detenía en las primeras 100 canciones.
+
+> **APK actualizados:** esta release conserva `versionName 1.0.5` y `versionCode 7`,
+> pero sus APK incluyen la corrección de sincronización. Instálalos manualmente
+> sobre la app existente: al no cambiar la versión, el actualizador interno no
+> mostrará un aviso.
+
+## 🔁 Playlists completas, sin límite de 100
+
+**Causa:** la importación hacía una única petición `browse` a YouTube Music y no
+seguía el token de continuación, así que solo entraba la primera página
+(~100 pistas) de cada playlist.
+
+- La obtención recorre todas las páginas con `continuation` hasta que la API deja
+  de devolver token: sin límite fijo de canciones ni de peticiones.
+- Cada página se reintenta antes de dar la sincronización por interrumpida; una
+  playlist nunca se marca como completa si falta una página.
+- Se conserva el orden original, se eliminan duplicados entre páginas y todo se
+  guarda en una única transacción de Room.
+- La biblioteca remota también se pagina: listas de playlists y «Tus Me Gusta».
+- El progreso muestra canciones procesadas sobre el total real (`200 / 420`).
+- Re-sincronizar actualiza la misma playlist (identidad `sourceId`) sin duplicar,
+  también para las playlists creadas por versiones anteriores.
+- Migración Room 4→5 no destructiva: conserva playlists, favoritos y ajustes.
+
+**Comprobado:** recorrido real de una playlist pública de 200 pistas (2 páginas,
+0 duplicados); pruebas con 50/100/150/420/1.000 pistas; migración aplicada en el
+dispositivo con la playlist existente intacta.
 
 ## 🎵 Las descargas vuelven a sonar
 
@@ -39,16 +67,18 @@ audio activos, pausa/reanudación y salto de posición funcionando.
 
 | Archivo | Tamaño | SHA-256 |
 |---|---|---|
-| `Cypher-v1.0.5-arm64-v8a-release.apk` | 60.504.291 B | `cea6f89d7309529d616c43f01612851de9d120d8d0697908dbbc76d50dd4c744` |
-| `Cypher-v1.0.5-universal-release.apk` | 104.003.723 B | `8fa12d97044fa3169a3ebcabd113892a4770466cc3663f9e70f6e38ccdd67c39` |
+| `Cypher-v1.0.5-arm64-v8a-release.apk` | 60.519.071 B | `3ff685b87c038c7ac741648bc8f9e70b676f8f5fcb7f7d393aa7354289de99cb` |
+| `Cypher-v1.0.5-universal-release.apk` | 104.018.503 B | `accc1a3f422b0e7541928645e648c733a8b73b812979385b18455aea39431fe8` |
 
 Firmados con la clave original (`CN=Cypher`), instalables sobre v1.0.4 sin
 perder playlists, favoritos, descargas ni ajustes.
 
 ## ✅ Pruebas
 
-- Suites JVM: 12 archivos, 51 pruebas, 0 fallos.
+- Suites JVM: 15 archivos, 68 pruebas, 0 fallos (la prueba real de red es opt-in).
 - Instalación sobre 1.0.4 (versionCode 6) conservando datos.
+- Migración Room 4→5 aplicada en dispositivo: la playlist existente sigue intacta.
+- Prueba real contra la API: playlist pública de 200 pistas recorrida en 2 páginas.
 - Pruebas en dispositivo CPH2579: descarga, reproducción offline, pausa,
   reanudación, búsqueda, listas, mini-reproductor y segundo plano.
 

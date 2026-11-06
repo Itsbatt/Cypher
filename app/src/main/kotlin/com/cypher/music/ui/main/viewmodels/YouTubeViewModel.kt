@@ -56,21 +56,54 @@ class YouTubeViewModel(
         viewModelScope.launch {
             _isSyncing.value = true
             _syncStatusMsg.value = "Conectando con YouTube Music..."
+            var incomplete = 0
             try {
-                val likedTracks = youTubeRepository.fetchLikedMusic(accountManager)
+                val likedTracks = youTubeRepository.fetchLikedMusic(accountManager) { processed, total ->
+                    _syncStatusMsg.value = if (total != null && total > 0) {
+                        "Tus Me Gusta: $processed / $total canciones..."
+                    } else {
+                        "Tus Me Gusta: $processed canciones..."
+                    }
+                }
                 if (likedTracks.isNotEmpty()) {
-                    _syncStatusMsg.value = "Sincronizando ${likedTracks.size} canciones de 'Tus Me Gusta'..."
-                    playlistRepository.createPlaylist("Tus Me Gusta (YouTube)", "Sincronizado desde YouTube Music", null, likedTracks)
+                    _syncStatusMsg.value = "Guardando ${likedTracks.size} canciones de 'Tus Me Gusta'..."
+                    playlistRepository.syncPlaylist(
+                        name = "Tus Me Gusta (YouTube)",
+                        description = "Sincronizado desde YouTube Music",
+                        tracks = likedTracks,
+                        sourceId = "VLLM"
+                    )
                 }
 
                 val remotePlaylists = youTubeRepository.fetchUserPlaylists(accountManager)
                 for ((idx, pl) in remotePlaylists.withIndex()) {
                     _syncStatusMsg.value = "Importando playlist ${idx + 1} de ${remotePlaylists.size}: ${pl.title}..."
-                    val tracks = if (pl.tracks.isNotEmpty()) pl.tracks else youTubeRepository.fetchPlaylistTracks(pl.id, accountManager)
-                    playlistRepository.createPlaylist(pl.title, pl.description.ifEmpty { "Sincronizado desde YouTube Music" }, pl.coverUrl, tracks)
+                    val result = youTubeRepository.fetchPlaylistTracksPaged(pl.id, accountManager) { processed, total ->
+                        _syncStatusMsg.value = if (total != null && total > 0) {
+                            "«${pl.title}»: $processed / $total canciones..."
+                        } else {
+                            "«${pl.title}»: $processed canciones..."
+                        }
+                    }
+                    if (result.items.isEmpty()) {
+                        incomplete++
+                        continue
+                    }
+                    playlistRepository.syncPlaylist(
+                        name = pl.title,
+                        description = pl.description.ifEmpty { "Sincronizado desde YouTube Music" },
+                        coverUri = pl.coverUrl,
+                        tracks = result.items,
+                        sourceId = pl.id
+                    )
+                    if (!result.complete) incomplete++
                 }
 
-                _syncStatusMsg.value = "Sincronización completada con éxito"
+                _syncStatusMsg.value = if (incomplete == 0) {
+                    "Sincronización completada con éxito"
+                } else {
+                    "Sincronización incompleta: $incomplete playlist(s) no se completaron."
+                }
             } catch (e: Exception) {
                 _syncStatusMsg.value = "Error al sincronizar: ${e.message}"
             } finally {

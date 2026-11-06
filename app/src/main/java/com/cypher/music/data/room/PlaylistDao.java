@@ -20,6 +20,9 @@ public interface PlaylistDao {
     @Query("DELETE FROM playlists WHERE id = :playlistId")
     void deletePlaylist(String playlistId);
 
+    @Query("SELECT * FROM playlists WHERE sourceId = :sourceId LIMIT 1")
+    PlaylistEntity getPlaylistBySourceId(String sourceId);
+
     @Query("SELECT * FROM playlists ORDER BY updatedAt DESC")
     List<PlaylistEntity> getAllPlaylists();
 

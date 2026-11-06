@@ -1,6 +1,7 @@
 package com.cypher.music.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import android.util.Log
 import com.cypher.music.data.room.CypherDatabase
 import com.cypher.music.data.room.PlaylistTrackCrossRef
@@ -22,6 +23,8 @@ class PlaylistRepository(
 ) {
     companion object {
         private const val TAG = "PlaylistRepository"
+        const val YOUTUBE_SYNC_DESCRIPTION = "Sincronizado desde YouTube Music"
+        private const val SYNC_DESCRIPTION_PREFIX = "Sincronizad"
     }
 
     val roomDb: CypherDatabase = CypherDatabase.getInstance(context)
@@ -87,6 +90,68 @@ class PlaylistRepository(
 
         loadData()
         playlist
+    }
+
+    /**
+     * Creates or updates the playlist produced by the YouTube Music sync.
+     *
+     * Matching on name + sync description keeps the existing playlist id across re-syncs,
+     * so syncing twice never duplicates a playlist. Tracks are de-duplicated by id,
+     * written in a single transaction and keep the remote order.
+     */
+    suspend fun syncPlaylist(
+        name: String,
+        description: String = YOUTUBE_SYNC_DESCRIPTION,
+        coverUri: String? = null,
+        tracks: List<Track>,
+        sourceId: String? = null
+    ): Playlist = withContext(Dispatchers.IO) {
+        val cleanName = name.trim().ifEmpty { "Nueva playlist" }
+        val cleanDescription = description.trim().ifEmpty { YOUTUBE_SYNC_DESCRIPTION }
+        val uniqueTracks = tracks.distinctBy { it.id }
+        val now = System.currentTimeMillis()
+
+        val existing = sourceId?.let { roomDb.playlistDao().getPlaylistBySourceId(it) }
+            ?: roomDb.playlistDao().getAllPlaylists().firstOrNull {
+                it.name == cleanName && isSameSyncOrigin(it.description, cleanDescription)
+            }
+
+        val playlist = Playlist(
+            id = existing?.id ?: "playlist_${UUID.randomUUID()}",
+            name = cleanName,
+            description = cleanDescription,
+            coverUri = coverUri ?: existing?.coverUri,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+            isPrivate = existing?.isPrivate ?: true,
+            tracks = uniqueTracks
+        )
+
+        // Throws on failure so the sync can report the playlist as incomplete instead of
+        // marking a half-written import as successful.
+        roomDb.withTransaction {
+            roomDb.playlistDao().insertPlaylist(playlist.toEntity().apply {
+                this.sourceId = sourceId ?: existing?.sourceId
+            })
+            roomDb.playlistDao().clearPlaylistTracks(playlist.id)
+            if (uniqueTracks.isNotEmpty()) {
+                roomDb.trackDao().insertTracks(uniqueTracks.map { it.toEntity() })
+                val refs = uniqueTracks.mapIndexed { index, track ->
+                    PlaylistTrackCrossRef(playlist.id, track.id, index, now)
+                }
+                roomDb.playlistDao().insertCrossRefs(refs)
+            }
+        }
+
+        loadData()
+        playlist
+    }
+
+    private fun isSameSyncOrigin(existingDescription: String?, incoming: String): Boolean {
+        if (existingDescription == incoming) return true
+        return existingDescription != null &&
+            existingDescription.startsWith(SYNC_DESCRIPTION_PREFIX) &&
+            incoming.startsWith(SYNC_DESCRIPTION_PREFIX)
     }
 
     suspend fun updatePlaylistDetails(

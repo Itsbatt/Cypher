@@ -767,14 +767,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncYouTubeMusic() {
+        if (_isSyncingYouTube.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _isSyncingYouTube.value = true
             _syncStatusMsg.value = "Conectando y sincronizando con YouTube Music..."
+            var incompletePlaylists = 0
+            var importedTracks = 0
             try {
                 Log.d("AppleMusicPlayer", "syncYouTubeMusic: Starting sync")
 
-                // 1. Liked Music
-                val likedTracks = youTubeRepository.fetchLikedMusic(youtubeAccountManager)
+                // 1. Liked Music, page by page: it can hold far more than one InnerTube page.
+                val likedTracks = youTubeRepository.fetchLikedMusic(youtubeAccountManager) { processed, total ->
+                    _syncStatusMsg.value = if (total != null && total > 0) {
+                        "Tus Me Gusta: $processed / $total canciones..."
+                    } else {
+                        "Tus Me Gusta: $processed canciones..."
+                    }
+                }
                 Log.d("AppleMusicPlayer", "syncYouTubeMusic: Liked tracks retrieved: ${likedTracks.size}")
                 var favCount = 0
                 for (track in likedTracks) {
@@ -784,17 +793,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // 2. Remote Playlists
+                // 2. Library playlists: metadata first, then every page of each playlist.
                 val remotePlaylists = youTubeRepository.fetchUserPlaylists(youtubeAccountManager)
                 Log.d("AppleMusicPlayer", "syncYouTubeMusic: Remote playlists retrieved: ${remotePlaylists.size}")
-                for (rPl in remotePlaylists) {
-                    Log.d("AppleMusicPlayer", "syncYouTubeMusic: Syncing playlist '${rPl.title}' with ${rPl.tracks.size} tracks")
-                    playlistRepository.createPlaylist(
-                        name = rPl.title,
-                        description = rPl.description,
-                        coverUri = rPl.coverUrl,
-                        initialTracks = rPl.tracks
+                for ((index, remotePlaylist) in remotePlaylists.withIndex()) {
+                    _syncStatusMsg.value =
+                        "Importando playlist ${index + 1} de ${remotePlaylists.size}: «${remotePlaylist.title}»..."
+
+                    val result = youTubeRepository.fetchPlaylistTracksPaged(
+                        remotePlaylist.id,
+                        youtubeAccountManager
+                    ) { processed, total ->
+                        _syncStatusMsg.value = if (total != null && total > 0) {
+                            "«${remotePlaylist.title}»: $processed / $total canciones..."
+                        } else {
+                            "«${remotePlaylist.title}»: $processed canciones..."
+                        }
+                    }
+
+                    if (result.items.isEmpty()) {
+                        incompletePlaylists++
+                        Log.w(
+                            "AppleMusicPlayer",
+                            "syncYouTubeMusic: '${remotePlaylist.title}' returned no tracks (${result.error})"
+                        )
+                        continue
+                    }
+
+                    playlistRepository.syncPlaylist(
+                        name = remotePlaylist.title,
+                        description = remotePlaylist.description.ifEmpty { "Sincronizado desde YouTube Music" },
+                        coverUri = remotePlaylist.coverUrl,
+                        tracks = result.items,
+                        sourceId = remotePlaylist.id
                     )
+                    importedTracks += result.items.size
+
+                    if (!result.complete) {
+                        incompletePlaylists++
+                        val expected = result.totalCount?.let { " de $it" } ?: ""
+                        Log.w(
+                            "AppleMusicPlayer",
+                            "syncYouTubeMusic: '${remotePlaylist.title}' incomplete after ${result.pagesFetched} pages: ${result.error}"
+                        )
+                        _syncStatusMsg.value =
+                            "«${remotePlaylist.title}»: importadas ${result.items.size}$expected canciones (interrumpido)"
+                    }
                 }
 
                 youtubeAccountManager.updateSyncTimestamp()
@@ -802,7 +846,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 favoritesManager.loadFavorites()
                 refreshDynamicRecommendations()
 
-                _syncStatusMsg.value = "¡Sincronización completada! $favCount canciones y ${remotePlaylists.size} playlists sincronizadas."
+                val outcome = if (incompletePlaylists == 0) "completada" else "incompleta"
+                _syncStatusMsg.value = buildString {
+                    append("Sincronización $outcome: $importedTracks canciones y ${remotePlaylists.size} playlists.")
+                    if (favCount > 0) append(" $favCount favoritos nuevos.")
+                    if (incompletePlaylists > 0) {
+                        append(" $incompletePlaylists playlist(s) no se completaron; vuelve a sincronizar.")
+                    }
+                }
             } catch (e: Exception) {
                 _syncStatusMsg.value = "Error al sincronizar: ${e.message}"
             } finally {

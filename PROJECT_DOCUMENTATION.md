@@ -94,6 +94,12 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 - **Resolució del Crash de Room en Dispositius Reals (Samsung):** Es va detectar que AGP 9.0.1 utilitza `builtInKotlin` per defecte, impedint que `annotationProcessor` generi `CypherDatabase_Impl` si la base de dades es defineix en Kotlin sense KSP. S'ha estabilitzat l'arquitectura de Room utilitzant Java amb processador d'anotacions natiu i wrappers idiomàtics en Kotlin (`CypherDatabase.kt`, `RoomMappers.kt`), assegurant la creació de `CypherDatabase_Impl` i eliminant el crash d'arrencada al 100%.
 - **Correcció del Bug d'Auto-Pausa:** Filtratge d'estats transitoris `PAUSED` emesos per l'iframe de YouTube durant la descàrrega/càrrega de vídeo (finestra de 3000 ms) i watchdog de buffer proactiu a 4s.
 
+### Fase 12: Estabilització de Descàrregues i Indicador Wave (v1.0.5)
+- **So de les descàrregues:** en reproduir streaming, ExoPlayer baixava el volum a 0 pel portador silenciós; el volum només es restablia per a pistes `LOCAL`, de manera que una descàrrega (tipus `YOUTUBE` reproduïda des del fitxer) quedava muda mentre la interfície avançava. S'ha centralitzat la decisió en `PlaybackOutputPolicy` (local o offline → ExoPlayer) i es restaura el volum en entrar en una pista offline.
+- **Indicador Wave:** una branca dibuixava les barres animades a qualsevol pista amb durada. Ara l'estat surt de `MusicPlayerManager` via `TrackRowPlayback`: només la pista que sona mostra animació; en pausa es manté el ressaltat i es mostra la durada.
+- **Descàrregues robustes:** validació de la signatura del contenidor (MP4/M4A, MP3, FLAC, OGG, WAV, WebM, AAC), rebuig de respostes HTTP que no siguin d'àudio i esborrat també per a FLAC/WAV.
+
+
 ---
 
 ## 3. Arquitectura del Sistema i Tecnologies

@@ -36,17 +36,16 @@
 
 ---
 
-## 📦 Latest Release (v1.0.2)
+## 📦 Latest Release (v1.0.5)
 
 Download signed APKs for your Android device:
 
 | Package | Target | Size | Link |
 |---|---|---|---|
-| **Cypher-v1.0.2-release.apk** | Universal (`arm64-v8a` + `armeabi-v7a`) | ~98.8 MB | [Download Release](releases/Cypher-v1.0.2-release.apk) |
-| **Cypher-v1.0.2-arm64-v8a-release.apk** | Optimized for 64-bit devices (Samsung, Pixel, Xiaomi, etc.) | ~57.3 MB | [Download 64-bit](releases/Cypher-v1.0.2-arm64-v8a-release.apk) |
-| **Cypher-v1.0.2-debug.apk** | Development / Debugging | ~174.3 MB | [Download Debug](releases/Cypher-v1.0.2-debug.apk) |
+| **Cypher-v1.0.5-arm64-v8a-release.apk** | Optimized for 64-bit devices (Samsung, Pixel, Xiaomi, etc.) | ~57.7 MB | [Download 64-bit](https://github.com/Itsbatt/Cypher/releases/download/v1.0.5/Cypher-v1.0.5-arm64-v8a-release.apk) |
+| **Cypher-v1.0.5-universal-release.apk** | Universal (`arm64-v8a` + `armeabi-v7a`) | ~99.2 MiB | [Download universal](https://github.com/Itsbatt/Cypher/releases/download/v1.0.5/Cypher-v1.0.5-universal-release.apk) |
 
-Detailed notes: [**`RELEASE_NOTES_v1.0.2.md`**](RELEASE_NOTES_v1.0.2.md)
+Detailed notes: [**`RELEASE_NOTES_v1.0.5.md`**](RELEASE_NOTES_v1.0.5.md) · [GitHub Release](https://github.com/Itsbatt/Cypher/releases/tag/v1.0.5)
 
 ---
 
@@ -90,7 +89,7 @@ Release builds are signed with the keystore declared in `keystore.properties` (b
 For a detailed technical breakdown of the architecture, migrations, and complete development history:
 - [**`PROJECT_DOCUMENTATION.md`**](PROJECT_DOCUMENTATION.md) — Comprehensive technical chronicle and architecture breakdown.
 - [**`MAPEO_ARCHIVOS.md`**](MAPEO_ARCHIVOS.md) — Concise reference index of all components, screens, ViewModels, and services.
-- [**`RELEASE_NOTES_v1.0.2.md`**](RELEASE_NOTES_v1.0.2.md) — Release notes and changelog for v1.0.2.
+- [**`RELEASE_NOTES_v1.0.5.md`**](RELEASE_NOTES_v1.0.5.md) — Release notes and changelog for v1.0.5.
 
 ---
 

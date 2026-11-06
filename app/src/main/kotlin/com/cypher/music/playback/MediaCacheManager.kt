@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
@@ -95,7 +96,7 @@ object MediaCacheManager {
             val files = vaultDir.listFiles() ?: emptyArray()
             val validIds = mutableSetOf<String>()
             for (f in files) {
-                if (f.isFile && f.name != ".nomedia" && f.length() > 10000) {
+                if (f.isFile && f.name != ".nomedia" && hasAudioSignature(f)) {
                     val baseName = f.name.substringBeforeLast(".")
                     validIds.add(baseName)
                     // Also check if original track was prefixed with yt_
@@ -237,7 +238,7 @@ object MediaCacheManager {
         val primaryDir = getOfflineVaultDir(context)
         for (ext in extensions) {
             val f = File(primaryDir, "$safeId.$ext")
-            if (f.exists() && f.length() > 10000) return f
+            if (hasAudioSignature(f)) return f
         }
 
         // 2. Scan across all mounted external volumes & legacy filesDir for resilient lookup
@@ -247,11 +248,39 @@ object MediaCacheManager {
             if (dir.exists() && dir.absolutePath != primaryDir.absolutePath) {
                 for (ext in extensions) {
                     val f = File(dir, "$safeId.$ext")
-                    if (f.exists() && f.length() > 10000) return f
+                    if (hasAudioSignature(f)) return f
                 }
             }
         }
         return null
+    }
+
+    /**
+     * Cheap container sniffing so a saved file is really audio and not an HTML/JSON
+     * error page renamed with an audio extension.
+     */
+    private fun hasAudioSignature(file: File): Boolean {
+        if (!file.exists() || file.length() <= 10000) return false
+        return try {
+            FileInputStream(file).use { input ->
+                val header = ByteArray(12)
+                val read = input.read(header)
+                if (read < 4) return false
+                val ascii = String(header, 0, read, Charsets.ISO_8859_1)
+                when {
+                    read >= 8 && ascii.regionMatches(4, "ftyp", 0, 4) -> true   // MP4/M4A
+                    ascii.startsWith("ID3") -> true                             // MP3
+                    ascii.startsWith("fLaC") -> true                            // FLAC
+                    ascii.startsWith("OggS") -> true                            // OGG/Opus
+                    ascii.startsWith("RIFF") -> true                            // WAV
+                    header[0] == 0x1A.toByte() && header[1] == 0x45.toByte() -> true // WebM/EBML
+                    header[0] == 0xFF.toByte() && (header[1].toInt() and 0xF6) == 0xF0 -> true // AAC ADTS
+                    else -> false
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
@@ -459,7 +488,11 @@ object MediaCacheManager {
                     .build()
 
                 val response = httpClient.newCall(req).execute()
-                if (response.isSuccessful) {
+                val contentType = response.header("Content-Type").orEmpty().lowercase()
+                val isAudioResponse = contentType.startsWith("audio/") ||
+                    contentType.startsWith("application/octet-stream") ||
+                    contentType.isEmpty()
+                if (response.isSuccessful && isAudioResponse) {
                     val body = response.body
                     if (body != null) {
                         val totalBytes = body.contentLength()
@@ -559,7 +592,7 @@ object MediaCacheManager {
         try {
             val safeId = trackId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
             val dir = getOfflineVaultDir(context)
-            val extensions = listOf("m4a", "webm", "opus", "mp3", "aac", "ogg")
+            val extensions = listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")
             var deleted = false
             for (ext in extensions) {
                 val f = File(dir, "$safeId.$ext")

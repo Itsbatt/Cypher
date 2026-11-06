@@ -109,11 +109,12 @@ class MusicPlayerManager(private val context: Context) {
     private val streamUrlPrecacheMap = java.util.concurrent.ConcurrentHashMap<String, CachedStreamUrl>()
     private var precacheJob: Job? = null
 
-    // Track transition guard (prevents spurious pauses during track skipping)
+    // Track transition guard: compares the video the IFrame reports against the
+    // one we asked it to load, instead of relying on a fixed time window.
     @Volatile
-    private var isTransitioningTrack = false
+    private var requestedYouTubeVideoId: String? = null
     @Volatile
-    private var lastTrackChangeTime = 0L
+    private var loadedYouTubeVideoId: String? = null
 
     // Native DSP Equalizer Manager
     val equalizerManager = EqualizerManager(context)
@@ -896,8 +897,8 @@ class MusicPlayerManager(private val context: Context) {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
-                    if (isTransitioningTrack) {
-                        Log.d("AppleMusicPlayer", "onPlayWhenReadyChanged: skipped because track is transitioning")
+                    if (TrackTransitionGuard.shouldIgnorePause(loadedYouTubeVideoId, requestedYouTubeVideoId)) {
+                        Log.d("AppleMusicPlayer", "onPlayWhenReadyChanged: skipped while the IFrame still reports the previous video")
                         return
                     }
                     if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST ||
@@ -956,7 +957,6 @@ class MusicPlayerManager(private val context: Context) {
                     if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE) {
                         when (state) {
                             PlayerConstants.PlayerState.PLAYING -> {
-                                isTransitioningTrack = false
                                 bufferingWatchdogJob?.cancel()
                                 _state.update { it.copy(isPlaying = true, isBuffering = false) }
                                 if (!exoPlayer.isPlaying) exoPlayer.play()
@@ -964,10 +964,9 @@ class MusicPlayerManager(private val context: Context) {
                                 precacheNextTrack()
                             }
                             PlayerConstants.PlayerState.PAUSED -> {
-                                val timeSinceChange = System.currentTimeMillis() - lastTrackChangeTime
-                                if (isTransitioningTrack || timeSinceChange < 3000L) {
-                                    Log.d("AppleMusicPlayer", "YouTubePlayer intermediate PAUSED ignored during track transition ($timeSinceChange ms)")
-                                    // Spurious pause from previous video teardown: do NOT stop playback!
+                                if (TrackTransitionGuard.shouldIgnorePause(loadedYouTubeVideoId, requestedYouTubeVideoId)) {
+                                    Log.d("AppleMusicPlayer", "PAUSED ignored: IFrame still on $loadedYouTubeVideoId, requested $requestedYouTubeVideoId")
+                                    // Spurious pause from the previous video teardown.
                                 } else {
                                     bufferingWatchdogJob?.cancel()
                                     _state.update { it.copy(isPlaying = false, isBuffering = false) }
@@ -996,6 +995,11 @@ class MusicPlayerManager(private val context: Context) {
                             else -> {}
                         }
                     }
+                }
+
+                override fun onVideoId(youTubePlayer: YouTubePlayer, videoId: String) {
+                    loadedYouTubeVideoId = videoId
+                    Log.d("AppleMusicPlayer", "YouTubePlayer loaded video id: $videoId")
                 }
 
                 override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
@@ -1110,9 +1114,6 @@ class MusicPlayerManager(private val context: Context) {
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
 
-        isTransitioningTrack = true
-        lastTrackChangeTime = System.currentTimeMillis()
-
         _playbackPositionMs.value = 0L
         _playbackProgress.value = 0f
 
@@ -1197,6 +1198,8 @@ class MusicPlayerManager(private val context: Context) {
             } else {
                 stopLocalProgressTracker()
                 val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+                requestedYouTubeVideoId = videoId
+                loadedYouTubeVideoId = null
                 Log.d("AppleMusicPlayer", "Target YouTube videoId: $videoId")
 
                 try {

@@ -10,7 +10,7 @@
 
 ## ✨ Qué cambia para ti
 
-- **Colores 100 % personalizados.** En Ajustes puedes escribir cualquier valor `#RRGGBB` (o `#AARRGGBB` con transparencia) para el **color distintivo**, el **fondo** y las **tarjetas**, con vista previa antes de aplicar. Ya no estás limitado a las paletas.
+- **Colores 100 % personalizados.** Pulsa la muestra de color y elige visualmente con el cuadrado de saturación/brillo, la barra de matiz y la opacidad; el hex se actualiza solo. También puedes escribirlo a mano (`#RRGGBB` o `#AARRGGBB`). Aplica al **color distintivo**, el **fondo** y las **tarjetas**.
 - **Menos cortes al reproducir.** Si la URL de streaming caducó, la app la renueva un par de veces antes de pasar al reproductor oficial; la precarga descarta URLs viejas.
 - **Adiós a las pausas fantasma.** Se compara el vídeo que el reproductor tiene cargado con el que se pidió, en lugar de ignorar pausas durante 3 segundos fijos.
 - **El watchdog respeta tu pausa.** Si pausas mientras carga, no se reanuda sola a los 4 segundos.
@@ -24,8 +24,8 @@
 
 | Archivo | Arquitectura | Tamaño | SHA-256 |
 |---|---|---|---|
-| **`Cypher-v1.0.4-arm64-v8a-release.apk`** | Solo 64 bits (recomendado) | 60,5 MB | `e2afafa82e3cae7ea455aff2cf84fa0711684e5b947fcdb02cdf94ddd3528fcd` |
-| **`Cypher-v1.0.4-universal-release.apk`** | Universal (`arm64-v8a` + `armeabi-v7a`) | 104,0 MB | `7f76b80ff532322929fdf4ed25bf3023b4de535e20b4863eef88fab7ac521db0` |
+| **`Cypher-v1.0.4-arm64-v8a-release.apk`** | Solo 64 bits (recomendado) | 60,5 MB | `659648404358b6c8eb61035f50ee4e4d1c3a0008dbead7fe86d47b5b2db79de5` |
+| **`Cypher-v1.0.4-universal-release.apk`** | Universal (`arm64-v8a` + `armeabi-v7a`) | 104,0 MB | `8d2a883f6568303d731b63b474479f825b874b9cc0da599f9dfcc394d64016b1` |
 
 Misma firma que 1.0.0–1.0.4: se instala encima sin desinstalar y conserva playlists y estadísticas.
 

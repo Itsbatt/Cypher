@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.cypher.music.data.AccentPalette
 import com.cypher.music.data.BackgroundTones
 import com.cypher.music.data.CardTones
+import com.cypher.music.data.HexColor
 import com.cypher.music.data.ThemePreferences
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -94,6 +95,7 @@ import com.cypher.music.data.CrossfadeOptions
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.network.YouTubeAccountSession
+import com.cypher.music.ui.components.HexColorPickerDialog
 import com.cypher.music.ui.components.UsernameDialog
 import com.cypher.music.ui.theme.ResolvedThemeColors
 import com.cypher.music.ui.utils.AppHaptics
@@ -133,6 +135,38 @@ fun SettingsScreen(
     val lyricsSettings by lyricsSettingsManager.settings.collectAsState()
     val wrappedYear = WrappedAvailability.activeYear()
     var isUsernameDialogOpen by remember { mutableStateOf(false) }
+
+    // Which theme colour the hex picker is editing: accent, background or card.
+    var hexColorTarget by remember { mutableStateOf<String?>(null) }
+    hexColorTarget?.let { target ->
+        val title = when (target) {
+            "accent" -> "Color distintivo"
+            "background" -> "Color de fondo"
+            else -> "Color de tarjetas"
+        }
+        val initial = when (target) {
+            "accent" -> themePrefs.accentColor
+            "background" -> themePrefs.customBackground
+            else -> themePrefs.customCard
+        }
+        HexColorPickerDialog(
+            title = title,
+            initialColor = initial,
+            accentColor = themeColors.accent,
+            onDismiss = { hexColorTarget = null },
+            onConfirm = { color ->
+                AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                onUpdatePrefs {
+                    when (target) {
+                        "accent" -> it.copy(accentColor = color)
+                        "background" -> it.copy(customBackground = color)
+                        else -> it.copy(customCard = color)
+                    }
+                }
+                hexColorTarget = null
+            }
+        )
+    }
 
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -611,6 +645,33 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 14.dp)
                 )
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            hexColorTarget = "accent"
+                        }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Color HEX personalizado",
+                        color = themeColors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = HexColor.toHex(themePrefs.accentColor),
+                        color = themeColors.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -666,6 +727,33 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            hexColorTarget = "background"
+                        }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Color HEX personalizado",
+                        color = themeColors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = HexColor.toHex(themePrefs.customBackground),
+                        color = themeColors.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -713,6 +801,33 @@ fun SettingsScreen(
                     fontSize = 13.sp,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            hexColorTarget = "card"
+                        }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Color HEX personalizado",
+                        color = themeColors.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = HexColor.toHex(themePrefs.customCard),
+                        color = themeColors.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
 
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),

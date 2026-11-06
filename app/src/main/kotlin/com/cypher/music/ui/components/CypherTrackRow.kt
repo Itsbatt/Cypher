@@ -54,6 +54,8 @@ import coil.compose.AsyncImage
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
 import com.cypher.music.playback.MediaCacheManager
+import com.cypher.music.playback.MusicPlayerManager
+import com.cypher.music.playback.TrackRowPlayback
 import com.cypher.music.ui.theme.IosDarkCard
 import com.cypher.music.ui.theme.IosDarkSeparator
 import com.cypher.music.ui.theme.IosDarkTextPrimary
@@ -81,30 +83,22 @@ fun CypherTrackRow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // The real playback state lives in MusicPlayerManager; screens pass whether this
+    // row is the selected track, not whether audio is actually running.
+    val playerState by MusicPlayerManager.getInstance(context).state.collectAsState()
+    val isCurrentTrack = isPlaying || TrackRowPlayback.isCurrent(track.id, playerState.currentTrack?.id)
+    val isActivelyPlaying = TrackRowPlayback.isActivelyPlaying(
+        rowTrackId = track.id,
+        currentTrackId = playerState.currentTrack?.id,
+        isPlaying = playerState.isPlaying
+    )
+
     val downloadProgressMap by MediaCacheManager.downloadProgressMap.collectAsState()
     val downloadedTrackIds by MediaCacheManager.downloadedTrackIds.collectAsState()
 
     val isDownloading = downloadProgressMap.containsKey(track.id)
     val downloadProgress = downloadProgressMap[track.id] ?: 0f
     val isDownloaded = track.isDownloaded || downloadedTrackIds.contains(track.id) || MediaCacheManager.isTrackDownloaded(context, track.id)
-
-    // Equalizer wave animation when playing
-    val transition = rememberInfiniteTransition(label = "EQ")
-    val bar1 by transition.animateFloat(
-        initialValue = 4f, targetValue = 14f,
-        animationSpec = infiniteRepeatable(tween(420), RepeatMode.Reverse),
-        label = "b1"
-    )
-    val bar2 by transition.animateFloat(
-        initialValue = 12f, targetValue = 5f,
-        animationSpec = infiniteRepeatable(tween(360), RepeatMode.Reverse),
-        label = "b2"
-    )
-    val bar3 by transition.animateFloat(
-        initialValue = 6f, targetValue = 15f,
-        animationSpec = infiniteRepeatable(tween(480), RepeatMode.Reverse),
-        label = "b3"
-    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -184,9 +178,9 @@ fun CypherTrackRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
-                    color = if (isPlaying) accentColor else IosDarkTextPrimary,
+                    color = if (isCurrentTrack) accentColor else IosDarkTextPrimary,
                     fontSize = 15.sp,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isCurrentTrack) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -242,32 +236,11 @@ fun CypherTrackRow(
                 }
             }
 
-            // Equalizer / Duration (Clean, unintruded)
-            if (isPlaying) {
-                Row(
-                    modifier = Modifier
-                        .height(18.dp)
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)
-                ) {
-                    Box(modifier = Modifier.width(3.dp).height(bar1.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                    Box(modifier = Modifier.width(3.dp).height(bar2.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                    Box(modifier = Modifier.width(3.dp).height(bar3.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                }
-            } else if (track.durationMs > 0) {
-                Row(
-                    modifier = Modifier
-                        .height(18.dp)
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)
-                ) {
-                    Box(modifier = Modifier.width(3.dp).height(bar1.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                    Box(modifier = Modifier.width(3.dp).height(bar2.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                    Box(modifier = Modifier.width(3.dp).height(bar3.dp).background(accentColor, RoundedCornerShape(1.dp)))
-                }
-            } else if (track.durationMs > 0) {
+            // Animated bars only for the track that is actually producing audio;
+            // every other row keeps its plain duration.
+            if (isActivelyPlaying) {
+                PlaybackBars(accentColor = accentColor)
+            } else if (track.formattedDuration.isNotBlank()) {
                 Text(
                     text = track.formattedDuration,
                     color = IosDarkTextSecondary.copy(alpha = 0.65f),
@@ -328,5 +301,37 @@ fun CypherTrackRow(
                 }
             }
         )
+    }
+}
+
+/** Three animated bars shown only while this row's track is the one playing. */
+@Composable
+private fun PlaybackBars(accentColor: Color) {
+    val transition = rememberInfiniteTransition(label = "EQ")
+    val bar1 by transition.animateFloat(
+        initialValue = 4f, targetValue = 14f,
+        animationSpec = infiniteRepeatable(tween(420), RepeatMode.Reverse),
+        label = "b1"
+    )
+    val bar2 by transition.animateFloat(
+        initialValue = 12f, targetValue = 5f,
+        animationSpec = infiniteRepeatable(tween(360), RepeatMode.Reverse),
+        label = "b2"
+    )
+    val bar3 by transition.animateFloat(
+        initialValue = 6f, targetValue = 15f,
+        animationSpec = infiniteRepeatable(tween(480), RepeatMode.Reverse),
+        label = "b3"
+    )
+    Row(
+        modifier = Modifier
+            .height(18.dp)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)
+    ) {
+        Box(modifier = Modifier.width(3.dp).height(bar1.dp).background(accentColor, RoundedCornerShape(1.dp)))
+        Box(modifier = Modifier.width(3.dp).height(bar2.dp).background(accentColor, RoundedCornerShape(1.dp)))
+        Box(modifier = Modifier.width(3.dp).height(bar3.dp).background(accentColor, RoundedCornerShape(1.dp)))
     }
 }

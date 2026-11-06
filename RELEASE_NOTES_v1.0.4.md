@@ -18,6 +18,19 @@
 - **Wrapped más fiable.** Ventana estacional y recordatorio del 31 a las 20:00 con reloj inyectado y alarma exacta solo si el sistema lo permite.
 - **CI.** Cada push ejecuta los tests y compila; cada tag recibe su `SHA256SUMS.txt`.
 
+## 🎨 Selector de color visual
+
+En **Ajustes → Color de Acento / Fondo base / Tarjetas**, pulsa la muestra de color (el cuadro junto al campo Hex) y se despliega un selector completo:
+
+- **Cuadrado de saturación y brillo:** toca o arrastra para elegir la intensidad y la luminosidad.
+- **Barra de matiz:** recorre todo el espectro de color.
+- **Barra de opacidad:** permite colores translúcidos (`#AARRGGBB`).
+- El campo **Hex se actualiza en tiempo real** al mover el selector, y si escribes un valor el selector se recoloca en esa posición.
+- La vista previa y el botón **Aplicar** muestran exactamente el color resultante antes de guardarlo.
+
+Los tres colores (distintivo, fondo y tarjetas) usan el mismo selector y se guardan en las preferencias de tema existentes.
+
+
 ---
 
 ## 📦 Descargas

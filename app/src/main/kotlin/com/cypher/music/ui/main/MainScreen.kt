@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import com.cypher.music.ui.components.CypherSleepTimerSheet
 import com.cypher.music.ui.components.SharePlaylistDialog
 import com.cypher.music.ui.components.QrScannerSheet
 import com.cypher.music.ui.components.PlaylistImportPreviewDialog
+import com.cypher.music.ui.components.UpdateBanner
 import com.cypher.music.ui.components.CypherMiniPlayer
 import com.cypher.music.ui.components.CypherNavBar
 import com.cypher.music.ui.components.CypherNowPlayingModal
@@ -68,6 +70,7 @@ import com.cypher.music.ui.theme.CypherLavenderDark
 import com.cypher.music.ui.theme.PaletteExtractor
 import com.cypher.music.ui.theme.ThemeResolver
 import com.cypher.music.ui.utils.AppHaptics
+import com.cypher.music.update.UpdateViewModel
 import com.cypher.music.ui.wrapped.WrappedScreen
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
@@ -149,6 +152,8 @@ fun MainScreen(
     val isScannerOpen by viewModel.isScannerOpen.collectAsState()
     val isLiquidGlassSettingsOpen by viewModel.isLiquidGlassSettingsOpen.collectAsState()
     val pendingImportPayload by viewModel.pendingImportPayload.collectAsState()
+    val updateViewModel: UpdateViewModel = viewModel()
+    val updateState by updateViewModel.state.collectAsState()
 
     // Initialize Haptic Engine for micro-ticks & controls
     LaunchedEffect(Unit) {
@@ -667,6 +672,21 @@ fun MainScreen(
                 themeColors = themeColors,
                 onConfirmImport = { viewModel.importSharedPlaylist(it) },
                 onDismiss = { viewModel.setPendingImportPayload(null) }
+            )
+        }
+
+        // Discreet GitHub release notice, floating above the dock.
+        if (updateState.visible && !isSettingsOpen && !isWrappedOpen &&
+            !currentUser?.displayName.isNullOrBlank()
+        ) {
+            UpdateBanner(
+                state = updateState,
+                accentColor = themeColors.accent,
+                onUpdate = { updateViewModel.downloadAndInstall() },
+                onDismiss = { updateViewModel.dismiss() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 14.dp, end = 14.dp, bottom = bottomContentPadding)
             )
         }
 

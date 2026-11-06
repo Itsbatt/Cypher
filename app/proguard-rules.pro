@@ -31,5 +31,11 @@
 # commons-compress registers extra fields via reflection
 -keep class org.apache.commons.compress.** { *; }
 
+# Google Code Scanner: 16.1.0 ships no consumer rules. R8 full mode (AGP 9)
+# strips/rewrites its internal factories and GmsBarcodeScanning.getClient()
+# then crashes with an NPE inside zzoi.create(). Keep the scanning internals.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_code_scanner.** { *; }
+
 # Optional XZ/7z codecs from commons-compress are not used by yt-dlp
 -dontwarn org.tukaani.xz.**

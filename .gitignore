@@ -20,3 +20,5 @@ keystore/
 *.keystore
 keystore.properties
 .kotlin/
+
+.backups/

@@ -1,5 +1,6 @@
 package com.cypher.music.wrapped
 
+import java.time.Clock
 import java.time.LocalDate
 import java.time.Month
 
@@ -28,8 +29,13 @@ object WrappedAvailability {
         else -> null
     }
 
+    /** Testable variant: resolves "today" from an injected clock. */
+    fun activeYear(clock: Clock): Int? = activeYear(LocalDate.now(clock))
+
     fun isAvailable(today: LocalDate = LocalDate.now()): Boolean =
         activeYear(today) != null
+
+    fun isAvailable(clock: Clock): Boolean = activeYear(clock) != null
 
     fun startsOn(recapYear: Int): LocalDate =
         LocalDate.of(recapYear, Month.DECEMBER, START_DAY)

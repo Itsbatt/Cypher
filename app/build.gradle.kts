@@ -28,8 +28,8 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 33
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.0.3"
+    versionCode = 5
+    versionName = "1.0.4"
 
     ndk {
       abiFilters.addAll(supportedAbis)
@@ -161,7 +161,7 @@ dependencies {
   implementation(libs.androidx.compose.material.icons.extended)
 
   // Security & Crypto
-  implementation("androidx.security:security-crypto:1.1.0-alpha06")
+  implementation("androidx.security:security-crypto:1.1.0")
 
   // Google Code Scanner (Play Services)
   implementation("com.google.android.gms:play-services-code-scanner:16.1.0")

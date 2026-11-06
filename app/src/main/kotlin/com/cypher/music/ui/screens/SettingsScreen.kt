@@ -1269,7 +1269,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Exporta o importa tus playlists, canciones favoritas y analíticas en formato JSON firmado de Cypher.",
+                    text = "Exporta o importa tus playlists y canciones favoritas en un archivo JSON local. El perfil, las estadísticas y los ajustes no se incluyen.",
                     color = themeColors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,

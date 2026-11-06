@@ -220,8 +220,15 @@ fun YouTubeLoginDialog(
                                         }
                                     }
 
+                                    // Keep the login surface restricted to Google/YouTube hosts: a
+                                    // redirect to any other site must not be loaded inside the session.
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                        return false
+                                        val host = request?.url?.host?.lowercase() ?: return false
+                                        val allowed = host == "google.com" || host.endsWith(".google.com") ||
+                                            host == "youtube.com" || host.endsWith(".youtube.com") ||
+                                            host.endsWith(".gstatic.com") ||
+                                            host.endsWith(".googleusercontent.com")
+                                        return !allowed
                                     }
                                 }
 

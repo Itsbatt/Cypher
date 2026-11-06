@@ -29,6 +29,7 @@ object UpdateInstaller {
     private const val TAG = "UpdateInstaller"
     private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
     private const val MAX_CHECKSUM_BYTES = 256 * 1024
+    private const val MAX_APK_BYTES = 300L * 1024 * 1024
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -73,6 +74,10 @@ object UpdateInstaller {
             return@withContext Result.failure(IOException("El recurso del release no es un APK."))
         }
 
+        if (asset.size > MAX_APK_BYTES) {
+            return@withContext Result.failure(IOException("El APK del release es demasiado grande."))
+        }
+
         targetDir.mkdirs()
         val finalFile = File(targetDir, safeName)
         val partFile = File(targetDir, "$safeName.part")
@@ -91,6 +96,9 @@ object UpdateInstaller {
                 }
                 val body = response.body ?: throw IOException("Respuesta de descarga vacía.")
                 val total = body.contentLength().takeIf { it > 0 } ?: asset.size
+                if (total > MAX_APK_BYTES) {
+                    throw IOException("El APK del release es demasiado grande.")
+                }
                 val digest = MessageDigest.getInstance("SHA-256")
                 var written = 0L
                 var lastProgressAt = 0L
@@ -104,6 +112,9 @@ object UpdateInstaller {
                             output.write(buffer, 0, read)
                             digest.update(buffer, 0, read)
                             written += read
+                            if (written > MAX_APK_BYTES) {
+                                throw IOException("El APK descargado supera el tamaño permitido.")
+                            }
                             val now = SystemClock.elapsedRealtime()
                             if (now - lastProgressAt >= 120) {
                                 lastProgressAt = now

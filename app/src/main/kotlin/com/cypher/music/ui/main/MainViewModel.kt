@@ -657,6 +657,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerManager.jumpToQueueIndex(index)
     }
 
+    fun moveQueueItem(from: Int, to: Int) {
+        playerManager.moveQueueItem(from, to)
+    }
+
     fun toggleFavorite(track: Track): Boolean {
         val result = favoritesManager.toggleFavorite(track)
         refreshDynamicRecommendations()

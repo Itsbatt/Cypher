@@ -2,6 +2,7 @@ package com.cypher.music.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,9 +18,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -27,17 +30,30 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.cypher.music.model.Track
 import com.cypher.music.playback.RepeatMode
@@ -46,6 +62,8 @@ import com.cypher.music.ui.theme.IosDarkCard
 import com.cypher.music.ui.theme.IosDarkSeparator
 import com.cypher.music.ui.theme.IosDarkTextPrimary
 import com.cypher.music.ui.theme.IosDarkTextSecondary
+import com.cypher.music.ui.utils.AppHaptics
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,9 +77,25 @@ fun CypherQueueSheet(
     onToggleRepeat: () -> Unit,
     onSelectIndex: (Int) -> Unit,
     onRemoveIndex: (Int) -> Unit,
+    onMoveIndex: (Int, Int) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var query by remember { mutableStateOf("") }
+    val density = LocalDensity.current
+    val rowHeightPx = with(density) { 58.dp.toPx() }
+    var draggingIndex by remember { mutableIntStateOf(-1) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val latestQueue by rememberUpdatedState(queue)
+    val latestQueueIndex by rememberUpdatedState(queueIndex)
+    val latestQuery by rememberUpdatedState(query)
+    val latestOnMove by rememberUpdatedState(onMoveIndex)
+
+    val visible = remember(queue, queueIndex, query) {
+        queue.withIndex().filter { (index, track) ->
+            index != queueIndex && (query.isBlank() || track.matches(query))
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -180,14 +214,62 @@ fun CypherQueueSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            HorizontalDivider(color = IosDarkSeparator, thickness = 0.5.dp)
+            // Search inside the queue
+            TextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = {
+                    Text("Buscar en la cola", color = IosDarkTextSecondary, fontSize = 14.sp)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = IosDarkTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (query.isNotBlank()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Borrar búsqueda",
+                                tint = IosDarkTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White.copy(alpha = 0.06f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = AppleMusicRed
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            // Upcoming Queue List
+            HorizontalDivider(
+                color = IosDarkSeparator,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
             Text(
-                text = "SIGUIENTES (${(queue.size - 1).coerceAtLeast(0)})",
+                text = if (query.isBlank()) {
+                    "SIGUIENTES (${(queue.size - 1).coerceAtLeast(0)})"
+                } else {
+                    "RESULTADOS (${visible.size})"
+                },
                 color = IosDarkTextSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -195,7 +277,7 @@ fun CypherQueueSheet(
                 modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
             )
 
-            if (queue.isEmpty() || queue.size == 1) {
+            if (visible.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -203,7 +285,11 @@ fun CypherQueueSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No hay canciones siguientes en la cola",
+                        text = if (query.isBlank()) {
+                            "No hay canciones siguientes en la cola"
+                        } else {
+                            "Ninguna canción coincide con «$query»"
+                        },
                         color = IosDarkTextSecondary,
                         fontSize = 14.sp
                     )
@@ -212,60 +298,122 @@ fun CypherQueueSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(340.dp)
+                        .height(300.dp)
                 ) {
-                    itemsIndexed(queue) { index, track ->
-                        if (index != queueIndex) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onSelectIndex(index)
-                                        onDismiss()
-                                    }
-                                    .padding(vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AsyncImage(
-                                    model = track.artworkUrl,
-                                    contentDescription = track.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(IosDarkCard)
-                                )
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = track.title,
-                                        color = IosDarkTextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = track.artist,
-                                        color = IosDarkTextSecondary,
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                    itemsIndexed(visible) { position, entry ->
+                        val index = entry.index
+                        val track = entry.value
+                        val isDragging = index == draggingIndex
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .graphicsLayer {
+                                    translationY = if (isDragging) dragOffset else 0f
+                                    shadowElevation = if (isDragging) with(density) { 10.dp.toPx() } else 0f
                                 }
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isDragging) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                                .clickable {
+                                    onSelectIndex(index)
+                                    onDismiss()
+                                }
+                                .padding(vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = track.artworkUrl,
+                                contentDescription = track.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(IosDarkCard)
+                            )
 
-                                IconButton(onClick = { onRemoveIndex(index) }) {
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = track.title,
+                                    color = IosDarkTextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = track.artist,
+                                    color = IosDarkTextSecondary,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // Dragging only makes sense on an unfiltered, complete list.
+                            if (query.isBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .pointerInput(index, visible.size) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    draggingIndex = index
+                                                    dragOffset = 0f
+                                                    AppHaptics.reorderTick()
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffset += dragAmount.y
+                                                    val shift = (dragOffset / rowHeightPx).roundToInt()
+                                                    if (shift != 0) {
+                                                        val currentPos = latestQueue.indices
+                                                            .filter { it != latestQueueIndex }
+                                                            .indexOf(draggingIndex)
+                                                        val maxPos = latestQueue.indices.count { it != latestQueueIndex } - 1
+                                                        val targetPos = (currentPos + shift).coerceIn(0, maxPos)
+                                                        if (targetPos != currentPos) {
+                                                            val targetIndex = latestQueue.indices
+                                                                .filter { it != latestQueueIndex }[targetPos]
+                                                            latestOnMove(draggingIndex, targetIndex)
+                                                            draggingIndex = targetIndex
+                                                            dragOffset -= (targetPos - currentPos) * rowHeightPx
+                                                        }
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggingIndex = -1
+                                                    dragOffset = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggingIndex = -1
+                                                    dragOffset = 0f
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "Quitar",
-                                        tint = IosDarkTextSecondary.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(18.dp)
+                                        imageVector = Icons.Filled.DragHandle,
+                                        contentDescription = "Reordenar ${track.title}",
+                                        tint = IosDarkTextSecondary.copy(alpha = 0.55f),
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
 
+                            IconButton(onClick = { onRemoveIndex(index) }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Quitar",
+                                    tint = IosDarkTextSecondary.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        if (position != visible.lastIndex) {
                             HorizontalDivider(
                                 color = IosDarkSeparator.copy(alpha = 0.4f),
                                 thickness = 0.5.dp,
@@ -277,4 +425,10 @@ fun CypherQueueSheet(
             }
         }
     }
+}
+
+private fun Track.matches(query: String): Boolean {
+    val q = query.trim()
+    return title.contains(q, ignoreCase = true) ||
+        artist.contains(q, ignoreCase = true)
 }

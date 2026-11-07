@@ -1432,6 +1432,22 @@ class MusicPlayerManager(private val context: Context) {
         }
     }
 
+    fun moveQueueItem(from: Int, to: Int) {
+        val q = _state.value.queue.toMutableList()
+        if (from !in q.indices || to !in q.indices || from == to) return
+        val moved = q.removeAt(from)
+        q.add(to, moved)
+        val current = _state.value.queueIndex
+        val newIndex = when {
+            current == from -> to
+            from < current && to >= current -> current - 1
+            from > current && to <= current -> current + 1
+            else -> current
+        }
+        _state.update { it.copy(queue = q, queueIndex = newIndex.coerceIn(0, (q.size - 1).coerceAtLeast(0))) }
+        PlaybackService.updateService(context)
+    }
+
     fun jumpToQueueIndex(index: Int) {
         val q = _state.value.queue
         if (index in q.indices) {

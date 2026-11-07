@@ -102,6 +102,10 @@ class PlayerViewModel(
         playerManager.jumpToQueueIndex(index)
     }
 
+    fun moveQueueItem(from: Int, to: Int) {
+        playerManager.moveQueueItem(from, to)
+    }
+
     fun setMasterPlaybackVolume(fraction: Float) {
         volumeManager.setVolumeFraction(fraction)
         playerManager.setMasterPlaybackVolume(fraction)

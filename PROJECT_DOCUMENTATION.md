@@ -1,13 +1,12 @@
 # Cypher — Documentació Tècnica Integral i Historial Complet del Projecte
 
 > **Nom Oficial de l'Aplicació:** Cypher  
-> **Identificador del Paquet (Package Name):** `com.cypher.music`  
-> **Versió:** 1.0 (Build 1) — Codi Obert (GPL-3.0)  
-> **Ruta Local del Projecte:** `C:\Users\bat\.gemini\antigravity\scratch\cypher`  
-> **Target SDK:** Android 16 (API 36) | **Min SDK:** Android 13 (API 33)  
-> **Llenguatges i Runtimes:** Kotlin 2.2, Java 21, Jetpack Compose (Material 3), AndroidX Media3, AGSL Shaders, Room v3  
-> **Dispositius de Validació en Temps Real:** Samsung Galaxy S22 5G (`SM-S901E`, Android 16 / SDK 36, ADB: `RZCT106THDK`), OnePlus Nord 3 5G  
-> **Data de Consolidació:** 04 de Novembre de 2026  
+> **Identificador del Paquet (Package Name):** `com.cypher.music`> **Versió:** 1.0.8 (Build 10) — Codi Obert (GPL-3.0)
+> **Ruta Local del Projecte:** `C:\Users\bat\.gemini\antigravity\scratch\meloflow`
+> **Target SDK:** Android 16 (API 36) | **Min SDK:** Android 13 (API 33)
+> **Llenguatges i Runtimes:** Kotlin 2.2, Java 21, Jetpack Compose (Material 3), AndroidX Media3, AGSL Shaders, Room v3
+> **Dispositiu de Validació:** OnePlus Nord 3 5G (`CPH2579`, Android 16 / SDK 36, 720x1612)
+> **Data de Consolidació:** 07 de Novembre de 2026  
 
 ---
 

@@ -80,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -125,6 +126,7 @@ fun CypherNowPlayingModal(
     onSetVolume: (Float) -> Unit,
     onSelectQueueIndex: (Int) -> Unit,
     onRemoveQueueIndex: (Int) -> Unit,
+    onMoveQueueIndex: (Int, Int) -> Unit = { _, _ -> },
     onViewArtist: (String) -> Unit,
     onViewAlbum: (String) -> Unit,
     onAddToPlaylist: ((Track) -> Unit)? = null,
@@ -165,6 +167,15 @@ fun CypherNowPlayingModal(
     val latestOnPrevious by rememberUpdatedState(onPrevious)
     // 1 = incoming artwork slides from the right (next), -1 = from the left (previous).
     var artworkSlideDirection by remember { mutableIntStateOf(1) }
+    // The artwork follows the finger a fraction of the drag distance, then springs back.
+    var artworkDragging by remember { mutableStateOf(false) }
+    var artworkDragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val maxArtworkFollowPx = with(LocalDensity.current) { 56.dp.toPx() }
+    val artworkFollowOffset by animateFloatAsState(
+        targetValue = if (artworkDragging) artworkDragOffsetPx else 0f,
+        animationSpec = if (artworkDragging) tween(0) else spring(dampingRatio = 0.55f, stiffness = 520f),
+        label = "ArtworkFollow"
+    )
 
     // Sheets toggles
     var showLyrics by remember { mutableStateOf(false) }
@@ -250,11 +261,20 @@ fun CypherNowPlayingModal(
                                     .clickable { showLyrics = true }
                                     .pointerInput(Unit) {
                                         detectHorizontalDragGestures(
-                                            onDragStart = { artworkSwipeAccumulator = 0f },
-                                            onDragCancel = { artworkSwipeAccumulator = 0f },
+                                            onDragStart = {
+                                                artworkSwipeAccumulator = 0f
+                                                artworkDragOffsetPx = 0f
+                                                artworkDragging = true
+                                            },
+                                            onDragCancel = {
+                                                artworkSwipeAccumulator = 0f
+                                                artworkDragging = false
+                                            },
                                             onDragEnd = {
                                                 val distance = artworkSwipeAccumulator
                                                 artworkSwipeAccumulator = 0f
+                                                artworkDragging = false
+                                                artworkDragOffsetPx = 0f
                                                 if (distance <= -artworkSwipeThresholdPx) {
                                                     AppHaptics.actionClick(themePrefs.hapticsEnabled)
                                                     artworkSlideDirection = 1
@@ -268,6 +288,8 @@ fun CypherNowPlayingModal(
                                             onHorizontalDrag = { change, dragAmount ->
                                                 change.consume()
                                                 artworkSwipeAccumulator += dragAmount
+                                                artworkDragOffsetPx =
+                                                    (artworkDragOffsetPx + dragAmount * 0.32f).coerceIn(-maxArtworkFollowPx, maxArtworkFollowPx)
                                             }
                                         )
                                     },
@@ -285,7 +307,9 @@ fun CypherNowPlayingModal(
                                                     fadeOut(animationSpec = tween(180))
                                             )
                                     },
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer { translationX = artworkFollowOffset },
                                     label = "ArtworkSlide"
                                 ) { shownTrack ->
                                     AsyncImage(
@@ -648,6 +672,7 @@ fun CypherNowPlayingModal(
             onToggleRepeat = onToggleRepeat,
             onSelectIndex = onSelectQueueIndex,
             onRemoveIndex = onRemoveQueueIndex,
+            onMoveIndex = onMoveQueueIndex,
             onDismiss = { showQueueSheet = false }
         )
     }

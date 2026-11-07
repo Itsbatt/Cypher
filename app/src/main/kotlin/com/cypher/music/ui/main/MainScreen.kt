@@ -528,6 +528,7 @@ fun MainScreen(
                 onSetVolume = { viewModel.setVolume(it) },
                 onSelectQueueIndex = { viewModel.jumpToQueueIndex(it) },
                 onRemoveQueueIndex = { viewModel.removeFromQueue(it) },
+                onMoveQueueIndex = { from, to -> viewModel.moveQueueItem(from, to) },
                 onViewArtist = { artist ->
                     viewModel.setNowPlayingExpanded(false)
                     navigateToArtist(artist)
@@ -736,8 +737,10 @@ fun MainScreen(
             )
         }
 
-        // Discreet GitHub release notice, floating above the dock.
-        if (updateState.visible && !isSettingsOpen && !isWrappedOpen &&
+        // Discreet GitHub release notice, floating above the dock. A same-version
+        // rebuild is only surfaced inside Settings so it never interrupts launch.
+        val showUpdateNotice = if (updateState.rebuild) isSettingsOpen else !isSettingsOpen
+        if (updateState.visible && showUpdateNotice && !isWrappedOpen &&
             !currentUser?.displayName.isNullOrBlank()
         ) {
             UpdateBanner(

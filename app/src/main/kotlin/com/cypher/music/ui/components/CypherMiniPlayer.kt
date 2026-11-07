@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -74,6 +75,18 @@ fun CypherMiniPlayer(
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
     // 1 = incoming content slides from the right (next), -1 = from the left (previous).
     var slideDirection by remember { mutableIntStateOf(1) }
+    var isDraggingContent by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var contentDragOffset by remember { mutableFloatStateOf(0f) }
+    val maxFollowPx = with(LocalDensity.current) { 40.dp.toPx() }
+    val followOffset by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isDraggingContent) contentDragOffset else 0f,
+        animationSpec = if (isDraggingContent) {
+            androidx.compose.animation.core.tween(0)
+        } else {
+            androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 520f)
+        },
+        label = "MiniFollow"
+    )
     // 56dp keeps a deliberate swipe from being confused with a tap on the play button.
     val swipeThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     val latestOnSkipNext by rememberUpdatedState(onSkipNext)
@@ -99,11 +112,20 @@ fun CypherMiniPlayer(
             .clickable { onExpand() }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
-                    onDragStart = { dragAccumulator = 0f },
-                    onDragCancel = { dragAccumulator = 0f },
+                    onDragStart = {
+                        dragAccumulator = 0f
+                        contentDragOffset = 0f
+                        isDraggingContent = true
+                    },
+                    onDragCancel = {
+                        dragAccumulator = 0f
+                        isDraggingContent = false
+                    },
                     onDragEnd = {
                         val distance = dragAccumulator
                         dragAccumulator = 0f
+                        isDraggingContent = false
+                        contentDragOffset = 0f
                         if (distance <= -swipeThresholdPx) {
                             AppHaptics.actionClick(themePrefs.hapticsEnabled)
                             slideDirection = 1
@@ -117,6 +139,7 @@ fun CypherMiniPlayer(
                     onHorizontalDrag = { change, dragAmount ->
                         change.consume()
                         dragAccumulator += dragAmount
+                        contentDragOffset = (contentDragOffset + dragAmount * 0.30f).coerceIn(-maxFollowPx, maxFollowPx)
                     }
                 )
             }
@@ -140,7 +163,9 @@ fun CypherMiniPlayer(
                                     fadeOut(animationSpec = tween(160))
                             )
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .graphicsLayer { translationX = followOffset },
                     label = "MiniArtworkSlide"
                 ) { shownTrack ->
                     Row(

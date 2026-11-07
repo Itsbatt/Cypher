@@ -71,6 +71,13 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent == null) return
 
+        // Spotify OAuth result: cypher://spotify-callback?code=...&state=...
+        val callback = intent.data
+        if (callback?.scheme == "cypher" && callback.host == "spotify-callback") {
+            viewModel.completeSpotifyAuthorization(callback)
+            return
+        }
+
         // Deep link from the Wrapped notification: cypher://wrapped?year=2026
         val isWrappedLink = intent.action == WrappedScheduler.ACTION_OPEN_WRAPPED ||
             (intent.data?.scheme == WrappedScheduler.DEEP_LINK_SCHEME &&

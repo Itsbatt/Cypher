@@ -23,16 +23,18 @@ class SpotifyImporter(private val youTubeRepository: YouTubeRepository) {
 
     data class Resolution(
         val tracks: List<Track>,
-        val missed: Int,
+        val failed: List<SpotifyTrackRef>,
         val total: Int
-    )
+    ) {
+        val missed: Int get() = failed.size
+    }
 
     suspend fun resolve(
         playlist: SpotifyPlaylistRef,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }
     ): Resolution = withContext(Dispatchers.IO) {
         val total = playlist.tracks.size
-        if (total == 0) return@withContext Resolution(emptyList(), 0, 0)
+        if (total == 0) return@withContext Resolution(emptyList(), emptyList(), 0)
 
         val done = AtomicInteger(0)
         val matched = mutableListOf<Track?>()
@@ -54,7 +56,10 @@ class SpotifyImporter(private val youTubeRepository: YouTubeRepository) {
 
         val seen = HashSet<String>()
         val tracks = matched.filterNotNull().filter { seen.add(it.id) }
-        Resolution(tracks, total - tracks.size, total)
+        val failed = playlist.tracks
+            .filterIndexed { index, _ -> matched[index] == null }
+            .distinctBy { it.title.lowercase() + "|" + it.artist.lowercase() }
+        Resolution(tracks, failed, total)
     }
 
     private suspend fun matchTrack(ref: SpotifyTrackRef): Track? {

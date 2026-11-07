@@ -37,7 +37,15 @@ import com.cypher.music.data.BackupImportSummary
 import com.cypher.music.data.SharedPlaylistPayload
 import com.cypher.music.data.SpotifyImporter
 import com.cypher.music.data.SpotifyImportUiState
+import com.cypher.music.network.SpotifyApiClient
+import com.cypher.music.network.SpotifyAuthManager
 import com.cypher.music.network.SpotifyImportService
+import com.cypher.music.network.SpotifyPlaylistRef
+import com.cypher.music.network.SpotifyPlaylistSummary
+import com.cypher.music.network.SpotifySession
+import com.cypher.music.data.SpotifyFailedTrack
+import com.cypher.music.data.SpotifyTransferSummary
+import com.cypher.music.data.SpotifyTransferUiState
 import com.cypher.music.playback.PlayerState
 import com.cypher.music.ui.components.CypherTab
 import com.cypher.music.ui.main.viewmodels.PlayerViewModel
@@ -61,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -71,6 +80,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val youTubeRepository = YouTubeRepository()
     private val spotifyImporter = SpotifyImporter(youTubeRepository)
+
+    // Spotify account (OAuth PKCE) and transfer of the user's own playlists.
+    val spotifyAuthManager = SpotifyAuthManager(application)
+    private val spotifyApiClient = SpotifyApiClient(spotifyAuthManager)
+    val spotifySession: StateFlow<SpotifySession> = spotifyAuthManager.session
+    val spotifyClientId: StateFlow<String> = spotifyAuthManager.clientId
+
+    private val _spotifyTransfer = MutableStateFlow(SpotifyTransferUiState())
+    val spotifyTransfer: StateFlow<SpotifyTransferUiState> = _spotifyTransfer.asStateFlow()
+
+    private val _spotifyAuthUrl = MutableStateFlow<String?>(null)
+    val spotifyAuthUrl: StateFlow<String?> = _spotifyAuthUrl.asStateFlow()
+
+    private var spotifyTransferJob: Job? = null
     private val musicRepository = MusicRepository(application, youTubeRepository)
     private val playerManager = MusicPlayerManager.getInstance(application)
     private val playlistRepository = PlaylistRepository(application, viewModelScope)
@@ -1038,11 +1061,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sourceId: String
     ) {
         _syncStatusMsg.value = "Releyendo «${entity.name}» en Spotify…"
-        val fetched = SpotifyImportService.fetchPlaylist(sourceId.removePrefix("spotify:"))
-            .getOrElse { failure ->
-                _syncStatusMsg.value = "No se pudo releer la playlist en Spotify: ${failure.message}"
+        val fetched = if (sourceId == "spotify:liked") {
+            val refs = spotifyApiClient.fetchSavedTracks().getOrElse { failure ->
+                _syncStatusMsg.value = "No se pudo releer «Me gusta»: ${failure.message}"
                 return
             }
+            SpotifyPlaylistRef(
+                id = "liked",
+                name = entity.name,
+                owner = spotifyAuthManager.session.value.displayName,
+                coverUrl = entity.coverUri,
+                tracks = refs
+            )
+        } else {
+            SpotifyImportService.fetchPlaylist(sourceId.removePrefix("spotify:"))
+                .getOrElse { failure ->
+                    _syncStatusMsg.value = "No se pudo releer la playlist en Spotify: ${failure.message}"
+                    return
+                }
+        }
         val resolution = spotifyImporter.resolve(fetched) { done, total ->
             _syncStatusMsg.value = "«${entity.name}»: $done / $total canciones…"
         }
@@ -1059,6 +1096,257 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             "«${entity.name}»: ${resolution.tracks.size} canciones; ${resolution.missed} no están en YouTube."
         }
+    }
+
+    // Spotify account connection (OAuth PKCE) and bulk transfer of playlists.
+    fun openSpotifySync() {
+        _spotifyTransfer.value = SpotifyTransferUiState(
+            isOpen = true,
+            needsClientId = spotifyAuthManager.clientId.value.isBlank() &&
+                !spotifyAuthManager.session.value.isLoggedIn
+        )
+        if (spotifyAuthManager.session.value.isLoggedIn) loadSpotifyPlaylists()
+    }
+
+    fun closeSpotifySync() {
+        _spotifyTransfer.value = SpotifyTransferUiState()
+    }
+
+    fun saveSpotifyClientId(clientId: String) {
+        spotifyAuthManager.setClientId(clientId)
+        _spotifyTransfer.value = _spotifyTransfer.value.copy(
+            needsClientId = clientId.isBlank(),
+            error = if (clientId.isBlank()) {
+                "El Client ID no puede estar vacío."
+            } else {
+                null
+            }
+        )
+    }
+
+    fun connectSpotify() {
+        spotifyAuthManager.beginAuthorization()
+            .onSuccess { request -> _spotifyAuthUrl.value = request.url }
+            .onFailure { failure ->
+                _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                    error = failure.message,
+                    needsClientId = spotifyAuthManager.clientId.value.isBlank()
+                )
+            }
+    }
+
+    fun consumeSpotifyAuthUrl() {
+        _spotifyAuthUrl.value = null
+    }
+
+    fun completeSpotifyAuthorization(uri: android.net.Uri) {
+        val error = uri.getQueryParameter("error")
+        val code = uri.getQueryParameter("code")
+        val state = uri.getQueryParameter("state")
+        if (!error.isNullOrBlank() || code.isNullOrBlank()) {
+            _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                isOpen = true,
+                error = "Spotify canceló la autorización."
+            )
+            return
+        }
+        viewModelScope.launch {
+            _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                isOpen = true,
+                status = "Conectando con Spotify…"
+            )
+            spotifyAuthManager.completeAuthorization(code, state)
+                .onSuccess {
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(status = "")
+                    loadSpotifyPlaylists()
+                }
+                .onFailure { failure ->
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                        status = "",
+                        error = failure.message
+                    )
+                }
+        }
+    }
+
+    fun disconnectSpotify() {
+        spotifyAuthManager.logout()
+        _spotifyTransfer.value = SpotifyTransferUiState()
+    }
+
+    fun loadSpotifyPlaylists() {
+        if (_spotifyTransfer.value.isLoadingPlaylists) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                isOpen = true,
+                isLoadingPlaylists = true,
+                error = null,
+                status = "Leyendo tus playlists…",
+                summary = null
+            )
+            spotifyApiClient.fetchPlaylists()
+                .onSuccess { playlists ->
+                    val likedTotal = spotifyApiClient.fetchLikedSongsTotal()
+                    val all = buildList {
+                        if (likedTotal > 0) {
+                            add(
+                                SpotifyPlaylistSummary(
+                                    id = "liked",
+                                    name = "Me gusta",
+                                    ownerName = spotifyAuthManager.session.value.displayName,
+                                    trackCount = likedTotal,
+                                    isLikedSongs = true
+                                )
+                            )
+                        }
+                        addAll(playlists)
+                    }
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                        isLoadingPlaylists = false,
+                        playlists = all,
+                        selectedIds = all.map { it.id }.toSet(),
+                        status = if (all.isEmpty()) {
+                            "Esta cuenta no tiene playlists."
+                        } else {
+                            "${all.size} playlists encontradas."
+                        }
+                    )
+                }
+                .onFailure { failure ->
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                        isLoadingPlaylists = false,
+                        error = failure.message ?: "No se pudieron leer tus playlists."
+                    )
+                }
+        }
+    }
+
+    fun toggleSpotifyPlaylist(id: String) {
+        val state = _spotifyTransfer.value
+        val selected = if (id in state.selectedIds) {
+            state.selectedIds - id
+        } else {
+            state.selectedIds + id
+        }
+        _spotifyTransfer.value = state.copy(selectedIds = selected)
+    }
+
+    fun selectAllSpotifyPlaylists(selected: Boolean) {
+        val state = _spotifyTransfer.value
+        _spotifyTransfer.value = state.copy(
+            selectedIds = if (selected) state.playlists.map { it.id }.toSet() else emptySet()
+        )
+    }
+
+    fun startSpotifyTransfer() {
+        val state = _spotifyTransfer.value
+        if (state.isImporting) return
+        val selected = state.playlists.filter { it.id in state.selectedIds }
+        if (selected.isEmpty()) {
+            _spotifyTransfer.value = state.copy(error = "Elige al menos una playlist para transferir.")
+            return
+        }
+
+        spotifyTransferJob = viewModelScope.launch(Dispatchers.IO) {
+            var imported = 0
+            val failures = mutableListOf<SpotifyFailedTrack>()
+            _spotifyTransfer.value = state.copy(
+                isImporting = true,
+                error = null,
+                summary = null,
+                playlistsTotal = selected.size,
+                playlistsDone = 0,
+                tracksDone = 0,
+                tracksTotal = 0,
+                status = "Preparando la transferencia…"
+            )
+
+            for ((index, playlist) in selected.withIndex()) {
+                if (!isActive) return@launch
+                _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                    currentPlaylist = playlist.name,
+                    playlistsDone = index,
+                    tracksDone = 0,
+                    tracksTotal = 0,
+                    status = "Leyendo «${playlist.name}»…"
+                )
+
+                val refsResult = if (playlist.isLikedSongs) {
+                    spotifyApiClient.fetchSavedTracks()
+                } else {
+                    spotifyApiClient.fetchPlaylistTracks(playlist.id)
+                }
+                if (refsResult.isFailure) {
+                    val message = refsResult.exceptionOrNull()?.message ?: "error desconocido"
+                    failures += SpotifyFailedTrack(playlist.name, "(playlist completa)", message)
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                        playlistsDone = index + 1,
+                        status = "«${playlist.name}» no se pudo leer: $message"
+                    )
+                    continue
+                }
+
+                val tracks = refsResult.getOrThrow()
+                    .distinctBy {
+                        it.spotifyUri ?: (it.title.lowercase() + "|" + it.artist.lowercase())
+                    }
+                val resolution = spotifyImporter.resolve(
+                    SpotifyPlaylistRef(
+                        id = playlist.id,
+                        name = playlist.name,
+                        owner = playlist.ownerName,
+                        coverUrl = playlist.coverUrl,
+                        tracks = tracks
+                    )
+                ) { done, total ->
+                    _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                        tracksDone = done,
+                        tracksTotal = total,
+                        status = "«${playlist.name}»: buscando $done / $total en YouTube…"
+                    )
+                }
+
+                val description = buildString {
+                    append(SpotifyImportService.IMPORT_DESCRIPTION)
+                    playlist.ownerName?.let { append(" · $it") }
+                }
+                playlistRepository.syncPlaylist(
+                    name = playlist.name,
+                    description = description,
+                    coverUri = playlist.coverUrl,
+                    tracks = resolution.tracks,
+                    sourceId = "spotify:${playlist.id}",
+                    complete = resolution.failed.isEmpty()
+                )
+                imported += resolution.tracks.size
+                failures += resolution.failed.map {
+                    SpotifyFailedTrack(playlist.name, it.title, it.artist)
+                }
+                _spotifyTransfer.value = _spotifyTransfer.value.copy(playlistsDone = index + 1)
+            }
+
+            spotifyAuthManager.markSynced()
+            val summary = SpotifyTransferSummary(selected.size, imported, failures)
+            _spotifyTransfer.value = _spotifyTransfer.value.copy(
+                isImporting = false,
+                currentPlaylist = null,
+                summary = summary,
+                status = "Transferencia completada."
+            )
+            _syncStatusMsg.value =
+                "Spotify: $imported canciones transferidas; ${failures.size} no encontradas."
+            playlistRepository.loadData()
+            refreshDynamicRecommendations()
+            selectTab(CypherTab.LIBRARY)
+        }
+    }
+
+    fun cancelSpotifyTransfer() {
+        spotifyTransferJob?.cancel()
+        _spotifyTransfer.value = _spotifyTransfer.value.copy(
+            isImporting = false,
+            status = "Transferencia cancelada."
+        )
     }
 
     // Dynamic Real Recommendation Engine with Artist Normalization & Smart YouTube Search

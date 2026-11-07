@@ -16,17 +16,33 @@
   canciones que añadas a mano** en la playlist; la pantalla de la playlist lo indica.
 - El aviso de sincronización incompleta ya no desaparece al cerrar la app.
 
-## Migración desde Spotify
+## Transferencia desde Spotify
 
-- **Importa playlists públicas de Spotify** pegando su enlace en Ajustes → «Migrar desde Spotify».
-  Cypher lee la playlist desde Spotify y busca cada canción en YouTube para que sea
-  reproducible aquí; muestra cuántas coincidencias encontró antes de guardar.
-- Las canciones que no aparezcan en YouTube se cuentan y no se inventan; si falta alguna,
-  la playlist queda marcada como incompleta con opción de reintentar.
-- La playlist importada conserva su enlace de origen: volver a importarla actualiza la
-  existente en lugar de duplicarla, y respeta la política híbrida con las canciones añadidas a mano.
-- Las playlists privadas o «Me gusta» requieren una sesión OAuth de Spotify y no están
-  disponibles por este camino sin credenciales.
+- **Conecta tu cuenta con OAuth 2.0 + PKCE** desde Ajustes → «Conectar con Spotify»,
+  sin compartir contraseña: la autorización ocurre en el navegador y solo se guardan
+  tokens cifrados en el dispositivo.
+- Tras conectar, Cypher lista **todas tus playlists y tu biblioteca de «Me gusta»**, con
+  paginación completa de la API: no se corta en 50 playlists ni en 100 canciones, así que
+  también funciona con listas de miles de canciones.
+- Eliges qué playlists transferir y la app hace el resto: lee cada playlist de Spotify,
+  busca cada canción en YouTube con el mismo motor que la sincronización de YouTube Music
+  y guarda la playlist aquí. La transferencia se puede cancelar y muestra el progreso en
+  tiempo real (playlist actual, canciones procesadas, barra de avance).
+- Al terminar aparece un **resumen**: canciones transferidas, canciones no encontradas y
+  el nombre y artista de cada fallo, con botones para **copiar** la lista al portapapeles
+  o **compartirla** con otra app.
+- Las playlists importadas conservan su origen `spotify:`: volver a transferirlas actualiza
+  la existente, no las duplica, y se respeta la política híbrida con las canciones añadidas a mano.
+- Límites de la API controlados: `429` con espera según `Retry-After`, renovación automática
+  del token, reintentos ante errores 5xx y mensajes claros si la sesión caduca o se revoca.
+- Sigue disponible la importación rápida **pegando el enlace** de una playlist pública, sin conectar cuenta.
+
+### Configurar Spotify (una vez)
+
+1. Crea una app en <https://developer.spotify.com/dashboard>.
+2. Añade el redirect URI `cypher://spotify-callback`.
+3. Copia el **Client ID** (no hace falta Client Secret), pégalo en la hoja de Spotify o
+   define `spotifyClientId` en `local.properties` / `SPOTIFY_CLIENT_ID` al compilar.
 
 ## Descargas
 

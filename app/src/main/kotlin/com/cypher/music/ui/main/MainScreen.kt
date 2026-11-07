@@ -2,6 +2,9 @@ package com.cypher.music.ui.main
 
 import android.util.Log
 import android.widget.Toast
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -52,6 +55,7 @@ import com.cypher.music.ui.components.SharePlaylistDialog
 import com.cypher.music.ui.components.QrScannerSheet
 import com.cypher.music.ui.components.PlaylistImportPreviewDialog
 import com.cypher.music.ui.components.SpotifyImportSheet
+import com.cypher.music.ui.components.SpotifySyncSheet
 import com.cypher.music.ui.components.UpdateBanner
 import com.cypher.music.ui.components.CypherMiniPlayer
 import com.cypher.music.ui.components.CypherNavBar
@@ -154,6 +158,18 @@ fun MainScreen(
     val isLiquidGlassSettingsOpen by viewModel.isLiquidGlassSettingsOpen.collectAsState()
     val pendingImportPayload by viewModel.pendingImportPayload.collectAsState()
     val spotifyImport by viewModel.spotifyImport.collectAsState()
+    val spotifySession by viewModel.spotifySession.collectAsState()
+    val spotifyClientId by viewModel.spotifyClientId.collectAsState()
+    val spotifyTransfer by viewModel.spotifyTransfer.collectAsState()
+    val spotifyAuthUrl by viewModel.spotifyAuthUrl.collectAsState()
+
+    LaunchedEffect(spotifyAuthUrl) {
+        val url = spotifyAuthUrl ?: return@LaunchedEffect
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        }
+        viewModel.consumeSpotifyAuthUrl()
+    }
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.state.collectAsState()
 
@@ -570,6 +586,9 @@ fun MainScreen(
                 onSyncYouTube = { viewModel.syncYouTubeMusic() },
                 onUnlinkYouTube = { viewModel.unlinkYouTubeAccount() },
                 onOpenSpotifyImport = { viewModel.openSpotifyImport() },
+                spotifySession = spotifySession,
+                onOpenSpotifySync = { viewModel.openSpotifySync() },
+                onDisconnectSpotify = { viewModel.disconnectSpotify() },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,
                 onToggleLoudnessNormalization = { viewModel.setLoudnessNormalizationEnabled(it) },
@@ -688,6 +707,44 @@ fun MainScreen(
                 onStart = { viewModel.startSpotifyImport() },
                 onConfirm = { viewModel.confirmSpotifyImport() },
                 onDismiss = { viewModel.closeSpotifyImport() }
+            )
+        }
+
+        // Spotify account transfer: connect, choose playlists, see progress and failures.
+        if (spotifyTransfer.isOpen) {
+            SpotifySyncSheet(
+                state = spotifyTransfer,
+                session = spotifySession,
+                clientId = spotifyClientId,
+                themeColors = themeColors,
+                onClientIdChange = { viewModel.saveSpotifyClientId(it) },
+                onConnect = { viewModel.connectSpotify() },
+                onLoadPlaylists = { viewModel.loadSpotifyPlaylists() },
+                onTogglePlaylist = { viewModel.toggleSpotifyPlaylist(it) },
+                onSelectAll = { viewModel.selectAllSpotifyPlaylists(it) },
+                onStartTransfer = { viewModel.startSpotifyTransfer() },
+                onCancelTransfer = { viewModel.cancelSpotifyTransfer() },
+                onCopyFailed = {
+                    val text = spotifyTransfer.summary?.exportText().orEmpty()
+                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(
+                        ClipData.newPlainText("Canciones no encontradas", text)
+                    )
+                    Toast.makeText(context, "Lista copiada", Toast.LENGTH_SHORT).show()
+                },
+                onShareFailed = {
+                    val text = spotifyTransfer.summary?.exportText().orEmpty()
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                    }
+                    context.startActivity(Intent.createChooser(share, "Compartir canciones no encontradas"))
+                },
+                onOpenLinkImport = {
+                    viewModel.closeSpotifySync()
+                    viewModel.openSpotifyImport()
+                },
+                onDismiss = { viewModel.closeSpotifySync() }
             )
         }
 

@@ -53,6 +53,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Spotify OAuth callback: cypher://spotify-callback?code=... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cypher" android:host="spotify-callback" />
+            </intent-filter>
+
             <!-- Cypher Wrapped deep link (notification) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

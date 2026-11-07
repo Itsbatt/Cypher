@@ -54,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +96,7 @@ import com.cypher.music.data.BackupImportSummary
 import com.cypher.music.data.CrossfadeOptions
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
+import com.cypher.music.network.SpotifySession
 import com.cypher.music.network.YouTubeAccountSession
 import com.cypher.music.ui.components.HexColorPickerDialog
 import com.cypher.music.ui.components.UsernameDialog
@@ -118,6 +120,9 @@ fun SettingsScreen(
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
     onOpenSpotifyImport: () -> Unit = {},
+    spotifySession: SpotifySession = SpotifySession(),
+    onOpenSpotifySync: () -> Unit = {},
+    onDisconnectSpotify: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     isLoudnessNormalizationEnabled: Boolean = true,
     onToggleLoudnessNormalization: (Boolean) -> Unit = {},
@@ -640,49 +645,126 @@ fun SettingsScreen(
             )
 
             SettingsCard(themeColors = themeColors) {
-                Text(
-                    text = "Pega el enlace de una playlist pública de Spotify y Cypher buscará cada canción en YouTube para que puedas seguir escuchándola aquí.",
-                    color = themeColors.textSecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
+                if (spotifySession.isLoggedIn) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Conectado a Spotify",
+                                color = themeColors.textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = spotifySession.displayName ?: spotifySession.email ?: "Sesión activa",
+                                color = themeColors.textSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
-                    onClick = {
-                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                        onOpenSpotifyImport()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MusicNote,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onOpenSpotifySync()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Sync,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Importar mis playlists",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onDisconnectSpotify()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Desconectar Spotify",
+                            color = Color(0xFFFF453A),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
                     Text(
-                        text = "Importar desde Spotify",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        text = "Conecta tu cuenta para importar todas tus playlists y tus «Me gusta» de una vez, sin copiar enlaces. También puedes pegar el enlace de una playlist pública.",
+                        color = themeColors.textSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Solo playlists públicas o enlazadas: las privadas necesitan iniciar sesión en Spotify.",
-                    color = themeColors.textSecondary,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp
-                )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onOpenSpotifySync()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Conectar con Spotify",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onOpenSpotifyImport()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Importar solo con un enlace",
+                            color = themeColors.accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

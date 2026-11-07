@@ -18,47 +18,41 @@
 
 ## Transferencia desde Spotify
 
-- **Conecta tu cuenta con OAuth 2.0 + PKCE** desde Ajustes → «Conectar con Spotify»,
-  sin compartir contraseña: la autorización ocurre en el navegador y solo se guardan
-  tokens cifrados en el dispositivo.
-- Tras conectar, Cypher lista **todas tus playlists y tu biblioteca de «Me gusta»**, con
-  paginación completa de la API: no se corta en 50 playlists ni en 100 canciones, así que
-  también funciona con listas de miles de canciones.
-- Eliges qué playlists transferir y la app hace el resto: lee cada playlist de Spotify,
-  busca cada canción en YouTube con el mismo motor que la sincronización de YouTube Music
-  y guarda la playlist aquí. La transferencia se puede cancelar y muestra el progreso en
-  tiempo real (playlist actual, canciones procesadas, barra de avance).
-- Al terminar aparece un **resumen**: canciones transferidas, canciones no encontradas y
-  el nombre y artista de cada fallo, con botones para **copiar** la lista al portapapeles
-  o **compartirla** con otra app.
-- Las playlists importadas conservan su origen `spotify:`: volver a transferirlas actualiza
-  la existente, no las duplica, y se respeta la política híbrida con las canciones añadidas a mano.
-- Límites de la API controlados: `429` con espera según `Retry-After`, renovación automática
-  del token, reintentos ante errores 5xx y mensajes claros si la sesión caduca o se revoca.
-- Sigue disponible la importación rápida **pegando el enlace** de una playlist pública, sin conectar cuenta.
-- **Importar un archivo de Spotify** (sin cuenta, sin Client ID y sin Premium): acepta el CSV
-  que exporta Exportify y el JSON de «Descargar tus datos» de Spotify, con playlists
-  privadas y «Me gusta». Se eligen las playlists y se transfieren con el mismo progreso,
-  resumen, copia y exportación de fallos que la conexión directa.
-- **Importar un ZIP con todas las playlists**, sin extraerlo a mano: detecta los CSV y JSON
-  que contiene, los importa de una vez y conserva el nombre de cada playlist. Aguanta
-  cientos de playlists y miles de canciones, omite las repetidas por nombre y, si un
-  archivo está dañado, vacío o demasiado grande, indica cuál es y por qué sin cancelar
-  el resto de la importación.
+- **Importa toda tu biblioteca desde un archivo, sin cuenta ni Premium.** Acepta el CSV que
+  exporta Exportify, el JSON de «Descargar tus datos» de Spotify y un **ZIP con todas las
+  playlists** (CSV y/o JSON) sin extraerlo a mano. Incluye playlists privadas y «Me gusta».
+- Con un ZIP, Cypher detecta todas las playlists, las importa de una vez y conserva el nombre
+  de cada una. Aguanta cientos de playlists y miles de canciones, ignora metadatos y archivos
+  ocultos, y si un CSV está dañado, vacío o supera 8 MB lo indica con su nombre y el motivo
+  **sin cancelar el resto de la importación**.
+- Eliges qué playlists transferir y la app hace el resto: busca cada canción en YouTube con el
+  mismo motor que la sincronización de YouTube Music y guarda la playlist aquí. La transferencia
+  se puede cancelar y muestra el progreso en tiempo real (playlist actual, canciones procesadas,
+  barra de avance).
+- Al terminar aparece un **resumen**: canciones transferidas, canciones no encontradas y el
+  nombre y artista de cada fallo, con botones para **copiar** la lista al portapapeles o
+  **compartirla** con otra app.
+- **Sin duplicados**: volver a importar actualiza la playlist existente y añade solo las
+  canciones que falten. Si ya tienes una playlist con el mismo nombre (aunque la crearas a
+  mano), se fusiona con ella conservando tus canciones, portada y descripción. Dentro de un
+  ZIP, las playlists con el mismo nombre se omiten.
+- Límites seguros para archivos grandes: hasta 1.000 playlists, 100.000 canciones, 8 MB por
+  archivo y 2.000 entradas; al alcanzarlos se avisa y se conserva lo importado.
+- Sigue disponible la importación rápida **pegando el enlace** de una playlist pública, sin
+  cuenta ni archivo.
+- **Conexión directa con la cuenta (opcional, solo en compilaciones con Client ID).** OAuth 2.0
+  + PKCE, tokens cifrados en el dispositivo, paginación completa y control de 429/401/5xx.
+  No viene activada en el APK publicado: desde febrero de 2026 Spotify exige **Premium en la
+  cuenta dueña de la app** para usar la Web API en modo desarrollo y limita a 5 usuarios
+  autorizados, así que la vía gratuita y universal es el archivo o el ZIP.
 
-### Configurar Spotify (una vez)
+### Configurar Spotify (opcional)
 
-1. Crea una app en <https://developer.spotify.com/dashboard>.
+1. Crea una app en <https://developer.spotify.com/dashboard> (requiere Premium en la cuenta).
 2. Añade el redirect URI `cypher://spotify-callback`.
-3. Copia el **Client ID** (no hace falta Client Secret), pégalo en la hoja de Spotify o
-   define `spotifyClientId` en `local.properties` / `SPOTIFY_CLIENT_ID` al compilar.
-
-> La Web API de Spotify exige **Premium en la cuenta dueña de la app** desde febrero de 2026
-> y, en modo desarrollo, un máximo de 5 usuarios autorizados. Sin Premium, el registro de la
-> app no permite marcar la Web API: usa la **importación por archivo**, que no depende de eso.
->
-> Si compilas sin `spotifyClientId`, Ajustes muestra directamente «Importar archivo de Spotify»
-> y oculta la conexión de cuenta.
+3. Copia el **Client ID** (no hace falta Client Secret) y defínelo con `spotifyClientId` en
+   `local.properties` o `SPOTIFY_CLIENT_ID` al compilar. Sin Client ID, Ajustes muestra
+   directamente «Importar ZIP o archivo» y oculta la conexión de cuenta.
 
 ## Descargas
 

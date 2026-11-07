@@ -107,7 +107,12 @@ class PlaylistRepository(
         coverUri: String? = null,
         tracks: List<Track>,
         sourceId: String? = null,
-        complete: Boolean = true
+        complete: Boolean = true,
+        /**
+         * File/ZIP imports merge into a playlist with the same name even when it was created
+         * by hand or by another source, instead of creating a second one with that name.
+         */
+        matchByName: Boolean = false
     ): Playlist = withContext(Dispatchers.IO) {
         val cleanName = name.trim().ifEmpty { "Nueva playlist" }
         val cleanDescription = description.trim().ifEmpty { YOUTUBE_SYNC_DESCRIPTION }
@@ -116,8 +121,17 @@ class PlaylistRepository(
 
         val existing = sourceId?.let { roomDb.playlistDao().getPlaylistBySourceId(it) }
             ?: roomDb.playlistDao().getAllPlaylists().firstOrNull {
-                it.name == cleanName && isSameSyncOrigin(it.description, cleanDescription)
+                val sameName = if (matchByName) {
+                    PlaylistSync.namesMatch(it.name, cleanName)
+                } else {
+                    it.name == cleanName
+                }
+                sameName && (matchByName || isSameSyncOrigin(it.description, cleanDescription))
             }
+
+        // When merging into a playlist the user owns, keep its description and source link.
+        val preserveDetails = matchByName && existing != null &&
+            !isSameSyncOrigin(existing.description, cleanDescription)
 
         // Hybrid policy: anything already in the playlist that YouTube Music does not
         // return is a manual addition, so it is preserved after the remote tracks.
@@ -131,7 +145,11 @@ class PlaylistRepository(
         val playlist = Playlist(
             id = existing?.id ?: "playlist_${UUID.randomUUID()}",
             name = cleanName,
-            description = cleanDescription,
+            description = if (preserveDetails) {
+                existing?.description ?: cleanDescription
+            } else {
+                cleanDescription
+            },
             coverUri = coverUri ?: existing?.coverUri,
             createdAt = existing?.createdAt ?: now,
             updatedAt = now,
@@ -145,7 +163,8 @@ class PlaylistRepository(
         // marking a half-written import as successful.
         roomDb.withTransaction {
             roomDb.playlistDao().insertPlaylist(playlist.toEntity().apply {
-                this.sourceId = sourceId ?: existing?.sourceId
+                // A playlist that already belongs to a source (for example YouTube Music) keeps it.
+                this.sourceId = existing?.sourceId ?: sourceId
             })
             roomDb.playlistDao().clearPlaylistTracks(playlist.id)
             if (mergedTracks.isNotEmpty()) {

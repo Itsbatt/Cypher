@@ -19,6 +19,13 @@ object PlaylistSync {
 
     fun isSynced(syncState: String?): Boolean = syncState != null
 
+    /** Same playlist name ignoring case and extra spaces, as used by file/ZIP imports. */
+    fun namesMatch(first: String, second: String): Boolean =
+        normalizeName(first) == normalizeName(second)
+
+    fun normalizeName(name: String): String =
+        name.trim().lowercase().replace(Regex("\\s+"), " ")
+
     fun stateFor(complete: Boolean): String = if (complete) COMPLETE else INCOMPLETE
 
     /**

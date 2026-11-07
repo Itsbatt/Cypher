@@ -1450,7 +1450,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     coverUri = playlist.coverUrl,
                     tracks = resolution.tracks,
                     sourceId = sourceId,
-                    complete = resolution.failed.isEmpty()
+                    complete = resolution.failed.isEmpty(),
+                    matchByName = exported != null
                 )
                 imported += resolution.tracks.size
                 failures += resolution.failed.map {

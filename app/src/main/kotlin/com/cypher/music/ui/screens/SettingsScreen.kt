@@ -96,7 +96,6 @@ import com.cypher.music.data.BackupImportSummary
 import com.cypher.music.data.CrossfadeOptions
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
-import com.cypher.music.network.SpotifySession
 import com.cypher.music.network.YouTubeAccountSession
 import com.cypher.music.ui.components.HexColorPickerDialog
 import com.cypher.music.ui.components.UsernameDialog
@@ -120,10 +119,7 @@ fun SettingsScreen(
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
     onOpenSpotifyImport: () -> Unit = {},
-    spotifySession: SpotifySession = SpotifySession(),
-    onOpenSpotifySync: () -> Unit = {},
-    spotifyAccountAvailable: Boolean = false,
-    onDisconnectSpotify: () -> Unit = {},
+    onImportSpotifyFile: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     isLoudnessNormalizationEnabled: Boolean = true,
     onToggleLoudnessNormalization: (Boolean) -> Unit = {},
@@ -637,7 +633,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Section: Migración desde Spotify (playlists públicas)
+        // Section: Migración desde Spotify (archivo o enlace)
         item {
             SettingsSectionHeader(
                 title = "Migrar desde Spotify",
@@ -646,129 +642,55 @@ fun SettingsScreen(
             )
 
             SettingsCard(themeColors = themeColors) {
-                if (spotifySession.isLoggedIn) {
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Conectado a Spotify",
-                                color = themeColors.textPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = spotifySession.displayName ?: spotifySession.email ?: "Sesión activa",
-                                color = themeColors.textSecondary,
-                                fontSize = 12.sp,
-                                maxLines = 1
-                            )
-                        }
-                    }
+                Text(
+                    text = "Importa toda tu biblioteca con un ZIP que contenga todas tus playlists, o con un único CSV o JSON exportado gratis desde Spotify. Incluye playlists privadas y «Me gusta», sin cuenta ni Premium.",
+                    color = themeColors.textSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                    Button(
-                        onClick = {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onOpenSpotifySync()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Sync,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Importar mis playlists",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-
-                    TextButton(
-                        onClick = {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onDisconnectSpotify()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Desconectar Spotify",
-                            color = Color(0xFFFF453A),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                } else {
-                    Text(
-                        text = if (spotifyAccountAvailable) {
-                            "Conecta tu cuenta para importar todas tus playlists y tus «Me gusta» de una vez, sin copiar enlaces."
-                        } else {
-                            "Importa toda tu biblioteca con un ZIP que contenga todos los CSV, o con un único CSV o JSON exportado gratis desde Spotify. Incluye playlists privadas y «Me gusta», sin cuenta ni Premium."
-                        },
-                        color = themeColors.textSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
+                Button(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        onImportSpotifyFile()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FileUpload,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Importar ZIP, CSV o JSON",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onOpenSpotifySync()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MusicNote,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (spotifyAccountAvailable) "Conectar con Spotify" else "Importar ZIP o archivo",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-
-                    TextButton(
-                        onClick = {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onOpenSpotifyImport()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Importar con un enlace de playlist",
-                            color = themeColors.accent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                TextButton(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        onOpenSpotifyImport()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Importar con un enlace de playlist",
+                        color = themeColors.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 

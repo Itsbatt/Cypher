@@ -15,6 +15,14 @@ data class SpotifyTrackRef(
     val spotifyUri: String?
 )
 
+data class SpotifyPlaylistSummary(
+    val id: String,
+    val name: String,
+    val ownerName: String? = null,
+    val coverUrl: String? = null,
+    val trackCount: Int = 0
+)
+
 data class SpotifyPlaylistRef(
     val id: String,
     val name: String,
@@ -28,8 +36,8 @@ data class SpotifyPlaylistRef(
  *
  * It fetches the public embed page and parses the `__NEXT_DATA__` payload that Spotify
  * ships for it, so users coming from Spotify can paste their playlist link and keep
- * listening. Private playlists (and Liked Songs) are not exposed publicly and need an
- * OAuth session, which this credential-free path deliberately does not fake.
+ * listening. Private playlists and Liked Songs are not exposed publicly; for those,
+ * use the CSV/JSON/ZIP import instead.
  */
 object SpotifyImportService {
     private const val TAG = "SpotifyImport"

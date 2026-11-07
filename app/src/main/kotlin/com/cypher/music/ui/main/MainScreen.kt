@@ -158,18 +158,7 @@ fun MainScreen(
     val isLiquidGlassSettingsOpen by viewModel.isLiquidGlassSettingsOpen.collectAsState()
     val pendingImportPayload by viewModel.pendingImportPayload.collectAsState()
     val spotifyImport by viewModel.spotifyImport.collectAsState()
-    val spotifySession by viewModel.spotifySession.collectAsState()
-    val spotifyClientId by viewModel.spotifyClientId.collectAsState()
     val spotifyTransfer by viewModel.spotifyTransfer.collectAsState()
-    val spotifyAuthUrl by viewModel.spotifyAuthUrl.collectAsState()
-
-    LaunchedEffect(spotifyAuthUrl) {
-        val url = spotifyAuthUrl ?: return@LaunchedEffect
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-        }
-        viewModel.consumeSpotifyAuthUrl()
-    }
 
     val spotifyFilePicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
@@ -592,16 +581,7 @@ fun MainScreen(
                 onSyncYouTube = { viewModel.syncYouTubeMusic() },
                 onUnlinkYouTube = { viewModel.unlinkYouTubeAccount() },
                 onOpenSpotifyImport = { viewModel.openSpotifyImport() },
-                spotifySession = spotifySession,
-                spotifyAccountAvailable = spotifyClientId.isNotBlank() || spotifySession.isLoggedIn,
-                onOpenSpotifySync = {
-                    if (spotifyClientId.isBlank() && !spotifySession.isLoggedIn) {
-                        spotifyFilePicker.launch(arrayOf("*/*"))
-                    } else {
-                        viewModel.openSpotifySync()
-                    }
-                },
-                onDisconnectSpotify = { viewModel.disconnectSpotify() },
+                onImportSpotifyFile = { spotifyFilePicker.launch(arrayOf("*/*")) },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,
                 onToggleLoudnessNormalization = { viewModel.setLoudnessNormalizationEnabled(it) },
@@ -727,12 +707,7 @@ fun MainScreen(
         if (spotifyTransfer.isOpen) {
             SpotifySyncSheet(
                 state = spotifyTransfer,
-                session = spotifySession,
-                clientId = spotifyClientId,
                 themeColors = themeColors,
-                onClientIdChange = { viewModel.saveSpotifyClientId(it) },
-                onConnect = { viewModel.connectSpotify() },
-                onLoadPlaylists = { viewModel.loadSpotifyPlaylists() },
                 onTogglePlaylist = { viewModel.toggleSpotifyPlaylist(it) },
                 onSelectAll = { viewModel.selectAllSpotifyPlaylists(it) },
                 onStartTransfer = { viewModel.startSpotifyTransfer() },

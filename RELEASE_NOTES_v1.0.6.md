@@ -18,7 +18,7 @@
 
 ## Transferencia desde Spotify
 
-- **Importa toda tu biblioteca desde un archivo, sin cuenta ni Premium.** Acepta el CSV que
+- **Importa toda tu biblioteca desde un archivo**, sin cuenta ni Premium. Acepta el CSV que
   exporta Exportify, el JSON de «Descargar tus datos» de Spotify y un **ZIP con todas las
   playlists** (CSV y/o JSON) sin extraerlo a mano. Incluye playlists privadas y «Me gusta».
 - Con un ZIP, Cypher detecta todas las playlists, las importa de una vez y conserva el nombre
@@ -38,21 +38,7 @@
   ZIP, las playlists con el mismo nombre se omiten.
 - Límites seguros para archivos grandes: hasta 1.000 playlists, 100.000 canciones, 8 MB por
   archivo y 2.000 entradas; al alcanzarlos se avisa y se conserva lo importado.
-- Sigue disponible la importación rápida **pegando el enlace** de una playlist pública, sin
-  cuenta ni archivo.
-- **Conexión directa con la cuenta (opcional, solo en compilaciones con Client ID).** OAuth 2.0
-  + PKCE, tokens cifrados en el dispositivo, paginación completa y control de 429/401/5xx.
-  No viene activada en el APK publicado: desde febrero de 2026 Spotify exige **Premium en la
-  cuenta dueña de la app** para usar la Web API en modo desarrollo y limita a 5 usuarios
-  autorizados, así que la vía gratuita y universal es el archivo o el ZIP.
-
-### Configurar Spotify (opcional)
-
-1. Crea una app en <https://developer.spotify.com/dashboard> (requiere Premium en la cuenta).
-2. Añade el redirect URI `cypher://spotify-callback`.
-3. Copia el **Client ID** (no hace falta Client Secret) y defínelo con `spotifyClientId` en
-   `local.properties` o `SPOTIFY_CLIENT_ID` al compilar. Sin Client ID, Ajustes muestra
-   directamente «Importar ZIP o archivo» y oculta la conexión de cuenta.
+- También puedes importar una playlist pública **pegando su enlace**, sin cuenta ni archivo.
 
 ## Descargas
 

@@ -41,13 +41,6 @@ android {
       "\"" + Integer.toHexString((versionName + buildStamp).hashCode()) + "\""
     )
 
-    // Spotify OAuth client id (public, no secret). Set spotifyClientId in local.properties
-    // or the SPOTIFY_CLIENT_ID environment variable; the app can also store it at runtime.
-    val spotifyClientId = providers.gradleProperty("spotifyClientId").orNull
-      ?: providers.environmentVariable("SPOTIFY_CLIENT_ID").orNull
-      ?: ""
-    buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"$spotifyClientId\"")
-
     javaCompileOptions {
       annotationProcessorOptions {
         arguments += mapOf("room.schemaLocation" to "$projectDir/schemas")

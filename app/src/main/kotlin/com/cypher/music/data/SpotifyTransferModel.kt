@@ -42,8 +42,7 @@ data class SpotifyTransferUiState(
     val summary: SpotifyTransferSummary? = null,
     /** Files skipped while reading a ZIP, each one with its reason. */
     val importIssues: List<String> = emptyList(),
-    val error: String? = null,
-    val needsClientId: Boolean = false
+    val error: String? = null
 ) {
     val selectedCount: Int get() = selectedIds.size
 

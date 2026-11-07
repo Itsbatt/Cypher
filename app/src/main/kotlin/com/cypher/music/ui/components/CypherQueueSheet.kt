@@ -88,7 +88,6 @@ fun CypherQueueSheet(
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val latestQueue by rememberUpdatedState(queue)
     val latestQueueIndex by rememberUpdatedState(queueIndex)
-    val latestQuery by rememberUpdatedState(query)
     val latestOnMove by rememberUpdatedState(onMoveIndex)
 
     val visible = remember(queue, queueIndex, query) {
@@ -303,6 +302,7 @@ fun CypherQueueSheet(
                     itemsIndexed(visible) { position, entry ->
                         val index = entry.index
                         val track = entry.value
+                        val latestRowIndex by rememberUpdatedState(index)
                         val isDragging = index == draggingIndex
                         Row(
                             modifier = Modifier
@@ -356,10 +356,11 @@ fun CypherQueueSheet(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .pointerInput(index, visible.size) {
+                                        // Keyed by Unit: a reorder must not restart the gesture.
+                                        .pointerInput(Unit) {
                                             detectDragGesturesAfterLongPress(
                                                 onDragStart = {
-                                                    draggingIndex = index
+                                                    draggingIndex = latestRowIndex
                                                     dragOffset = 0f
                                                     AppHaptics.reorderTick()
                                                 },
@@ -372,8 +373,12 @@ fun CypherQueueSheet(
                                                             .filter { it != latestQueueIndex }
                                                             .indexOf(draggingIndex)
                                                         val maxPos = latestQueue.indices.count { it != latestQueueIndex } - 1
-                                                        val targetPos = (currentPos + shift).coerceIn(0, maxPos)
-                                                        if (targetPos != currentPos) {
+                                                        val targetPos = if (currentPos >= 0 && maxPos >= 0) {
+                                                            (currentPos + shift).coerceIn(0, maxPos)
+                                                        } else {
+                                                            currentPos
+                                                        }
+                                                        if (currentPos >= 0 && targetPos != currentPos) {
                                                             val targetIndex = latestQueue.indices
                                                                 .filter { it != latestQueueIndex }[targetPos]
                                                             latestOnMove(draggingIndex, targetIndex)

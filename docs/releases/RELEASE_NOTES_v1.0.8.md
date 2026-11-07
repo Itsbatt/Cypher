@@ -2,7 +2,7 @@
 
 Versión de mantenimiento centrada en el control de la reproducción, el versionado y la documentación. Mantiene todo lo de la 1.0.7: gestos para cambiar de canción e importación de Spotify sin cuenta.
 
-**Build 10** · `versionCode 10` · `versionName 1.0.8`
+**Build 11** · `versionCode 11` · `versionName 1.0.8`
 
 ## Gestos más naturales
 

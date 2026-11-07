@@ -170,6 +170,12 @@ fun MainScreen(
         }
         viewModel.consumeSpotifyAuthUrl()
     }
+
+    val spotifyFilePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importSpotifyExport(it) }
+    }
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.state.collectAsState()
 
@@ -587,7 +593,14 @@ fun MainScreen(
                 onUnlinkYouTube = { viewModel.unlinkYouTubeAccount() },
                 onOpenSpotifyImport = { viewModel.openSpotifyImport() },
                 spotifySession = spotifySession,
-                onOpenSpotifySync = { viewModel.openSpotifySync() },
+                spotifyAccountAvailable = spotifyClientId.isNotBlank() || spotifySession.isLoggedIn,
+                onOpenSpotifySync = {
+                    if (spotifyClientId.isBlank() && !spotifySession.isLoggedIn) {
+                        spotifyFilePicker.launch(arrayOf("*/*"))
+                    } else {
+                        viewModel.openSpotifySync()
+                    }
+                },
                 onDisconnectSpotify = { viewModel.disconnectSpotify() },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,

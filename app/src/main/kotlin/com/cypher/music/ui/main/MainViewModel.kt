@@ -94,6 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val spotifyAuthUrl: StateFlow<String?> = _spotifyAuthUrl.asStateFlow()
 
     private var spotifyTransferJob: Job? = null
+    private val spotifyExportTracks = mutableMapOf<String, List<com.cypher.music.network.SpotifyTrackRef>>()
     private val musicRepository = MusicRepository(application, youTubeRepository)
     private val playerManager = MusicPlayerManager.getInstance(application)
     private val playlistRepository = PlaylistRepository(application, viewModelScope)
@@ -907,6 +908,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _syncStatusMsg.value = "Esta playlist no está vinculada a una cuenta de música."
                     return@launch
                 }
+                if (sourceId.startsWith("spotify-file:")) {
+                    _syncStatusMsg.value =
+                        "Vuelve a importar el archivo de Spotify para actualizar «${entity.name}»."
+                    return@launch
+                }
                 if (sourceId.startsWith("spotify:")) {
                     retrySpotifyPlaylist(entity, sourceId)
                     return@launch
@@ -1109,7 +1115,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeSpotifySync() {
+        spotifyExportTracks.clear()
         _spotifyTransfer.value = SpotifyTransferUiState()
+    }
+
+    /**
+     * Free path for users without a Spotify account app: import a CSV (Exportify) or the
+     * JSON from "Download your data". No Client ID, Premium or Web API involved.
+     */
+    fun importSpotifyExport(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = getApplication<Application>().contentResolver
+            val fileName = runCatching {
+                resolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+                }
+            }.getOrNull() ?: "Spotify"
+
+            val content = runCatching {
+                resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+
+            if (content.isNullOrBlank()) {
+                _spotifyTransfer.value = SpotifyTransferUiState(
+                    isOpen = true,
+                    error = "No se pudo leer el archivo. Prueba a exportarlo de nuevo."
+                )
+                return@launch
+            }
+
+            _spotifyTransfer.value = SpotifyTransferUiState(
+                isOpen = true,
+                isLoadingPlaylists = true,
+                status = "Leyendo $fileName…"
+            )
+
+            val fallbackName = fileName.substringBeforeLast('.').ifBlank { "Playlist de Spotify" }
+            val parsed = com.cypher.music.network.SpotifyExportParser.parse(content, fallbackName)
+            if (parsed.isEmpty()) {
+                _spotifyTransfer.value = SpotifyTransferUiState(
+                    isOpen = true,
+                    error = "El archivo no contiene canciones de Spotify reconocibles. " +
+                        "Usa el CSV de Exportify o el JSON de «Descargar tus datos»."
+                )
+                return@launch
+            }
+
+            spotifyExportTracks.clear()
+            val summaries = parsed.map { playlist ->
+                val key = "file-" + playlist.name.trim().lowercase().hashCode().toUInt().toString(16)
+                spotifyExportTracks[key] = playlist.tracks
+                SpotifyPlaylistSummary(
+                    id = key,
+                    name = playlist.name,
+                    ownerName = "Archivo de Spotify",
+                    trackCount = playlist.tracks.size
+                )
+            }
+
+            _spotifyTransfer.value = SpotifyTransferUiState(
+                isOpen = true,
+                playlists = summaries,
+                selectedIds = summaries.map { it.id }.toSet(),
+                status = "${summaries.size} playlists y " +
+                    "${summaries.sumOf { it.trackCount }} canciones leídas del archivo."
+            )
+        }
     }
 
     fun saveSpotifyClientId(clientId: String) {
@@ -1171,6 +1243,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnectSpotify() {
         spotifyAuthManager.logout()
+        spotifyExportTracks.clear()
         _spotifyTransfer.value = SpotifyTransferUiState()
     }
 
@@ -1271,10 +1344,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     status = "Leyendo «${playlist.name}»…"
                 )
 
-                val refsResult = if (playlist.isLikedSongs) {
-                    spotifyApiClient.fetchSavedTracks()
-                } else {
-                    spotifyApiClient.fetchPlaylistTracks(playlist.id)
+                val exported = spotifyExportTracks[playlist.id]
+                val refsResult = when {
+                    exported != null -> Result.success(exported)
+                    playlist.isLikedSongs -> spotifyApiClient.fetchSavedTracks()
+                    else -> spotifyApiClient.fetchPlaylistTracks(playlist.id)
                 }
                 if (refsResult.isFailure) {
                     val message = refsResult.exceptionOrNull()?.message ?: "error desconocido"
@@ -1310,12 +1384,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     append(SpotifyImportService.IMPORT_DESCRIPTION)
                     playlist.ownerName?.let { append(" · $it") }
                 }
+                val sourceId = if (exported != null) {
+                    "spotify-file:${playlist.id}"
+                } else {
+                    "spotify:${playlist.id}"
+                }
                 playlistRepository.syncPlaylist(
                     name = playlist.name,
                     description = description,
                     coverUri = playlist.coverUrl,
                     tracks = resolution.tracks,
-                    sourceId = "spotify:${playlist.id}",
+                    sourceId = sourceId,
                     complete = resolution.failed.isEmpty()
                 )
                 imported += resolution.tracks.size

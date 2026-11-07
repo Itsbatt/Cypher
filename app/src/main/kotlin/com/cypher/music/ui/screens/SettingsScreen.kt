@@ -122,6 +122,7 @@ fun SettingsScreen(
     onOpenSpotifyImport: () -> Unit = {},
     spotifySession: SpotifySession = SpotifySession(),
     onOpenSpotifySync: () -> Unit = {},
+    spotifyAccountAvailable: Boolean = false,
     onDisconnectSpotify: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     isLoudnessNormalizationEnabled: Boolean = true,
@@ -715,7 +716,11 @@ fun SettingsScreen(
                     }
                 } else {
                     Text(
-                        text = "Conecta tu cuenta para importar todas tus playlists y tus «Me gusta» de una vez, sin copiar enlaces. También puedes pegar el enlace de una playlist pública.",
+                        text = if (spotifyAccountAvailable) {
+                            "Conecta tu cuenta para importar todas tus playlists y tus «Me gusta» de una vez, sin copiar enlaces."
+                        } else {
+                            "Importa toda tu biblioteca con un archivo que exportas gratis desde Spotify. Incluye playlists privadas y «Me gusta», sin cuenta ni Premium."
+                        },
                         color = themeColors.textSecondary,
                         fontSize = 13.sp,
                         lineHeight = 18.sp
@@ -742,7 +747,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Conectar con Spotify",
+                            text = if (spotifyAccountAvailable) "Conectar con Spotify" else "Importar archivo de Spotify",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -758,7 +763,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Importar solo con un enlace",
+                            text = "Importar con un enlace de playlist",
                             color = themeColors.accent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold

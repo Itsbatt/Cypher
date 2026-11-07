@@ -127,7 +127,7 @@ fun SpotifySyncSheet(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Conecta tu cuenta y elige qué quieres traer",
+                        text = "Conecta tu cuenta o importa un archivo, y elige qué traer",
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
@@ -145,7 +145,7 @@ fun SpotifySyncSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (!session.isLoggedIn) {
+            if (!session.isLoggedIn && state.playlists.isEmpty()) {
                 Text(
                     text = "Autoriza tu cuenta de Spotify una vez y Cypher podrá leer todas tus playlists y tus «Me gusta», sin copiar enlaces.",
                     color = Color.White.copy(alpha = 0.7f),
@@ -219,6 +219,7 @@ fun SpotifySyncSheet(
                     }
                 }
             } else {
+                if (session.isLoggedIn)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

@@ -36,6 +36,10 @@
 - Límites de la API controlados: `429` con espera según `Retry-After`, renovación automática
   del token, reintentos ante errores 5xx y mensajes claros si la sesión caduca o se revoca.
 - Sigue disponible la importación rápida **pegando el enlace** de una playlist pública, sin conectar cuenta.
+- **Importar un archivo de Spotify** (sin cuenta, sin Client ID y sin Premium): acepta el CSV
+  que exporta Exportify y el JSON de «Descargar tus datos» de Spotify, con playlists
+  privadas y «Me gusta». Se eligen las playlists y se transfieren con el mismo progreso,
+  resumen, copia y exportación de fallos que la conexión directa.
 
 ### Configurar Spotify (una vez)
 
@@ -43,6 +47,13 @@
 2. Añade el redirect URI `cypher://spotify-callback`.
 3. Copia el **Client ID** (no hace falta Client Secret), pégalo en la hoja de Spotify o
    define `spotifyClientId` en `local.properties` / `SPOTIFY_CLIENT_ID` al compilar.
+
+> La Web API de Spotify exige **Premium en la cuenta dueña de la app** desde febrero de 2026
+> y, en modo desarrollo, un máximo de 5 usuarios autorizados. Sin Premium, el registro de la
+> app no permite marcar la Web API: usa la **importación por archivo**, que no depende de eso.
+>
+> Si compilas sin `spotifyClientId`, Ajustes muestra directamente «Importar archivo de Spotify»
+> y oculta la conexión de cuenta.
 
 ## Descargas
 

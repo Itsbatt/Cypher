@@ -77,12 +77,23 @@ fun UpdateBanner(
                     .padding(horizontal = 10.dp)
             ) {
                 Text(
-                    text = "Nueva versión ${release.versionName}",
+                    text = if (state.rebuild) "Recompilación de ${release.versionName}"
+                    else "Nueva versión ${release.versionName}",
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
-                if (release.summary.isNotBlank()) {
+                if (state.rebuild) {
+                    Text(
+                        text = "Misma versión con una compilación más reciente",
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                } else if (release.summary.isNotBlank()) {
                     Text(
                         text = release.summary,
                         color = Color.White.copy(alpha = 0.62f),
@@ -146,7 +157,7 @@ fun UpdateBanner(
                     colors = ButtonDefaults.textButtonColors(contentColor = accentColor)
                 ) {
                     Text(
-                        text = "Actualizar",
+                        text = if (state.rebuild) "Reinstalar" else "Actualizar",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )

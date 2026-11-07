@@ -19,6 +19,10 @@ public class PlaylistEntity {
     public boolean isPrivate;
     /** YouTube Music playlist id (VLPL...) for synced playlists; null for local ones. */
     public String sourceId;
+    /** Epoch millis of the last sync attempt; 0 for never-synced local playlists. */
+    public long lastSyncedAt;
+    /** "complete" or "incomplete" for mirrored playlists; null for local ones. */
+    public String syncState;
 
     public PlaylistEntity() {
         this.id = "";

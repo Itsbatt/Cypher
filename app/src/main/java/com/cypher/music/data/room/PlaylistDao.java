@@ -23,6 +23,14 @@ public interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE sourceId = :sourceId LIMIT 1")
     PlaylistEntity getPlaylistBySourceId(String sourceId);
 
+    @Query("UPDATE playlists SET syncState = :state, lastSyncedAt = :syncedAt WHERE id = :playlistId")
+    void setSyncState(String playlistId, String state, long syncedAt);
+
+    @Query("SELECT t.* FROM tracks t " +
+           "INNER JOIN playlist_tracks_crossref c ON t.id = c.trackId " +
+           "WHERE c.playlistId = :playlistId ORDER BY c.position ASC")
+    java.util.List<TrackEntity> getOrderedTracks(String playlistId);
+
     @Query("SELECT * FROM playlists ORDER BY updatedAt DESC")
     List<PlaylistEntity> getAllPlaylists();
 

@@ -41,6 +41,13 @@ class CypherApplication : Application() {
             } catch (e: Exception) {
                 Log.e("CypherApplication", "Failed to sync downloaded IDs", e)
             }
+
+            try {
+                // Downloads interrupted by a reboot or a kill resume here.
+                com.cypher.music.playback.MediaCacheManager.resumePendingDownloads(this@CypherApplication)
+            } catch (e: Exception) {
+                Log.e("CypherApplication", "Failed to resume pending downloads", e)
+            }
         }
     }
 }

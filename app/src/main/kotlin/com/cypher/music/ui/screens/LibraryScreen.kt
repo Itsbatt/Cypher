@@ -1,5 +1,6 @@
 package com.cypher.music.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
@@ -59,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -76,11 +80,13 @@ import com.cypher.music.data.Playlist
 import com.cypher.music.data.ThemePreferences
 import com.cypher.music.data.toTrackCountString
 import com.cypher.music.model.Track
+import com.cypher.music.playback.MediaCacheManager
 import com.cypher.music.ui.components.CypherSectionHeader
 import com.cypher.music.ui.components.CypherTrackRow
 import com.cypher.music.ui.components.ArtworkPlaceholder
 import com.cypher.music.ui.components.PlaylistMosaicCover
 import com.cypher.music.ui.theme.ResolvedThemeColors
+import kotlinx.coroutines.launch
 
 data class LibraryMenuItem(
     val id: String,
@@ -123,6 +129,7 @@ fun LibraryScreen(
     onSharePlaylist: (Playlist) -> Unit = {},
     onDownloadPlaylist: (Playlist) -> Unit = {},
     onDeletePlaylistDownloads: (Playlist) -> Unit = {},
+    onRetryPlaylistSync: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val allLibraryTracks = remember(localTracks, favoriteTracks) {
@@ -172,7 +179,8 @@ fun LibraryScreen(
                         onAlbumSelect(albumName)
                     },
                     onDownloadPlaylist = onDownloadPlaylist,
-                    onDeletePlaylistDownloads = onDeletePlaylistDownloads
+                    onDeletePlaylistDownloads = onDeletePlaylistDownloads,
+                    onRetrySync = { onRetryPlaylistSync(selectedPlaylist.id) }
                 )
             }
 
@@ -288,6 +296,8 @@ fun LibraryScreen(
 
             // Sub-view: Música descargada (Offline vault)
             section == "descargas" -> {
+                val exportContext = LocalContext.current
+                val exportScope = rememberCoroutineScope()
                 TracksFullListView(
                     title = "Música descargada",
                     tracks = downloadedTracks,
@@ -296,6 +306,18 @@ fun LibraryScreen(
                     themeColors = themeColors,
                     bottomPadding = bottomPadding,
                     emptyMessage = "No tienes música descargada aún. Usa 'Descargar canción' en el menú (•••) de cualquier canción para escucharla sin conexión.",
+                    onExport = {
+                        exportScope.launch {
+                            val total = downloadedTracks.count {
+                                MediaCacheManager.exportToMediaStore(exportContext, it)
+                            }
+                            Toast.makeText(
+                                exportContext,
+                                "Exportadas $total de ${downloadedTracks.size} canciones a Música",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
                     onBack = { onSectionChange(null) },
                     onTrackClick = onTrackClick,
                     onPlayNext = onPlayNext,
@@ -1064,7 +1086,8 @@ private fun TracksFullListView(
     onPlayNext: (Track) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
-    onToggleFavorite: (Track) -> Unit
+    onToggleFavorite: (Track) -> Unit,
+    onExport: (() -> Unit)? = null
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var sortBy by remember { mutableStateOf("title") } // "title", "artist", "duration"
@@ -1111,6 +1134,17 @@ private fun TracksFullListView(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                if (onExport != null) {
+                    IconButton(onClick = onExport) {
+                        Icon(
+                            imageVector = Icons.Filled.IosShare,
+                            contentDescription = "Exportar a Música",
+                            tint = themeColors.textPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
 
                 IconButton(onClick = { showSortMenu = true }) {
@@ -1444,7 +1478,9 @@ private fun PlayShuffleHeroButtons(
                 text = "Reproducir",
                 color = themeColors.accent,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false
             )
         }
 

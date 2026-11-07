@@ -149,7 +149,7 @@ class YouTubeRepository {
                                 results.add(
                                     Track(
                                         id = "yt_$videoId",
-                                        title = cleanTitle(title),
+                                        title = TitleCleaner.clean(title),
                                         artist = ArtistNormalizer.normalize(artist),
                                         album = "YouTube Music",
                                         durationMs = durationMs,
@@ -193,7 +193,7 @@ class YouTubeRepository {
                         results.add(
                             Track(
                                 id = "yt_$vid",
-                                title = cleanTitle(item.optString("title", "Canción")),
+                                title = TitleCleaner.clean(item.optString("title", "Canción")),
                                 artist = ArtistNormalizer.normalize(item.optString("uploaderName", "Artista")),
                                 album = "YouTube Music",
                                 durationMs = item.optLong("duration", 210L) * 1000L,
@@ -364,17 +364,6 @@ class YouTubeRepository {
         return (if (seconds > 0) seconds else 210L) * 1000L
     }
 
-    private fun cleanTitle(raw: String): String {
-        return raw
-            .replace(Regex("(?i)\\(official video\\)"), "")
-            .replace(Regex("(?i)\\[official music video\\]"), "")
-            .replace(Regex("(?i)\\(video oficial\\)"), "")
-            .replace(Regex("(?i)\\(audio oficial\\)"), "")
-            .replace(Regex("(?i)\\(visualizer\\)"), "")
-            .replace(Regex("(?i)\\(letra/lyrics\\)"), "")
-            .trim()
-    }
-
     fun getDefaultFeaturedTracks(): List<Track> {
         return listOf(
             Track(
@@ -490,12 +479,6 @@ class YouTubeRepository {
             Log.d("AppleMusicPlayer", "fetchUserPlaylists found 0 playlists")
             emptyList()
         }
-
-    suspend fun fetchPlaylistTracks(
-        browseId: String,
-        accountManager: YouTubeAccountManager?,
-        onProgress: (processed: Int, totalCount: Int?) -> Unit = { _, _ -> }
-    ): List<Track> = fetchPlaylistTracksPaged(browseId, accountManager, onProgress).items
 
     /**
      * Walks every continuation page of a playlist. The returned [PagedResult] says whether

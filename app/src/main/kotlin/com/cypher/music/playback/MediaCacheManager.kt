@@ -1,9 +1,12 @@
 package com.cypher.music.playback
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Environment
+import android.os.StatFs
+import android.provider.MediaStore
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
@@ -32,6 +35,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -47,6 +52,9 @@ data class PlaylistDownloadProgress(
 object MediaCacheManager {
     private const val TAG = "MediaCacheManager"
     private const val MAX_CACHE_SIZE_BYTES = 2L * 1024 * 1024 * 1024 // 2 GB
+    private const val MIN_FREE_BYTES = 80L * 1024 * 1024
+    private const val DOWNLOAD_QUEUE_PREFS = "cypher_download_queue"
+    private const val DOWNLOAD_QUEUE_KEY = "pending"
 
     // Live reactive state: trackId -> progress (0.0f .. 1.0f). If present, it's currently downloading.
     private val _downloadProgressMap = MutableStateFlow<Map<String, Float>>(emptyMap())
@@ -332,6 +340,127 @@ object MediaCacheManager {
         validTracks
     }
 
+    fun hasFreeSpace(context: Context, requiredBytes: Long = MIN_FREE_BYTES): Boolean = runCatching {
+        val stats = StatFs(getOfflineVaultDir(context).absolutePath)
+        stats.availableBytes >= requiredBytes
+    }.getOrDefault(true)
+
+    private fun queuePrefs(context: Context) =
+        context.getSharedPreferences(DOWNLOAD_QUEUE_PREFS, Context.MODE_PRIVATE)
+
+    private fun readQueue(context: Context): JSONArray = runCatching {
+        JSONArray(queuePrefs(context).getString(DOWNLOAD_QUEUE_KEY, "[]") ?: "[]")
+    }.getOrDefault(JSONArray())
+
+    private fun writeQueue(context: Context, queue: JSONArray) {
+        queuePrefs(context).edit().putString(DOWNLOAD_QUEUE_KEY, queue.toString()).apply()
+    }
+
+    /** Tracks whose download was interrupted and will be retried on the next start. */
+    fun pendingDownloadIds(context: Context): Set<String> {
+        val queue = readQueue(context)
+        val ids = HashSet<String>(queue.length())
+        for (index in 0 until queue.length()) {
+            queue.optJSONObject(index)?.optString("id")?.takeIf { it.isNotBlank() }?.let(ids::add)
+        }
+        return ids
+    }
+
+    fun enqueueDownload(context: Context, track: Track) {
+        val queue = readQueue(context)
+        for (index in 0 until queue.length()) {
+            if (queue.optJSONObject(index)?.optString("id") == track.id) return
+        }
+        queue.put(trackToJson(track))
+        writeQueue(context, queue)
+    }
+
+    fun removeQueuedDownload(context: Context, trackId: String) {
+        val queue = readQueue(context)
+        val remaining = JSONArray()
+        for (index in 0 until queue.length()) {
+            val item = queue.optJSONObject(index) ?: continue
+            if (item.optString("id") != trackId) remaining.put(item)
+        }
+        writeQueue(context, remaining)
+    }
+
+    /** Retries downloads that were interrupted by a reboot, a crash or a kill. */
+    suspend fun resumePendingDownloads(context: Context) = withContext(Dispatchers.IO) {
+        val queue = readQueue(context)
+        if (queue.length() == 0) return@withContext
+        for (index in 0 until queue.length()) {
+            val track = trackFromJson(queue.optJSONObject(index) ?: continue) ?: continue
+            if (isTrackDownloaded(context, track.id)) {
+                removeQueuedDownload(context, track.id)
+                continue
+            }
+            downloadTrackOffline(context, track)
+        }
+    }
+
+    /**
+     * Copies a downloaded track into the shared Music collection so it survives
+     * uninstalling the app. Returns true when the file was published.
+     */
+    suspend fun exportToMediaStore(context: Context, track: Track): Boolean = withContext(Dispatchers.IO) {
+        val file = getOfflineTrackFile(context, track.id) ?: return@withContext false
+        val resolver = context.contentResolver
+        val displayName = "${track.artist} - ${track.title}"
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .take(120)
+            .ifBlank { track.id }
+        val values = ContentValues().apply {
+            put(MediaStore.Audio.Media.DISPLAY_NAME, "$displayName.m4a")
+            put(MediaStore.Audio.Media.TITLE, track.title)
+            put(MediaStore.Audio.Media.ARTIST, track.artist)
+            put(MediaStore.Audio.Media.ALBUM, track.album)
+            put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
+            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/Cypher")
+            put(MediaStore.Audio.Media.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+            ?: return@withContext false
+        val copied = runCatching {
+            resolver.openOutputStream(uri)?.use { output ->
+                file.inputStream().use { input -> input.copyTo(output) }
+            } != null
+        }.getOrDefault(false)
+        values.clear()
+        values.put(MediaStore.Audio.Media.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        if (!copied) runCatching { resolver.delete(uri, null, null) }
+        copied
+    }
+
+    private fun trackToJson(track: Track): JSONObject = JSONObject().apply {
+        put("id", track.id)
+        put("title", track.title)
+        put("artist", track.artist)
+        put("album", track.album)
+        put("durationMs", track.durationMs)
+        put("artworkUrl", track.artworkUrl)
+        put("streamUrl", track.streamUrl)
+        put("sourceType", track.sourceType.name)
+        put("path", track.path)
+    }
+
+    private fun trackFromJson(json: JSONObject): Track? {
+        val id = json.optString("id").takeIf { it.isNotBlank() } ?: return null
+        return Track(
+            id = id,
+            title = json.optString("title"),
+            artist = json.optString("artist"),
+            album = json.optString("album"),
+            durationMs = json.optLong("durationMs", 0L),
+            artworkUrl = json.optString("artworkUrl"),
+            streamUrl = json.optString("streamUrl"),
+            sourceType = runCatching { AudioSourceType.valueOf(json.optString("sourceType")) }
+                .getOrDefault(AudioSourceType.YOUTUBE),
+            path = json.optString("path").takeIf { it.isNotBlank() }
+        )
+    }
+
     /**
      * Downloads a track for offline playback into the private vault, hidden from MediaStore.
      * Updates reactive progress StateFlows for real-time UI feedback.
@@ -342,6 +471,11 @@ object MediaCacheManager {
         onProgress: (Float) -> Unit = {}
     ): File? = withContext(Dispatchers.IO) {
         val safeId = track.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        if (!hasFreeSpace(context)) {
+            Log.w(TAG, "Not enough free space to download ${track.id}")
+            return@withContext null
+        }
+        enqueueDownload(context, track)
         try {
             ensureInitialized(context)
 
@@ -351,6 +485,7 @@ object MediaCacheManager {
                 roomDb.trackDao().insertTrack(track.toEntity(isDownloaded = true, downloadedUri = existing.absolutePath))
                 roomDb.trackDao().setDownloaded(track.id, true, existing.absolutePath, System.currentTimeMillis())
                 _downloadedTrackIds.update { it + track.id }
+                removeQueuedDownload(context, track.id)
                 return@withContext existing
             }
 
@@ -525,6 +660,7 @@ object MediaCacheManager {
                 roomDb.trackDao().insertTrack(track.toEntity(isDownloaded = true, downloadedUri = downloadedFile.absolutePath))
                 roomDb.trackDao().setDownloaded(track.id, true, downloadedFile.absolutePath, System.currentTimeMillis())
                 _downloadedTrackIds.update { it + track.id }
+                removeQueuedDownload(context, track.id)
                 downloadedFile
             } else {
                 Log.e(TAG, "Download failed or output file is empty/missing for track: ${track.id}")

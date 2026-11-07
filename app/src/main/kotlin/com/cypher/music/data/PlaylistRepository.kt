@@ -95,26 +95,38 @@ class PlaylistRepository(
     /**
      * Creates or updates the playlist produced by the YouTube Music sync.
      *
-     * Matching on name + sync description keeps the existing playlist id across re-syncs,
-     * so syncing twice never duplicates a playlist. Tracks are de-duplicated by id,
-     * written in a single transaction and keep the remote order.
+     * Matching on sourceId (or name + sync description for old imports) keeps the existing
+     * playlist id across re-syncs, so syncing twice never duplicates a playlist. The policy
+     * is hybrid: remote tracks keep their remote order and tracks the user added by hand are
+     * kept after them instead of being deleted. [complete] is stored with the playlist so the
+     * UI can show an "incomplete" badge and offer a retry after a failure.
      */
     suspend fun syncPlaylist(
         name: String,
         description: String = YOUTUBE_SYNC_DESCRIPTION,
         coverUri: String? = null,
         tracks: List<Track>,
-        sourceId: String? = null
+        sourceId: String? = null,
+        complete: Boolean = true
     ): Playlist = withContext(Dispatchers.IO) {
         val cleanName = name.trim().ifEmpty { "Nueva playlist" }
         val cleanDescription = description.trim().ifEmpty { YOUTUBE_SYNC_DESCRIPTION }
-        val uniqueTracks = tracks.distinctBy { it.id }
+        val remoteTracks = tracks.distinctBy { it.id }
         val now = System.currentTimeMillis()
 
         val existing = sourceId?.let { roomDb.playlistDao().getPlaylistBySourceId(it) }
             ?: roomDb.playlistDao().getAllPlaylists().firstOrNull {
                 it.name == cleanName && isSameSyncOrigin(it.description, cleanDescription)
             }
+
+        // Hybrid policy: anything already in the playlist that YouTube Music does not
+        // return is a manual addition, so it is preserved after the remote tracks.
+        val existingTracks = if (existing != null) {
+            roomDb.playlistDao().getOrderedTracks(existing.id).map { it.toDomain() }
+        } else {
+            emptyList()
+        }
+        val mergedTracks = PlaylistSync.mergeHybrid(remoteTracks, existingTracks)
 
         val playlist = Playlist(
             id = existing?.id ?: "playlist_${UUID.randomUUID()}",
@@ -124,7 +136,9 @@ class PlaylistRepository(
             createdAt = existing?.createdAt ?: now,
             updatedAt = now,
             isPrivate = existing?.isPrivate ?: true,
-            tracks = uniqueTracks
+            tracks = mergedTracks,
+            lastSyncedAt = now,
+            syncState = PlaylistSync.stateFor(complete)
         )
 
         // Throws on failure so the sync can report the playlist as incomplete instead of
@@ -134,9 +148,9 @@ class PlaylistRepository(
                 this.sourceId = sourceId ?: existing?.sourceId
             })
             roomDb.playlistDao().clearPlaylistTracks(playlist.id)
-            if (uniqueTracks.isNotEmpty()) {
-                roomDb.trackDao().insertTracks(uniqueTracks.map { it.toEntity() })
-                val refs = uniqueTracks.mapIndexed { index, track ->
+            if (mergedTracks.isNotEmpty()) {
+                roomDb.trackDao().insertTracks(mergedTracks.map { it.toEntity() })
+                val refs = mergedTracks.mapIndexed { index, track ->
                     PlaylistTrackCrossRef(playlist.id, track.id, index, now)
                 }
                 roomDb.playlistDao().insertCrossRefs(refs)
@@ -145,6 +159,14 @@ class PlaylistRepository(
 
         loadData()
         playlist
+    }
+
+    /** Records the outcome of a sync that failed before any page could be imported. */
+    suspend fun markSyncIncomplete(playlistId: String) = withContext(Dispatchers.IO) {
+        runCatching {
+            roomDb.playlistDao().setSyncState(playlistId, PlaylistSync.INCOMPLETE, System.currentTimeMillis())
+        }
+        loadData()
     }
 
     private fun isSameSyncOrigin(existingDescription: String?, incoming: String): Boolean {

@@ -462,7 +462,9 @@ class MusicPlayerManager(private val context: Context) {
                             )
                         }
                         "cat_playlists" -> {
-                            val allPlaylists = roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
+                            val allPlaylists = com.cypher.music.data.room.dbRead {
+                                roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
+                            }
                             // Sort playlists with tracks first so empty playlists don't show at the top
                             val sortedPlaylists = allPlaylists.sortedByDescending { it.tracks.size }
                             for (pl in sortedPlaylists) {
@@ -485,7 +487,9 @@ class MusicPlayerManager(private val context: Context) {
                             }
                         }
                         "cat_favorites" -> {
-                            val favs = roomDb.trackDao().getFavoriteTracks().map { it.toDomain() }
+                            val favs = com.cypher.music.data.room.dbRead {
+                                roomDb.trackDao().getFavoriteTracks().map { it.toDomain() }
+                            }
                             for (t in favs) {
                                 allMatchedItems.add(createMediaItemFromTrack(t))
                             }
@@ -553,9 +557,13 @@ class MusicPlayerManager(private val context: Context) {
                             }
                         }
                         "cat_recents" -> {
-                            val recents = roomDb.recentlyPlayedDao().getRecentlyPlayed(30).map { it.toDomain() }
+                            val recents = com.cypher.music.data.room.dbRead {
+                                roomDb.recentlyPlayedDao().getRecentlyPlayed(30).map { it.toDomain() }
+                            }
                             for (r in recents) {
-                                val track = roomDb.trackDao().getTrackById(r.extraId ?: r.id)?.toDomain()
+                                val track = com.cypher.music.data.room.dbRead {
+                                    roomDb.trackDao().getTrackById(r.extraId ?: r.id)?.toDomain()
+                                }
                                     ?: Track(
                                         id = r.extraId ?: r.id,
                                         title = r.title,
@@ -571,7 +579,9 @@ class MusicPlayerManager(private val context: Context) {
                         }
                         else -> {
                             val plId = if (parentId.startsWith("pl_")) parentId.removePrefix("pl_") else parentId
-                            val tracks = roomDb.playlistDao().getTracksForPlaylist(plId).map { it.toDomain() }
+                            val tracks = com.cypher.music.data.room.dbRead {
+                                roomDb.playlistDao().getTracksForPlaylist(plId).map { it.toDomain() }
+                            }
                             for (t in tracks) {
                                 allMatchedItems.add(createMediaItemFromTrack(t))
                             }
@@ -625,8 +635,10 @@ class MusicPlayerManager(private val context: Context) {
                     val roomDb = com.cypher.music.data.room.CypherDatabase.getInstance(context)
                     val plId = if (mediaId.startsWith("pl_")) mediaId.removePrefix("pl_") else mediaId
                     val matchedPlaylist = if (mediaId != "root" && !mediaId.startsWith("cat_")) {
-                        roomDb.playlistDao().getPlaylistWithTracks(plId)?.toDomain()
-                            ?: roomDb.playlistDao().getPlaylistWithTracks(mediaId)?.toDomain()
+                        com.cypher.music.data.room.dbRead {
+                            roomDb.playlistDao().getPlaylistWithTracks(plId)?.toDomain()
+                                ?: roomDb.playlistDao().getPlaylistWithTracks(mediaId)?.toDomain()
+                        }
                     } else null
 
                     val item: MediaItem = when {
@@ -729,7 +741,9 @@ class MusicPlayerManager(private val context: Context) {
                                 ).build()
                         }
                         else -> {
-                            val entity = roomDb.trackDao().getTrackById(mediaId)
+                            val entity = com.cypher.music.data.room.dbRead {
+                                roomDb.trackDao().getTrackById(mediaId)
+                            }
                             if (entity != null) {
                                 createMediaItemFromTrack(entity.toDomain())
                             } else {
@@ -784,19 +798,25 @@ class MusicPlayerManager(private val context: Context) {
                 val updatedList = mediaItems.map { item ->
                     try {
                         val plId = if (item.mediaId.startsWith("pl_")) item.mediaId.removePrefix("pl_") else item.mediaId
-                        val pl = roomDb.playlistDao().getPlaylistWithTracks(plId)?.toDomain()
-                            ?: roomDb.playlistDao().getPlaylistWithTracks(item.mediaId)?.toDomain()
+                        val pl = com.cypher.music.data.room.dbRead {
+                            roomDb.playlistDao().getPlaylistWithTracks(plId)?.toDomain()
+                                ?: roomDb.playlistDao().getPlaylistWithTracks(item.mediaId)?.toDomain()
+                        }
                         if (pl != null && pl.tracks.isNotEmpty()) {
                             scope.launch(Dispatchers.Main) {
                                 playTrack(pl.tracks.first(), pl.tracks)
                             }
                             createMediaItemFromTrack(pl.tracks.first())
                         } else {
-                            val track = roomDb.trackDao().getTrackById(item.mediaId)?.toDomain()
+                            val track = com.cypher.music.data.room.dbRead {
+                                roomDb.trackDao().getTrackById(item.mediaId)?.toDomain()
+                            }
 
                             if (track != null) {
                                 scope.launch(Dispatchers.Main) {
-                                    val allPlaylists = roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
+                                    val allPlaylists = com.cypher.music.data.room.dbRead {
+                                roomDb.playlistDao().getAllPlaylistsWithTracks().map { it.toDomain() }
+                            }
                                     val containingPlaylist = allPlaylists.firstOrNull { p ->
                                         p.tracks.any { it.id == track.id }
                                     }

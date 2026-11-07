@@ -413,7 +413,8 @@ fun MainScreen(
                             viewModel.deletePlaylistDownloads(pl) {
                                 Toast.makeText(context, "Descargas eliminadas de «${pl.name}»", Toast.LENGTH_SHORT).show()
                             }
-                        }
+                        },
+                        onRetryPlaylistSync = { playlistId -> viewModel.retryPlaylistSync(playlistId) }
                     )
                 }
                 CypherTab.SEARCH -> {

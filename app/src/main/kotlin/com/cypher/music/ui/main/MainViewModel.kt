@@ -811,23 +811,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
 
+                    playlistRepository.syncPlaylist(
+                        name = remotePlaylist.title,
+                        description = remotePlaylist.description.ifEmpty { "Sincronizado desde YouTube Music" },
+                        coverUri = remotePlaylist.coverUrl,
+                        tracks = result.items,
+                        sourceId = remotePlaylist.id,
+                        complete = result.complete
+                    )
+                    importedTracks += result.items.size
+
                     if (result.items.isEmpty()) {
                         incompletePlaylists++
                         Log.w(
                             "AppleMusicPlayer",
                             "syncYouTubeMusic: '${remotePlaylist.title}' returned no tracks (${result.error})"
                         )
-                        continue
                     }
-
-                    playlistRepository.syncPlaylist(
-                        name = remotePlaylist.title,
-                        description = remotePlaylist.description.ifEmpty { "Sincronizado desde YouTube Music" },
-                        coverUri = remotePlaylist.coverUrl,
-                        tracks = result.items,
-                        sourceId = remotePlaylist.id
-                    )
-                    importedTracks += result.items.size
 
                     if (!result.complete) {
                         incompletePlaylists++
@@ -856,6 +856,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 _syncStatusMsg.value = "Error al sincronizar: ${e.message}"
+            } finally {
+                _isSyncingYouTube.value = false
+            }
+        }
+    }
+
+    /**
+     * Retries a single synced playlist without touching the rest of the library.
+     * Manual tracks the user added to it are preserved by [PlaylistRepository.syncPlaylist].
+     */
+    fun retryPlaylistSync(playlistId: String) {
+        if (_isSyncingYouTube.value) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _isSyncingYouTube.value = true
+            try {
+                val entity = playlistRepository.roomDb.playlistDao().getPlaylistById(playlistId)
+                val sourceId = entity?.sourceId
+                if (entity == null || sourceId.isNullOrBlank()) {
+                    _syncStatusMsg.value = "Esta playlist no está vinculada a YouTube Music."
+                    return@launch
+                }
+                if (!youtubeAccountManager.session.value.isLoggedIn) {
+                    _syncStatusMsg.value = "Vincula tu cuenta de Google para reintentar la sincronización."
+                    return@launch
+                }
+
+                _syncStatusMsg.value = "Reintentando «${entity.name}»..."
+                val result = youTubeRepository.fetchPlaylistTracksPaged(sourceId, youtubeAccountManager) {
+                        processed, total ->
+                    _syncStatusMsg.value = if (total != null && total > 0) {
+                        "«${entity.name}»: $processed / $total canciones..."
+                    } else {
+                        "«${entity.name}»: $processed canciones..."
+                    }
+                }
+
+                playlistRepository.syncPlaylist(
+                    name = entity.name,
+                    description = entity.description.ifBlank { "Sincronizado desde YouTube Music" },
+                    coverUri = entity.coverUri,
+                    tracks = result.items,
+                    sourceId = sourceId,
+                    complete = result.complete
+                )
+                _syncStatusMsg.value = if (result.complete) {
+                    "«${entity.name}» sincronizada: ${result.items.size} canciones."
+                } else {
+                    "«${entity.name}» sigue incompleta: ${result.items.size} canciones."
+                }
+            } catch (e: Exception) {
+                _syncStatusMsg.value = "No se pudo reintentar la sincronización: ${e.message}"
             } finally {
                 _isSyncingYouTube.value = false
             }

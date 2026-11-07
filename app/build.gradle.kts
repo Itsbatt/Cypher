@@ -28,8 +28,24 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 33
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.0.5"
+    versionCode = 8
+    versionName = "1.0.6"
+
+    // Identifies this exact compilation inside the APK. Two builds that only differ in
+    // timestamp get a different id, so a rebuilt 1.0.6 can be told apart from the first one.
+    val buildStamp = providers.environmentVariable("CYPHER_BUILD_STAMP").orNull
+      ?: System.currentTimeMillis().toString()
+    buildConfigField(
+      "String",
+      "BUILD_ID",
+      "\"" + Integer.toHexString((versionName + buildStamp).hashCode()) + "\""
+    )
+
+    javaCompileOptions {
+      annotationProcessorOptions {
+        arguments += mapOf("room.schemaLocation" to "$projectDir/schemas")
+      }
+    }
 
     ndk {
       abiFilters.addAll(supportedAbis)
@@ -75,8 +91,14 @@ android {
   buildFeatures {
     compose = true
     aidl = false
-    buildConfig = false
+    buildConfig = true
     shaders = false
+  }
+
+  sourceSets {
+    getByName("androidTest") {
+      assets.srcDir("$projectDir/schemas")
+    }
   }
 
   packaging {
@@ -131,6 +153,7 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
+  androidTestImplementation("androidx.room:room-testing:2.6.1")
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)

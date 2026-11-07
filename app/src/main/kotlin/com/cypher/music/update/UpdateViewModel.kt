@@ -21,6 +21,8 @@ data class UpdateUiState(
     val checking: Boolean = false,
     val downloading: Boolean = false,
     val progress: Float = 0f,
+    val rebuild: Boolean = false,
+    val rebuildDigest: String? = null,
     val error: String? = null
 )
 
@@ -57,12 +59,31 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             preferences.lastCheckAt = System.currentTimeMillis()
 
             result.onSuccess { latest ->
-                if (latest == null || latest.version <= installed) {
+                if (latest == null || latest.version < installed) {
                     Log.i(
                         TAG,
                         "Sin actualizaciones: instalada=$installed, última=${latest?.versionName ?: "ninguna"}"
                     )
-                    _state.update { it.copy(checking = false, visible = false, release = null) }
+                    _state.update {
+                        it.copy(checking = false, visible = false, release = null, rebuild = false)
+                    }
+                    return@launch
+                }
+
+                // Same version: only offer something when the published APK is a different build.
+                if (latest.version == installed) {
+                    val rebuild = isRebuildOfInstalled(latest)
+                    Log.i(TAG, "Misma versión ${latest.versionName}; recompilación=$rebuild")
+                    _state.update {
+                        it.copy(
+                            checking = false,
+                            visible = rebuild,
+                            release = if (rebuild) latest else null,
+                            rebuild = rebuild,
+                            rebuildDigest = publishedDigestFor(latest),
+                            error = null
+                        )
+                    }
                     return@launch
                 }
 
@@ -73,6 +94,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                         checking = false,
                         release = latest,
                         visible = !dismissed,
+                        rebuild = false,
                         error = null
                     )
                 }
@@ -85,8 +107,36 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
     fun dismiss() {
         val release = _state.value.release ?: return
-        preferences.dismissedVersion = release.versionName
+        if (_state.value.rebuild) {
+            preferences.dismissedRebuild =
+                "${release.versionName}:${_state.value.rebuildDigest?.take(12).orEmpty()}"
+        } else {
+            preferences.dismissedVersion = release.versionName
+        }
         _state.update { it.copy(visible = false) }
+    }
+
+    /**
+     * True when the release has the same version as the installed app but publishes a
+     * different APK (a rebuild). Compares the installed base APK digest with the
+     * SHA-256 published for the matching asset.
+     */
+    private suspend fun publishedDigestFor(latest: ReleaseInfo): String? = withContext(Dispatchers.IO) {
+        val asset = UpdateAssetSelector.select(latest.assets, Build.SUPPORTED_ABIS.toList())
+            ?: return@withContext null
+        UpdateInstaller.fetchChecksum(latest, asset)
+    }
+
+    private suspend fun isRebuildOfInstalled(latest: ReleaseInfo): Boolean = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val asset = UpdateAssetSelector.select(latest.assets, Build.SUPPORTED_ABIS.toList())
+            ?: return@withContext false
+        val published = UpdateInstaller.fetchChecksum(latest, asset) ?: return@withContext false
+        val installedDigest = InstalledBuild.apkSha256(app) ?: return@withContext false
+        if (!InstalledBuild.isDifferentBuild(installedDigest, published)) return@withContext false
+
+        val signature = "${latest.versionName}:${published.take(12)}"
+        preferences.dismissedRebuild != signature
     }
 
     fun downloadAndInstall() {

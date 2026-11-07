@@ -53,7 +53,9 @@ fun PlaylistEntity.toDomain(tracks: List<Track> = emptyList()): Playlist {
         createdAt = createdAt,
         updatedAt = updatedAt,
         isPrivate = isPrivate,
-        tracks = tracks
+        tracks = tracks,
+        lastSyncedAt = lastSyncedAt,
+        syncState = syncState
     )
 }
 
@@ -66,7 +68,10 @@ fun Playlist.toEntity(): PlaylistEntity {
         createdAt,
         updatedAt,
         isPrivate
-    )
+    ).apply {
+        lastSyncedAt = this@toEntity.lastSyncedAt
+        syncState = this@toEntity.syncState
+    }
 }
 
 /**

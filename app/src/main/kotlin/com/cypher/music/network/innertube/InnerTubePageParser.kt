@@ -2,6 +2,7 @@ package com.cypher.music.network.innertube
 
 import com.cypher.music.data.ArtistNormalizer
 import com.cypher.music.model.AudioSourceType
+import com.cypher.music.network.TitleCleaner
 import com.cypher.music.model.Track
 import org.json.JSONArray
 import org.json.JSONObject
@@ -170,7 +171,7 @@ object InnerTubePageParser {
 
         return Track(
             id = "yt_$videoId",
-            title = cleanTitle(title),
+            title = TitleCleaner.clean(title),
             artist = ArtistNormalizer.normalize(artist.ifBlank { "YouTube Music" }),
             album = "YouTube Music",
             durationMs = durationMs,
@@ -262,17 +263,6 @@ object InnerTubePageParser {
             seconds = seconds * 60 + (part.toLongOrNull() ?: 0L)
         }
         return seconds * 1000L
-    }
-
-    private fun cleanTitle(raw: String): String {
-        return raw
-            .replace(Regex("(?i)\\(official video\\)"), "")
-            .replace(Regex("(?i)\\[official music video\\]"), "")
-            .replace(Regex("(?i)\\(video oficial\\)"), "")
-            .replace(Regex("(?i)\\(audio oficial\\)"), "")
-            .replace(Regex("(?i)\\(visualizer\\)"), "")
-            .replace(Regex("(?i)\\(letra/lyrics\\)"), "")
-            .trim()
     }
 
     private fun forEachObject(node: Any?, key: String, action: (JSONObject) -> Unit) {

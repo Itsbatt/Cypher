@@ -108,6 +108,7 @@ fun PlaylistDetailScreen(
         onSharePlaylist: (Playlist) -> Unit = {},
         onDownloadPlaylist: (Playlist) -> Unit = {},
         onDeletePlaylistDownloads: (Playlist) -> Unit = {},
+        onRetrySync: () -> Unit = {},
         modifier: Modifier = Modifier
 ) {
         val context = LocalContext.current
@@ -352,7 +353,7 @@ fun PlaylistDetailScreen(
             textAlign = TextAlign.Center
                 )
 
-                if (playlist.description.isNotBlank()) {
+                if (playlist.description.isNotBlank() && playlist.description != playlist.name) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
               text = playlist.description,
@@ -370,6 +371,55 @@ fun PlaylistDetailScreen(
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium
                 )
+
+                if (playlist.isSynced) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(themeColors.card)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (playlist.isSyncIncomplete) Color(0xFFFFB300) else Color(0xFF30D158)
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                        Text(
+                            text = if (playlist.isSyncIncomplete) "Sincronización incompleta"
+                            else "Sincronizada con YouTube Music",
+                            color = themeColors.textPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (playlist.isSyncIncomplete) {
+                            TextButton(
+                                onClick = onRetrySync,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = "Reintentar",
+                                    color = themeColors.accent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Sincronización híbrida: las canciones que añadas aquí se conservan",
+                        color = themeColors.textSecondary,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
 
                 if (isDownloadingPlaylist && playlistProgress != null) {
                     Spacer(modifier = Modifier.height(10.dp))
@@ -465,6 +515,7 @@ fun PlaylistDetailScreen(
                 contentColor = Color.White
               ),
               shape = RoundedCornerShape(50),
+              contentPadding = PaddingValues(horizontal = 8.dp),
               modifier = Modifier
                 .weight(1f)
                 .height(48.dp)
@@ -472,13 +523,15 @@ fun PlaylistDetailScreen(
               Icon(
                 imageVector = Icons.Filled.PlayArrow,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
               )
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(modifier = Modifier.width(4.dp))
               Text(
                 text = "Reproducir",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false
               )
             }
 

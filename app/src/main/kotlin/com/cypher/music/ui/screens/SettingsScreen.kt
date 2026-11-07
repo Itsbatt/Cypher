@@ -332,7 +332,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Horas totales acumuladas",
+                            text = "Tiempo total escuchado",
                             color = themeColors.textSecondary,
                             fontSize = 12.sp
                         )
@@ -409,7 +409,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
 
                     Text(
-                        text = "Top Artistas Normalizados",
+                        text = "Artistas más escuchados",
                         color = themeColors.textSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1019,7 +1019,10 @@ fun SettingsScreen(
                         text = "Ajustar →",
                         color = themeColors.accent,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
 
@@ -1134,7 +1137,10 @@ fun SettingsScreen(
                         text = "Configurar →",
                         color = themeColors.accent,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
 

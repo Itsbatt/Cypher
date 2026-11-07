@@ -18,8 +18,16 @@ class UpdatePreferences(context: Context) {
             prefs.edit().putLong(KEY_LAST_CHECK_AT, value).apply()
         }
 
+    /** Identifies a rebuild of the same version that the user chose to ignore. */
+    var dismissedRebuild: String?
+        get() = prefs.getString(KEY_DISMISSED_REBUILD, null)
+        set(value) {
+            prefs.edit().putString(KEY_DISMISSED_REBUILD, value).apply()
+        }
+
     private companion object {
         const val KEY_DISMISSED_VERSION = "dismissed_version"
         const val KEY_LAST_CHECK_AT = "last_check_at"
+        const val KEY_DISMISSED_REBUILD = "dismissed_rebuild"
     }
 }

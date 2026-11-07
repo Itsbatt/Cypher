@@ -11,11 +11,17 @@ data class Playlist(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isPrivate: Boolean = true,
-    val tracks: List<Track> = emptyList()
+    val tracks: List<Track> = emptyList(),
+    /** Epoch millis of the last YouTube Music sync; 0 when the playlist is local. */
+    val lastSyncedAt: Long = 0L,
+    /** [PlaylistSync.COMPLETE] / [PlaylistSync.INCOMPLETE] for mirrored playlists. */
+    val syncState: String? = null
 ) {
     val trackCount: Int get() = tracks.size
     val formattedTrackCount: String get() = trackCount.toTrackCountString()
     val totalDurationMs: Long get() = tracks.sumOf { it.durationMs }
+    val isSynced: Boolean get() = syncState != null
+    val isSyncIncomplete: Boolean get() = syncState == PlaylistSync.INCOMPLETE
 
     val formattedDuration: String
         get() {

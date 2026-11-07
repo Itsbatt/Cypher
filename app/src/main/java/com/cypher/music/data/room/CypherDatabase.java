@@ -18,8 +18,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         PlaybackDailyEntity.class,
         SearchQueryEntity.class
     },
-    version = 5,
-    exportSchema = false
+    version = 6,
+    exportSchema = true
 )
 @TypeConverters({Converters.class})
 public abstract class CypherDatabase extends RoomDatabase {
@@ -68,6 +68,18 @@ public abstract class CypherDatabase extends RoomDatabase {
         }
     };
 
+    /**
+     * Records when a playlist was last mirrored and whether every page was imported.
+     * Local playlists keep syncState null, so no existing row changes meaning.
+     */
+    private static final Migration MIGRATION_5_6 = new Migration(5, 6) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE `playlists` ADD COLUMN `lastSyncedAt` INTEGER NOT NULL DEFAULT 0");
+            database.execSQL("ALTER TABLE `playlists` ADD COLUMN `syncState` TEXT");
+        }
+    };
+
     public abstract PlaylistDao playlistDao();
     public abstract TrackDao trackDao();
     public abstract RecentlyPlayedDao recentlyPlayedDao();
@@ -84,9 +96,7 @@ public abstract class CypherDatabase extends RoomDatabase {
                         CypherDatabase.class,
                         DATABASE_NAME
                     )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
-                    .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries()
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build();
                 }
             }

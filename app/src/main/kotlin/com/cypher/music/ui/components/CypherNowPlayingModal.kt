@@ -67,6 +67,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,6 +150,12 @@ fun CypherNowPlayingModal(
     var isDraggingSlider by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(playerState.progress) }
 
+    // Horizontal swipe on the artwork changes track without touching the vertical dismissal gesture.
+    val artworkSwipeThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
+    var artworkSwipeAccumulator by remember { mutableFloatStateOf(0f) }
+    val latestOnNext by rememberUpdatedState(onNext)
+    val latestOnPrevious by rememberUpdatedState(onPrevious)
+
     // Sheets toggles
     var showLyrics by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
@@ -230,7 +237,28 @@ fun CypherNowPlayingModal(
                                     .fillMaxWidth(0.92f)
                                     .aspectRatio(1f)
                                     .scale(artworkScale)
-                                    .clickable { showLyrics = true },
+                                    .clickable { showLyrics = true }
+                                    .pointerInput(Unit) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { artworkSwipeAccumulator = 0f },
+                                            onDragCancel = { artworkSwipeAccumulator = 0f },
+                                            onDragEnd = {
+                                                val distance = artworkSwipeAccumulator
+                                                artworkSwipeAccumulator = 0f
+                                                if (distance <= -artworkSwipeThresholdPx) {
+                                                    AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                                    latestOnNext()
+                                                } else if (distance >= artworkSwipeThresholdPx) {
+                                                    AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                                    latestOnPrevious()
+                                                }
+                                            },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                artworkSwipeAccumulator += dragAmount
+                                            }
+                                        )
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 AsyncImage(

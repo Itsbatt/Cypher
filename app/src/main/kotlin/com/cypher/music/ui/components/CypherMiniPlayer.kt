@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,10 @@ fun CypherMiniPlayer(
 ) {
     val track = playerState.currentTrack ?: return
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    // 56dp keeps a deliberate swipe from being confused with a tap on the play button.
+    val swipeThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
+    val latestOnSkipNext by rememberUpdatedState(onSkipNext)
+    val latestOnPrevious by rememberUpdatedState(onPrevious)
     val miniPlayerShape = RoundedCornerShape(20.dp)
 
     Box(
@@ -84,17 +90,20 @@ fun CypherMiniPlayer(
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { dragAccumulator = 0f },
+                    onDragCancel = { dragAccumulator = 0f },
                     onDragEnd = {
-                        if (dragAccumulator < -60f) {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onSkipNext()
-                        } else if (dragAccumulator > 60f && onPrevious != null) {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            onPrevious()
-                        }
+                        val distance = dragAccumulator
                         dragAccumulator = 0f
+                        if (distance <= -swipeThresholdPx) {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            latestOnSkipNext()
+                        } else if (distance >= swipeThresholdPx && latestOnPrevious != null) {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            latestOnPrevious?.invoke()
+                        }
                     },
-                    onHorizontalDrag = { _, dragAmount ->
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
                         dragAccumulator += dragAmount
                     }
                 )

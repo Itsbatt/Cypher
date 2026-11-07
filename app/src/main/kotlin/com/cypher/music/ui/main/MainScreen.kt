@@ -51,6 +51,7 @@ import com.cypher.music.ui.components.CypherSleepTimerSheet
 import com.cypher.music.ui.components.SharePlaylistDialog
 import com.cypher.music.ui.components.QrScannerSheet
 import com.cypher.music.ui.components.PlaylistImportPreviewDialog
+import com.cypher.music.ui.components.SpotifyImportSheet
 import com.cypher.music.ui.components.UpdateBanner
 import com.cypher.music.ui.components.CypherMiniPlayer
 import com.cypher.music.ui.components.CypherNavBar
@@ -152,6 +153,7 @@ fun MainScreen(
     val isScannerOpen by viewModel.isScannerOpen.collectAsState()
     val isLiquidGlassSettingsOpen by viewModel.isLiquidGlassSettingsOpen.collectAsState()
     val pendingImportPayload by viewModel.pendingImportPayload.collectAsState()
+    val spotifyImport by viewModel.spotifyImport.collectAsState()
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.state.collectAsState()
 
@@ -567,6 +569,7 @@ fun MainScreen(
                 onOpenYouTubeLogin = { viewModel.openYouTubeLoginDialog() },
                 onSyncYouTube = { viewModel.syncYouTubeMusic() },
                 onUnlinkYouTube = { viewModel.unlinkYouTubeAccount() },
+                onOpenSpotifyImport = { viewModel.openSpotifyImport() },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 isLoudnessNormalizationEnabled = isLoudnessNormalizationEnabled,
                 onToggleLoudnessNormalization = { viewModel.setLoudnessNormalizationEnabled(it) },
@@ -673,6 +676,18 @@ fun MainScreen(
                 themeColors = themeColors,
                 onConfirmImport = { viewModel.importSharedPlaylist(it) },
                 onDismiss = { viewModel.setPendingImportPayload(null) }
+            )
+        }
+
+        // Import from Spotify: paste a public playlist link and keep its songs here.
+        if (spotifyImport.isOpen) {
+            SpotifyImportSheet(
+                state = spotifyImport,
+                themeColors = themeColors,
+                onLinkChange = { viewModel.setSpotifyLink(it) },
+                onStart = { viewModel.startSpotifyImport() },
+                onConfirm = { viewModel.confirmSpotifyImport() },
+                onDismiss = { viewModel.closeSpotifyImport() }
             )
         }
 

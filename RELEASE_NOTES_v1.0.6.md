@@ -16,6 +16,18 @@
   canciones que añadas a mano** en la playlist; la pantalla de la playlist lo indica.
 - El aviso de sincronización incompleta ya no desaparece al cerrar la app.
 
+## Migración desde Spotify
+
+- **Importa playlists públicas de Spotify** pegando su enlace en Ajustes → «Migrar desde Spotify».
+  Cypher lee la playlist desde Spotify y busca cada canción en YouTube para que sea
+  reproducible aquí; muestra cuántas coincidencias encontró antes de guardar.
+- Las canciones que no aparezcan en YouTube se cuentan y no se inventan; si falta alguna,
+  la playlist queda marcada como incompleta con opción de reintentar.
+- La playlist importada conserva su enlace de origen: volver a importarla actualiza la
+  existente en lugar de duplicarla, y respeta la política híbrida con las canciones añadidas a mano.
+- Las playlists privadas o «Me gusta» requieren una sesión OAuth de Spotify y no están
+  disponibles por este camino sin credenciales.
+
 ## Descargas
 
 - Se comprueba el **espacio libre** antes de descargar (mínimo 80 MB) y se avisa en el log.

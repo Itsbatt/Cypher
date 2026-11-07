@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
@@ -116,6 +117,7 @@ fun SettingsScreen(
     onOpenYouTubeLogin: () -> Unit = {},
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
+    onOpenSpotifyImport: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     isLoudnessNormalizationEnabled: Boolean = true,
     onToggleLoudnessNormalization: (Boolean) -> Unit = {},
@@ -624,6 +626,63 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Section: Migración desde Spotify (playlists públicas)
+        item {
+            SettingsSectionHeader(
+                title = "Migrar desde Spotify",
+                icon = Icons.Filled.MusicNote,
+                tint = themeColors.accent
+            )
+
+            SettingsCard(themeColors = themeColors) {
+                Text(
+                    text = "Pega el enlace de una playlist pública de Spotify y Cypher buscará cada canción en YouTube para que puedas seguir escuchándola aquí.",
+                    color = themeColors.textSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Button(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        onOpenSpotifyImport()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MusicNote,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Importar desde Spotify",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Solo playlists públicas o enlazadas: las privadas necesitan iniciar sesión en Spotify.",
+                    color = themeColors.textSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

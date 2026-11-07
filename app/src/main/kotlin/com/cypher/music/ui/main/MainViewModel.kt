@@ -35,6 +35,9 @@ import com.cypher.music.playback.EqualizerState
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.BackupImportSummary
 import com.cypher.music.data.SharedPlaylistPayload
+import com.cypher.music.data.SpotifyImporter
+import com.cypher.music.data.SpotifyImportUiState
+import com.cypher.music.network.SpotifyImportService
 import com.cypher.music.playback.PlayerState
 import com.cypher.music.ui.components.CypherTab
 import com.cypher.music.ui.main.viewmodels.PlayerViewModel
@@ -67,6 +70,7 @@ import java.time.ZoneId
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val youTubeRepository = YouTubeRepository()
+    private val spotifyImporter = SpotifyImporter(youTubeRepository)
     private val musicRepository = MusicRepository(application, youTubeRepository)
     private val playerManager = MusicPlayerManager.getInstance(application)
     private val playlistRepository = PlaylistRepository(application, viewModelScope)
@@ -160,6 +164,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isNowPlayingExpanded: StateFlow<Boolean> = _isNowPlayingExpanded.asStateFlow()
 
     // QR Code and Short Code Sharing & Import State
+    private val _spotifyImport = MutableStateFlow(SpotifyImportUiState())
+    val spotifyImport: StateFlow<SpotifyImportUiState> = _spotifyImport.asStateFlow()
+
     private val _playlistToShare = MutableStateFlow<Playlist?>(null)
     val playlistToShare: StateFlow<Playlist?> = _playlistToShare.asStateFlow()
 
@@ -874,7 +881,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val entity = playlistRepository.roomDb.playlistDao().getPlaylistById(playlistId)
                 val sourceId = entity?.sourceId
                 if (entity == null || sourceId.isNullOrBlank()) {
-                    _syncStatusMsg.value = "Esta playlist no está vinculada a YouTube Music."
+                    _syncStatusMsg.value = "Esta playlist no está vinculada a una cuenta de música."
+                    return@launch
+                }
+                if (sourceId.startsWith("spotify:")) {
+                    retrySpotifyPlaylist(entity, sourceId)
                     return@launch
                 }
                 if (!youtubeAccountManager.session.value.isLoggedIn) {
@@ -910,6 +921,143 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isSyncingYouTube.value = false
             }
+        }
+    }
+
+    // Spotify import: public playlists, resolved to YouTube so they are playable here.
+    fun openSpotifyImport() {
+        _spotifyImport.value = SpotifyImportUiState(isOpen = true)
+    }
+
+    fun closeSpotifyImport() {
+        _spotifyImport.value = SpotifyImportUiState()
+    }
+
+    fun setSpotifyLink(link: String) {
+        _spotifyImport.value = _spotifyImport.value.copy(link = link, error = null)
+    }
+
+    fun startSpotifyImport() {
+        val state = _spotifyImport.value
+        if (state.isBusy) return
+        val link = state.link.trim()
+        if (link.isEmpty()) {
+            _spotifyImport.value = state.copy(error = "Pega el enlace de una playlist de Spotify.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _spotifyImport.value = _spotifyImport.value.copy(
+                isBusy = true,
+                error = null,
+                status = "Leyendo la playlist de Spotify…",
+                playlist = null,
+                tracks = emptyList(),
+                missed = 0
+            )
+            try {
+                val fetched = SpotifyImportService.fetchPlaylist(link).getOrElse { failure ->
+                    _spotifyImport.value = _spotifyImport.value.copy(
+                        isBusy = false,
+                        error = failure.message ?: "No se pudo leer la playlist."
+                    )
+                    return@launch
+                }
+                _spotifyImport.value = _spotifyImport.value.copy(
+                    playlist = fetched,
+                    status = "Buscando ${fetched.tracks.size} canciones en YouTube…"
+                )
+                val resolution = spotifyImporter.resolve(fetched) { done, total ->
+                    _spotifyImport.value = _spotifyImport.value.copy(
+                        status = "Buscando en YouTube: $done / $total…"
+                    )
+                }
+                if (resolution.tracks.isEmpty()) {
+                    _spotifyImport.value = _spotifyImport.value.copy(
+                        isBusy = false,
+                        error = "No se encontró ninguna canción de esta playlist en YouTube."
+                    )
+                } else {
+                    _spotifyImport.value = _spotifyImport.value.copy(
+                        isBusy = false,
+                        tracks = resolution.tracks,
+                        missed = resolution.missed,
+                        status = buildString {
+                            append("${resolution.tracks.size} de ${resolution.total} canciones encontradas")
+                            if (resolution.missed > 0) {
+                                append("; ${resolution.missed} no están en YouTube")
+                            }
+                            append(".")
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                _spotifyImport.value = _spotifyImport.value.copy(
+                    isBusy = false,
+                    error = "No se pudo importar: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun confirmSpotifyImport() {
+        val state = _spotifyImport.value
+        val playlist = state.playlist ?: return
+        if (state.tracks.isEmpty() || state.isBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            _spotifyImport.value = state.copy(isBusy = true, status = "Creando la playlist…")
+            try {
+                val description = buildString {
+                    append(SpotifyImportService.IMPORT_DESCRIPTION)
+                    playlist.owner?.let { append(" · $it") }
+                }
+                playlistRepository.syncPlaylist(
+                    name = playlist.name,
+                    description = description,
+                    coverUri = playlist.coverUrl,
+                    tracks = state.tracks,
+                    sourceId = "spotify:${playlist.id}",
+                    complete = state.missed == 0
+                )
+                _syncStatusMsg.value =
+                    "«${playlist.name}» importada desde Spotify: ${state.tracks.size} canciones."
+                _spotifyImport.value = SpotifyImportUiState()
+                selectTab(CypherTab.LIBRARY)
+            } catch (e: Exception) {
+                _spotifyImport.value = _spotifyImport.value.copy(
+                    isBusy = false,
+                    status = "",
+                    error = "No se pudo guardar la playlist: ${e.message}"
+                )
+            }
+        }
+    }
+
+    /** Retry path for a playlist whose source lives in Spotify, not in YouTube Music. */
+    private suspend fun retrySpotifyPlaylist(
+        entity: com.cypher.music.data.room.PlaylistEntity,
+        sourceId: String
+    ) {
+        _syncStatusMsg.value = "Releyendo «${entity.name}» en Spotify…"
+        val fetched = SpotifyImportService.fetchPlaylist(sourceId.removePrefix("spotify:"))
+            .getOrElse { failure ->
+                _syncStatusMsg.value = "No se pudo releer la playlist en Spotify: ${failure.message}"
+                return
+            }
+        val resolution = spotifyImporter.resolve(fetched) { done, total ->
+            _syncStatusMsg.value = "«${entity.name}»: $done / $total canciones…"
+        }
+        playlistRepository.syncPlaylist(
+            name = fetched.name.ifBlank { entity.name },
+            description = entity.description,
+            coverUri = fetched.coverUrl ?: entity.coverUri,
+            tracks = resolution.tracks,
+            sourceId = sourceId,
+            complete = resolution.missed == 0
+        )
+        _syncStatusMsg.value = if (resolution.missed == 0) {
+            "«${entity.name}» actualizada desde Spotify: ${resolution.tracks.size} canciones."
+        } else {
+            "«${entity.name}»: ${resolution.tracks.size} canciones; ${resolution.missed} no están en YouTube."
         }
     }
 

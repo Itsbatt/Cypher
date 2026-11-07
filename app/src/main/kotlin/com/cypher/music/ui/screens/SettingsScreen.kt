@@ -719,7 +719,7 @@ fun SettingsScreen(
                         text = if (spotifyAccountAvailable) {
                             "Conecta tu cuenta para importar todas tus playlists y tus «Me gusta» de una vez, sin copiar enlaces."
                         } else {
-                            "Importa toda tu biblioteca con un archivo que exportas gratis desde Spotify. Incluye playlists privadas y «Me gusta», sin cuenta ni Premium."
+                            "Importa toda tu biblioteca con un ZIP que contenga todos los CSV, o con un único CSV o JSON exportado gratis desde Spotify. Incluye playlists privadas y «Me gusta», sin cuenta ni Premium."
                         },
                         color = themeColors.textSecondary,
                         fontSize = 13.sp,
@@ -747,7 +747,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (spotifyAccountAvailable) "Conectar con Spotify" else "Importar archivo de Spotify",
+                            text = if (spotifyAccountAvailable) "Conectar con Spotify" else "Importar ZIP o archivo",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,

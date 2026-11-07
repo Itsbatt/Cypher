@@ -40,6 +40,11 @@
   que exporta Exportify y el JSON de «Descargar tus datos» de Spotify, con playlists
   privadas y «Me gusta». Se eligen las playlists y se transfieren con el mismo progreso,
   resumen, copia y exportación de fallos que la conexión directa.
+- **Importar un ZIP con todas las playlists**, sin extraerlo a mano: detecta los CSV y JSON
+  que contiene, los importa de una vez y conserva el nombre de cada playlist. Aguanta
+  cientos de playlists y miles de canciones, omite las repetidas por nombre y, si un
+  archivo está dañado, vacío o demasiado grande, indica cuál es y por qué sin cancelar
+  el resto de la importación.
 
 ### Configurar Spotify (una vez)
 

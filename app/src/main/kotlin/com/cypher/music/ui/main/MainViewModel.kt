@@ -1133,11 +1133,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }.getOrNull() ?: "Spotify"
 
-            val content = runCatching {
-                resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-            }.getOrNull()
-
-            if (content.isNullOrBlank()) {
+            val stream = runCatching { resolver.openInputStream(uri) }.getOrNull()
+            if (stream == null) {
                 _spotifyTransfer.value = SpotifyTransferUiState(
                     isOpen = true,
                     error = "No se pudo leer el archivo. Prueba a exportarlo de nuevo."
@@ -1151,37 +1148,95 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 status = "Leyendo $fileName…"
             )
 
-            val fallbackName = fileName.substringBeforeLast('.').ifBlank { "Playlist de Spotify" }
-            val parsed = com.cypher.music.network.SpotifyExportParser.parse(content, fallbackName)
-            if (parsed.isEmpty()) {
-                _spotifyTransfer.value = SpotifyTransferUiState(
-                    isOpen = true,
-                    error = "El archivo no contiene canciones de Spotify reconocibles. " +
-                        "Usa el CSV de Exportify o el JSON de «Descargar tus datos»."
-                )
-                return@launch
-            }
+            stream.use { raw ->
+                val buffered = java.io.BufferedInputStream(raw)
+                buffered.mark(4)
+                val signature = ByteArray(4)
+                val signatureRead = buffered.read(signature)
+                buffered.reset()
+                val isZip = signatureRead == 4 &&
+                    signature[0] == 'P'.code.toByte() &&
+                    signature[1] == 'K'.code.toByte() &&
+                    signature[2] == 3.toByte() &&
+                    signature[3] == 4.toByte()
 
-            spotifyExportTracks.clear()
-            val summaries = parsed.map { playlist ->
-                val key = "file-" + playlist.name.trim().lowercase().hashCode().toUInt().toString(16)
-                spotifyExportTracks[key] = playlist.tracks
-                SpotifyPlaylistSummary(
-                    id = key,
-                    name = playlist.name,
-                    ownerName = "Archivo de Spotify",
-                    trackCount = playlist.tracks.size
-                )
-            }
+                if (isZip) {
+                    val zip = com.cypher.music.network.SpotifyExportParser.parseZip(buffered, fileName)
+                    if (zip.playlists.isEmpty()) {
+                        _spotifyTransfer.value = SpotifyTransferUiState(
+                            isOpen = true,
+                            error = "El ZIP no contiene playlists de Spotify reconocibles.",
+                            importIssues = zip.issues
+                        )
+                        return@use
+                    }
+                    applySpotifyExport(
+                        parsed = zip.playlists,
+                        issues = zip.issues,
+                        duplicateCount = zip.duplicates.size,
+                        isZip = true
+                    )
+                    return@use
+                }
 
-            _spotifyTransfer.value = SpotifyTransferUiState(
-                isOpen = true,
-                playlists = summaries,
-                selectedIds = summaries.map { it.id }.toSet(),
-                status = "${summaries.size} playlists y " +
-                    "${summaries.sumOf { it.trackCount }} canciones leídas del archivo."
+                val content = runCatching {
+                    buffered.reader().use { it.readText() }
+                }.getOrNull()
+
+                if (content.isNullOrBlank()) {
+                    _spotifyTransfer.value = SpotifyTransferUiState(
+                        isOpen = true,
+                        error = "No se pudo leer el archivo. Prueba a exportarlo de nuevo."
+                    )
+                    return@use
+                }
+
+                val fallbackName = fileName.substringBeforeLast('.').ifBlank { "Playlist de Spotify" }
+                val parsed = com.cypher.music.network.SpotifyExportParser.parse(content, fallbackName)
+                if (parsed.isEmpty()) {
+                    _spotifyTransfer.value = SpotifyTransferUiState(
+                        isOpen = true,
+                        error = "El archivo no contiene canciones de Spotify reconocibles. " +
+                            "Usa el CSV de Exportify, el JSON de «Descargar tus datos» o un ZIP con varios CSV."
+                    )
+                    return@use
+                }
+                applySpotifyExport(parsed, emptyList(), duplicateCount = 0, isZip = false)
+            }
+        }
+    }
+
+    private fun applySpotifyExport(
+        parsed: List<com.cypher.music.network.SpotifyExportPlaylist>,
+        issues: List<String>,
+        duplicateCount: Int,
+        isZip: Boolean
+    ) {
+        spotifyExportTracks.clear()
+        val summaries = parsed.map { playlist ->
+            val key = "file-" + playlist.name.trim().lowercase().hashCode().toUInt().toString(16)
+            spotifyExportTracks[key] = playlist.tracks
+            SpotifyPlaylistSummary(
+                id = key,
+                name = playlist.name,
+                ownerName = "Archivo de Spotify",
+                trackCount = playlist.tracks.size
             )
         }
+
+        _spotifyTransfer.value = SpotifyTransferUiState(
+            isOpen = true,
+            playlists = summaries,
+            selectedIds = summaries.map { it.id }.toSet(),
+            status = buildString {
+                append("${summaries.size} playlists y ")
+                append("${summaries.sumOf { it.trackCount }} canciones leídas del ")
+                append(if (isZip) "ZIP" else "archivo")
+                append('.')
+                if (duplicateCount > 0) append(" $duplicateCount repetidas omitidas.")
+            },
+            importIssues = issues
+        )
     }
 
     fun saveSpotifyClientId(clientId: String) {

@@ -1,6 +1,9 @@
 package com.cypher.music.network
 
-import android.util.Log
+import java.io.BufferedInputStream
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.util.zip.ZipInputStream
 import org.json.JSONObject
 
 data class SpotifyExportPlaylist(
@@ -8,16 +11,26 @@ data class SpotifyExportPlaylist(
     val tracks: List<SpotifyTrackRef>
 )
 
+data class SpotifyZipImport(
+    val playlists: List<SpotifyExportPlaylist> = emptyList(),
+    val issues: List<String> = emptyList(),
+    val duplicates: List<String> = emptyList()
+)
+
 /**
- * Reads the two free ways of getting a Spotify library out of Spotify:
+ * Reads the free ways of getting a Spotify library out of Spotify:
  * - a CSV exported with Exportify (one file per playlist),
- * - the JSON from Spotify's "Download your data" (all playlists in one file).
+ * - the JSON from Spotify's "Download your data" (all playlists in one file),
+ * - a ZIP that contains any number of those files.
  *
- * Neither needs a Spotify account, Premium, a Client ID or the Web API, so the
+ * None of them needs a Spotify account, Premium, a Client ID or the Web API, so the
  * transfer works for users who cannot connect an app.
  */
 object SpotifyExportParser {
-    private const val TAG = "SpotifyExport"
+    private const val MAX_ENTRY_CHARS = 8 * 1024 * 1024
+    private const val MAX_ENTRIES = 2_000
+    private const val MAX_PLAYLISTS = 1_000
+    private const val MAX_TOTAL_TRACKS = 100_000
 
     fun parse(content: String, fallbackName: String): List<SpotifyExportPlaylist> {
         val trimmed = content.trimStart('\uFEFF', ' ', '\t', '\n', '\r')
@@ -37,6 +50,117 @@ object SpotifyExportParser {
                 listOf(SpotifyExportPlaylist(fallbackName.ifBlank { "Playlist de Spotify" }, tracks))
             }
         }
+    }
+
+    /**
+     * Streams every CSV/JSON entry of a ZIP. A broken entry is reported in [SpotifyZipImport.issues]
+     * and the rest keeps importing; playlists with the same name (ignoring case and spacing) are
+     * skipped and listed in [SpotifyZipImport.duplicates].
+     */
+    fun parseZip(input: InputStream, sourceName: String = "ZIP"): SpotifyZipImport {
+        val playlists = mutableListOf<SpotifyExportPlaylist>()
+        val issues = mutableListOf<String>()
+        val duplicates = mutableListOf<String>()
+        val seenNames = mutableSetOf<String>()
+        var totalTracks = 0
+        var entries = 0
+
+        try {
+            ZipInputStream(BufferedInputStream(input)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.isDirectory) continue
+
+                    entries++
+                    if (entries > MAX_ENTRIES) {
+                        issues += "El $sourceName supera las $MAX_ENTRIES entradas; se omitió el resto."
+                        break
+                    }
+
+                    val path = entry.name
+                    val baseName = path.substringAfterLast('/').substringAfterLast('\\')
+                    if (path.contains("__MACOSX/") || baseName.startsWith(".")) continue
+
+                    val lower = baseName.lowercase()
+                    val isCsv = lower.endsWith(".csv")
+                    val isJson = lower.endsWith(".json")
+                    if (!isCsv && !isJson) continue
+
+                    val text = readEntry(zip, MAX_ENTRY_CHARS)
+                    if (text == null) {
+                        issues += "«$baseName»: supera el tamaño máximo de 8 MB."
+                        continue
+                    }
+                    if (text.isBlank()) {
+                        if (isCsv) issues += "«$baseName»: el archivo está vacío."
+                        continue
+                    }
+
+                    val parsed = if (isCsv) {
+                        val name = baseName.substringBeforeLast('.').ifBlank { "Playlist de Spotify" }
+                        val tracks = parseCsv(text.trimStart('\uFEFF'))
+                        if (tracks.isEmpty()) emptyList() else listOf(SpotifyExportPlaylist(name, tracks))
+                    } else {
+                        // Spotify's own export includes metadata JSON files; ignore those silently.
+                        parse(text, baseName.substringBeforeLast('.'))
+                    }
+
+                    if (parsed.isEmpty()) {
+                        if (isCsv) issues += "«$baseName»: no tiene canciones reconocibles."
+                        continue
+                    }
+
+                    for (playlist in parsed) {
+                        val key = normalizeName(playlist.name)
+                        if (!seenNames.add(key)) {
+                            duplicates += playlist.name
+                            continue
+                        }
+                        if (playlists.size >= MAX_PLAYLISTS) {
+                            issues += "Se alcanzó el límite de $MAX_PLAYLISTS playlists; el resto se omitió."
+                            break
+                        }
+                        val remaining = MAX_TOTAL_TRACKS - totalTracks
+                        if (remaining <= 0) {
+                            issues += "Se alcanzó el límite de $MAX_TOTAL_TRACKS canciones; el resto se omitió."
+                            break
+                        }
+                        val tracks = if (playlist.tracks.size > remaining) {
+                            issues += "«${playlist.name}»: se importaron las primeras $remaining canciones."
+                            playlist.tracks.take(remaining)
+                        } else {
+                            playlist.tracks
+                        }
+                        playlists += SpotifyExportPlaylist(playlist.name, tracks)
+                        totalTracks += tracks.size
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            issues += "No se pudo leer el $sourceName: ${e.message ?: "archivo dañado"}."
+        }
+
+        if (playlists.isEmpty() && issues.isEmpty()) {
+            issues += "No se encontró ninguna playlist dentro del $sourceName."
+        }
+
+        return SpotifyZipImport(playlists, issues, duplicates)
+    }
+
+    internal fun normalizeName(name: String): String =
+        name.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    private fun readEntry(zip: ZipInputStream, limit: Int): String? {
+        val reader = InputStreamReader(zip, Charsets.UTF_8)
+        val buffer = CharArray(8192)
+        val builder = StringBuilder()
+        while (true) {
+            val read = reader.read(buffer)
+            if (read < 0) break
+            builder.append(buffer, 0, read)
+            if (builder.length > limit) return null
+        }
+        return builder.toString()
     }
 
     internal fun parseCsv(content: String): List<SpotifyTrackRef> {
@@ -91,7 +215,6 @@ object SpotifyExportParser {
         val root = try {
             JSONObject(content)
         } catch (e: Exception) {
-            Log.w(TAG, "Not a Spotify JSON export: ${e.message}")
             return emptyList()
         }
 
@@ -112,7 +235,6 @@ object SpotifyExportParser {
         val array = try {
             org.json.JSONArray(content)
         } catch (e: Exception) {
-            Log.w(TAG, "Invalid JSON array export: ${e.message}")
             return emptyList()
         }
         return buildList {

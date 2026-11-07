@@ -344,7 +344,41 @@ fun SpotifySyncSheet(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (state.isImporting) {
+                    if (state.importIssues.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF2A2422))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "Archivos omitidos",
+                            color = Color(0xFFFF9F43),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 130.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            state.importIssues.forEach { issue ->
+                                Text(
+                                    text = "• $issue",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (state.isImporting) {
                         LinearProgressIndicator(
                             progress = { state.progress },
                             modifier = Modifier

@@ -9,6 +9,7 @@ Esta versión añade gestos para cambiar de canción sin abrir menús, y mantien
 - Umbral de **56 dp** para que un toque o un pequeño temblor sobre los botones no cambie de canción por accidente.
 - El gesto horizontal no interfiere con los controles de reproducción, pausa, favorito, cola ni con el gesto vertical para expandir o cerrar el reproductor. Se respeta la cola, el historial y el modo aleatorio/repetir.
 - Respuesta háptica al cambiar de canción si tienes la vibración activada.
+- La portada del reproductor y el contenido del MiniPlayer se deslizan brevemente en la dirección del gesto al entrar la canción nueva, para que el cambio se sienta inmediato y natural.
 
 ## Importación desde Spotify (heredado de 1.0.6)
 

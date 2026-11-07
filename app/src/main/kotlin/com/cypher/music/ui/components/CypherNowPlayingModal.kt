@@ -3,12 +3,19 @@ package com.cypher.music.ui.components
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,6 +71,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -155,6 +163,8 @@ fun CypherNowPlayingModal(
     var artworkSwipeAccumulator by remember { mutableFloatStateOf(0f) }
     val latestOnNext by rememberUpdatedState(onNext)
     val latestOnPrevious by rememberUpdatedState(onPrevious)
+    // 1 = incoming artwork slides from the right (next), -1 = from the left (previous).
+    var artworkSlideDirection by remember { mutableIntStateOf(1) }
 
     // Sheets toggles
     var showLyrics by remember { mutableStateOf(false) }
@@ -247,9 +257,11 @@ fun CypherNowPlayingModal(
                                                 artworkSwipeAccumulator = 0f
                                                 if (distance <= -artworkSwipeThresholdPx) {
                                                     AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                                    artworkSlideDirection = 1
                                                     latestOnNext()
                                                 } else if (distance >= artworkSwipeThresholdPx) {
                                                     AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                                    artworkSlideDirection = -1
                                                     latestOnPrevious()
                                                 }
                                             },
@@ -261,22 +273,38 @@ fun CypherNowPlayingModal(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
-                                    model = track.artworkUrl,
-                                    contentDescription = track.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .shadow(
-                                            elevation = if (playerState.isPlaying) 32.dp else 14.dp,
-                                            shape = RoundedCornerShape(24.dp),
-                                            ambientColor = ambientColors.accent.copy(alpha = 0.5f),
-                                            spotColor = ambientColors.dominant
-                                        )
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(IosDarkCard)
-                                        .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                                )
+                                AnimatedContent(
+                                    targetState = track,
+                                    contentKey = { it.id },
+                                    transitionSpec = {
+                                        val direction = artworkSlideDirection
+                                        (slideInHorizontally(animationSpec = tween(260)) { width -> direction * width / 4 } +
+                                            fadeIn(animationSpec = tween(180)))
+                                            .togetherWith(
+                                                slideOutHorizontally(animationSpec = tween(260)) { width -> -direction * width / 4 } +
+                                                    fadeOut(animationSpec = tween(180))
+                                            )
+                                    },
+                                    modifier = Modifier.fillMaxSize(),
+                                    label = "ArtworkSlide"
+                                ) { shownTrack ->
+                                    AsyncImage(
+                                        model = shownTrack.artworkUrl,
+                                        contentDescription = shownTrack.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .shadow(
+                                                elevation = if (playerState.isPlaying) 32.dp else 14.dp,
+                                                shape = RoundedCornerShape(24.dp),
+                                                ambientColor = ambientColors.accent.copy(alpha = 0.5f),
+                                                spotColor = ambientColors.dominant
+                                            )
+                                            .clip(RoundedCornerShape(24.dp))
+                                            .background(IosDarkCard)
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+                                    )
+                                }
                             }
                         }
                     }

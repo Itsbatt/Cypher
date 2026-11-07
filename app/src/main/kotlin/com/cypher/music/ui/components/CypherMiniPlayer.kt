@@ -1,5 +1,12 @@
 package com.cypher.music.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -64,6 +72,8 @@ fun CypherMiniPlayer(
 ) {
     val track = playerState.currentTrack ?: return
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    // 1 = incoming content slides from the right (next), -1 = from the left (previous).
+    var slideDirection by remember { mutableIntStateOf(1) }
     // 56dp keeps a deliberate swipe from being confused with a tap on the play button.
     val swipeThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     val latestOnSkipNext by rememberUpdatedState(onSkipNext)
@@ -96,9 +106,11 @@ fun CypherMiniPlayer(
                         dragAccumulator = 0f
                         if (distance <= -swipeThresholdPx) {
                             AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            slideDirection = 1
                             latestOnSkipNext()
                         } else if (distance >= swipeThresholdPx && latestOnPrevious != null) {
                             AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            slideDirection = -1
                             latestOnPrevious?.invoke()
                         }
                     },
@@ -116,46 +128,67 @@ fun CypherMiniPlayer(
                     .padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Proportional Album Artwork with rounded corners
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
+                AnimatedContent(
+                    targetState = track,
+                    contentKey = { it.id },
+                    transitionSpec = {
+                        val direction = slideDirection
+                        (slideInHorizontally(animationSpec = tween(220)) { width -> direction * width / 4 } +
+                            fadeIn(animationSpec = tween(160)))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = tween(220)) { width -> -direction * width / 4 } +
+                                    fadeOut(animationSpec = tween(160))
+                            )
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "MiniArtworkSlide"
+                ) { shownTrack ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Proportional Album Artwork with rounded corners
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
 
-                    if (!track.artworkUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = track.artworkUrl,
-                            contentDescription = track.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                            if (!shownTrack.artworkUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = shownTrack.artworkUrl,
+                                    contentDescription = shownTrack.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        // High-legibility Title & Artist
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = shownTrack.title,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(1.dp))
+                            Text(
+                                text = shownTrack.artist,
+                                color = IosDarkTextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // High-legibility Title & Artist
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.title,
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = track.artist,
-                        color = IosDarkTextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
 
                 // Controls

@@ -175,16 +175,74 @@ fun LiquidGlassBackground(
         label = "LiquidGlassTime"
     )
 
-    // Native 100% GPU-accelerated AGSL RuntimeShader (MinSDK 33 Android 13+)
-    AgslLiquidGlassRenderer(
-        col1 = col1,
-        col2 = col2,
-        col3 = col3,
-        time = animTime,
-        speed = config.animationSpeed,
-        distortion = config.distortionScale,
-        opacity = config.overallOpacity,
+    // Native 100% GPU-accelerated AGSL RuntimeShader (Android 13 / API 33+).
+    // android.graphics.RuntimeShader does not exist before API 33, so creating it
+    // on Android 10 crashed Now Playing with NoClassDefFoundError. Older versions
+    // use the documented animated gradient fallback instead.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        AgslLiquidGlassRenderer(
+            col1 = col1,
+            col2 = col2,
+            col3 = col3,
+            time = animTime,
+            speed = config.animationSpeed,
+            distortion = config.distortionScale,
+            opacity = config.overallOpacity,
+            modifier = modifier
+        )
+    } else {
+        LegacyLiquidGlassRenderer(
+            col1 = col1,
+            col2 = col2,
+            col3 = col3,
+            time = animTime,
+            opacity = config.overallOpacity,
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * API 29-32 ambient glow: three slowly drifting radial pools over the OLED base.
+ * Visually the same family as the shader, without needing RuntimeShader.
+ */
+@Composable
+private fun LegacyLiquidGlassRenderer(
+    col1: Color,
+    col2: Color,
+    col3: Color,
+    time: Float,
+    opacity: Float,
+    modifier: Modifier
+) {
+    val drift = (kotlin.math.sin(time / 100f) * 0.5f + 0.5f)
+    Box(
         modifier = modifier
+            .fillMaxSize()
+            .background(IosDarkBackground)
+            .drawWithCache {
+                val radius = size.maxDimension * 0.95f
+                val top = Brush.radialGradient(
+                    colors = listOf(col1.copy(alpha = opacity * 0.55f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * (0.10f + 0.12f * drift), size.height * 0.08f),
+                    radius = radius
+                )
+                val side = Brush.radialGradient(
+                    colors = listOf(col2.copy(alpha = opacity * 0.45f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * (0.50f + 0.18f * (1f - drift))),
+                    radius = radius
+                )
+                val bottom = Brush.radialGradient(
+                    colors = listOf(col3.copy(alpha = opacity * 0.35f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * (0.30f + 0.10f * (1f - drift)), size.height * 0.96f),
+                    radius = radius
+                )
+                onDrawBehind {
+                    drawRect(brush = top)
+                    drawRect(brush = side)
+                    drawRect(brush = bottom)
+                }
+            }
     )
 }
 

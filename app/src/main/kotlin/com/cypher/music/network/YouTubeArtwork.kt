@@ -16,24 +16,49 @@ object YouTubeArtwork {
     private const val SAFE_RES = "hqdefault.jpg"
     private val THUMB_URL = Regex("""https?://i\.ytimg\.com/vi/([A-Za-z0-9_-]{6,})/""")
 
+    /** InnerTube sizes covers with `=w60-h60-l90-rj`; 1080 keeps full-bleed panels sharp. */
+    private const val LARGE_SIZE_PARAMS = "=w1080-h1080-l90-rj"
+    private const val FALLBACK_SIZE_PARAMS = "=w544-h544-l90-rj"
+    private val SIZE_PARAMS = Regex("""=[swh]-?\d.*$""")
+
     /** Preferred artwork URL for a video id. */
     fun url(videoId: String): String = "https://i.ytimg.com/vi/$videoId/$MAX_RES"
 
     /**
-     * Promotes a YouTube thumbnail to the sharpest available frame. Any other URL
-     * (local album art, remote covers) is returned untouched.
+     * Promotes a thumbnail to the sharpest frame the provider offers. YouTube's
+     * InnerTube API hands out tiny Google-hosted covers (`=w60-h60`), which is
+     * what made the app look soft; this rewrites them to 1080 px. Local album art
+     * and other remote covers are returned untouched.
      */
     fun upgrade(url: String?): String? {
-        val videoId = videoIdOf(url) ?: return url
-        if (url != null && url.contains("/$MAX_RES")) return url
-        return "https://i.ytimg.com/vi/$videoId/$MAX_RES"
+        if (url.isNullOrBlank()) return url
+        videoIdOf(url)?.let { videoId ->
+            return if (url.contains("/$MAX_RES")) url else "https://i.ytimg.com/vi/$videoId/$MAX_RES"
+        }
+        return resizeGoogleArtwork(url, LARGE_SIZE_PARAMS)
     }
 
-    /** Only maxres frames fall back; anything else returns null to stop retrying. */
+    /** Only upscaled frames fall back; anything else returns null to stop retrying. */
     fun fallback(url: String?): String? {
-        val videoId = videoIdOf(url) ?: return null
-        if (url == null || !url.contains("/$MAX_RES")) return null
-        return "https://i.ytimg.com/vi/$videoId/$SAFE_RES"
+        videoIdOf(url)?.let { videoId ->
+            return if (url != null && url.contains("/$MAX_RES")) {
+                "https://i.ytimg.com/vi/$videoId/$SAFE_RES"
+            } else {
+                null
+            }
+        }
+        if (url == null || !url.contains(LARGE_SIZE_PARAMS)) return null
+        return resizeGoogleArtwork(url, FALLBACK_SIZE_PARAMS, force = true)
+    }
+
+    /** Rewrites the `=w…-h…` sizing suffix used by lh3.googleusercontent.com covers. */
+    private fun resizeGoogleArtwork(url: String, params: String, force: Boolean = false): String? {
+        val isGoogleHost = url.contains("googleusercontent.com") || url.contains("ggpht.com")
+        if (!isGoogleHost) return url
+        if (!force && url.endsWith(params)) return url
+        val base = url.substringBefore("=").trimEnd()
+        if (base.isEmpty()) return url
+        return base + params
     }
 
     private fun videoIdOf(url: String?): String? =
@@ -48,6 +73,8 @@ class YouTubeArtworkFallbackInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val result = chain.proceed(chain.request)
         if (result is ErrorResult) {
+            // A cover that 404s at 1080 px (or has no maxres frame) is retried once
+            // at a size every provider definitely serves.
             val fallback = YouTubeArtwork.fallback(chain.request.data as? String)
             if (fallback != null) {
                 return chain.proceed(chain.request.newBuilder().data(fallback).build())

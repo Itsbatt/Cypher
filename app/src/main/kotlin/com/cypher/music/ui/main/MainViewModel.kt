@@ -19,9 +19,7 @@ import com.cypher.music.data.UnifiedSearchResults
 import com.cypher.music.data.User
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.data.UserProfileStore
-import com.cypher.music.data.WrappedAlbumStat
 import com.cypher.music.data.WrappedArtistStat
-import com.cypher.music.data.WrappedGenreStat
 import com.cypher.music.data.WrappedPeakDay
 import com.cypher.music.data.WrappedPreferences
 import com.cypher.music.data.WrappedStats
@@ -341,12 +339,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openWrapped(year: Int = WrappedAvailability.activeYear() ?: LocalDate.now().year) {
+    fun openWrapped(year: Int? = WrappedAvailability.activeYear()) {
+        // Outside the end-of-year window the recap is not reachable at all: not from
+        // Settings, not from the notification deep link, not from an internal caller.
+        val recapYear = year ?: return
+        if (WrappedAvailability.activeYear() != recapYear) return
         _isWrappedOpen.value = true
-        if (WrappedAvailability.activeYear() == year) {
-            wrappedPreferences.markShown(year)
-        }
-        loadWrappedStats(year)
+        wrappedPreferences.markShown(recapYear)
+        loadWrappedStats(recapYear)
     }
 
     fun closeWrapped() {
@@ -415,24 +415,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 share = shareOf(row.totalTimeMs)
             )
         }
-        val topAlbums = dao.getTopAlbums(startDay, endDay, 5).mapIndexed { index, row ->
-            WrappedAlbumStat(
-                rank = index + 1,
-                name = row.album ?: "Desconocido",
-                artworkUrl = row.artworkUrl,
-                playCount = row.playCount,
-                totalTimeMs = row.totalTimeMs
-            )
-        }
-        val topGenres = dao.getTopGenres(startDay, endDay, 5).mapIndexed { index, row ->
-            WrappedGenreStat(
-                rank = index + 1,
-                name = row.genre ?: "Desconocido",
-                playCount = row.playCount,
-                totalTimeMs = row.totalTimeMs,
-                share = shareOf(row.totalTimeMs)
-            )
-        }
         val mostRepeated = dao.getMostRepeatedTrack(startDay, endDay)?.let { row ->
             WrappedTrackStat(
                 rank = 1,
@@ -456,8 +438,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             totalPlays = dao.getTotalPlays(startDay, endDay),
             topTracks = topTracks,
             topArtists = topArtists,
-            topAlbums = topAlbums,
-            topGenres = topGenres,
             mostRepeatedTrack = mostRepeated,
             peakDay = peakDay
         )

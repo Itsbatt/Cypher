@@ -137,9 +137,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val lyricsSettingsManager = remember { LyricsSettingsManager(context) }
     val lyricsSettings by lyricsSettingsManager.settings.collectAsState()
-    // The recap is always reviewable from Settings; only the automatic offer and
-    // notification keep the end-of-year window.
-    val wrappedYear = WrappedAvailability.activeYear() ?: java.time.LocalDate.now().year
+    // The recap only exists inside its end-of-year window; outside it there is no
+    // entry here at all, so nothing can open an empty or off-season recap.
+    val wrappedYear = WrappedAvailability.activeYear()
     var isUsernameDialogOpen by remember { mutableStateOf(false) }
 
     // Which theme colour the hex picker is editing: accent, background or card.
@@ -365,9 +365,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // Always reviewable from Settings; the end-of-year window only gates
-                // the automatic offer, never the user's access to their own year.
-                run {
+                if (wrappedYear != null) run {
                     HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
 
                     Row(
@@ -399,7 +397,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Minutos, artistas, álbumes y géneros",
+                                text = "Minutos, artistas y pistas del año",
                                 color = themeColors.textSecondary,
                                 fontSize = 12.sp
                             )

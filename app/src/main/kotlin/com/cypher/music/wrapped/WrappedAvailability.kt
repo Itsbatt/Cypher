@@ -5,19 +5,18 @@ import java.time.LocalDate
 import java.time.Month
 
 /**
- * Cypher Wrapped only goes live at the end of the year: from 1 December until
- * 7 January, when the recap of the year that just ended is still relevant.
- *
- * Outside that window the recap is neither offered automatically nor listed in
- * Settings, so the annual story keeps its "event" feel.
+ * Cypher Wrapped only goes live at the end of the year: from 15 December until
+ * 10 January (both days inclusive). Outside that window the recap is neither
+ * offered automatically nor listed in Settings, so the annual story keeps its
+ * "event" feel while still covering the New Year holiday.
  */
 object WrappedAvailability {
 
     /** First day the recap becomes available. */
-    const val START_DAY = 1
+    const val START_DAY = 15
 
     /** Last day the recap stays available (January of the following year). */
-    const val END_DAY = 7
+    const val END_DAY = 10
 
     /**
      * Year of the recap that should be shown today, or `null` when the app is
@@ -28,6 +27,9 @@ object WrappedAvailability {
         today.month == Month.JANUARY && today.dayOfMonth <= END_DAY -> today.year - 1
         else -> null
     }
+
+    /** Human readable window, used by Settings so the dates are never stated twice. */
+    fun windowLabel(): String = "Del $START_DAY de diciembre al $END_DAY de enero"
 
     /** Testable variant: resolves "today" from an injected clock. */
     fun activeYear(clock: Clock): Int? = activeYear(LocalDate.now(clock))

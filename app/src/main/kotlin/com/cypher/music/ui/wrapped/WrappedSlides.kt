@@ -50,9 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.cypher.music.data.WrappedAlbumStat
 import com.cypher.music.data.WrappedArtistStat
-import com.cypher.music.data.WrappedGenreStat
 import com.cypher.music.data.WrappedPeakDay
 import com.cypher.music.data.WrappedStats
 import com.cypher.music.data.WrappedTrackStat
@@ -478,216 +476,6 @@ private fun ArtistShareRow(artist: WrappedArtistStat, delayMs: Int) {
     }
 }
 
-// ----------------------------------------------------------------------- albums
-
-@Composable
-fun WrappedAlbumsSlide(
-    stats: WrappedStats,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 22.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Reveal(0) { SectionLabel("TOP 5 ÁLBUMES") }
-        Reveal(50) {
-            Headline(
-                text = "Los discos del año",
-                modifier = Modifier.padding(top = 6.dp, bottom = 18.dp)
-            )
-        }
-
-        if (stats.topAlbums.isEmpty()) {
-            EmptyNote("Tus pistas no traen álbum identificado, así que aún no podemos ordenarlos.")
-        } else {
-            stats.topAlbums.forEachIndexed { index, album ->
-                Reveal(delayMs = index * 90, modifier = Modifier.fillMaxWidth()) {
-                    AlbumRow(album = album)
-                }
-                if (index != stats.topAlbums.lastIndex) HairlineRow(startIndent = 80.dp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlbumRow(album: WrappedAlbumStat) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "${album.rank}",
-            color = if (album.rank == 1) Accent else TextSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(20.dp)
-        )
-        Artwork(url = album.artworkUrl, title = album.name, size = 48.dp)
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp)
-        ) {
-            Text(
-                text = album.name,
-                color = TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${album.playCount} reproducciones · ${formatListeningTime(album.totalTimeMs)}",
-                color = TextSecondary,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-// ----------------------------------------------------------------------- genres
-
-@Composable
-fun WrappedGenresSlide(
-    stats: WrappedStats,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Reveal(0) { SectionLabel("TU AÑO EN SONIDO") }
-        Reveal(50) {
-            Headline(
-                text = "Géneros que te definieron",
-                modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
-            )
-        }
-
-        if (stats.topGenres.isEmpty()) {
-            EmptyNote("Tu biblioteca no expone etiquetas de género, así que no podemos calcularlos sin inventarlos.")
-        } else {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                stats.topGenres.forEachIndexed { index, genre ->
-                    GenreRow(genre = genre, delayMs = index * 90)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(22.dp))
-
-        Reveal(delayMs = 200) { SectionLabel("CANCIÓN MÁS REPETIDA") }
-        val repeated = stats.mostRepeatedTrack
-        if (repeated == null) {
-            Spacer(Modifier.height(8.dp))
-            EmptyNote("Todavía no hay una canción repetida este año.")
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Artwork(url = repeated.artworkUrl, title = repeated.title, size = 44.dp)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp)
-                ) {
-                    Text(
-                        text = repeated.title,
-                        color = TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = repeated.artist,
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Text(
-                    text = "${repeated.playCount}×",
-                    color = Accent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Reveal(delayMs = 300, modifier = Modifier.fillMaxWidth()) {
-            PeakDayRow(peak = stats.peakDay)
-        }
-    }
-}
-
-@Composable
-private fun GenreRow(genre: WrappedGenreStat, delayMs: Int) {
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMs.toLong())
-        shown = true
-    }
-    val fill by animateFloatAsState(
-        targetValue = if (shown) genre.share.coerceIn(0f, 1f) else 0f,
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "genreShare${genre.rank}"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = genre.name,
-            color = TextPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(112.dp)
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(3.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.10f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fill)
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(Accent.copy(alpha = 0.85f))
-            )
-        }
-        Text(
-            text = "${(genre.share * 100).roundToInt()}%",
-            color = TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 10.dp)
-        )
-    }
-}
-
 @Composable
 private fun PeakDayRow(peak: WrappedPeakDay?) {
     Row(
@@ -810,16 +598,9 @@ fun WrappedSummarySlide(
                     detail = topTrack?.artist
                 )
                 SummaryLine(
-                    label = "ÁLBUM DEL AÑO",
-                    value = stats.topAlbum?.name ?: "Sin álbum identificado",
-                    detail = stats.topAlbum?.let { "${it.playCount} reproducciones" }
-                )
-                SummaryLine(
-                    label = "GÉNERO PRINCIPAL",
-                    value = stats.topGenres.firstOrNull()?.name ?: "Sin datos de género",
-                    detail = stats.topGenres.firstOrNull()?.let {
-                        "${(it.share * 100).roundToInt()}% de tu tiempo"
-                    }
+                    label = "CANCIÓN MÁS REPETIDA",
+                    value = stats.mostRepeatedTrack?.title ?: "Sin datos todavía",
+                    detail = stats.mostRepeatedTrack?.let { "${it.playCount} reproducciones" }
                 )
                 SummaryLine(
                     label = "DÍA CON MÁS MÚSICA",

@@ -30,10 +30,19 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.READ_MEDIA_AUDIO] == true ||
-            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true) {
-            viewModel.refreshLocalStorage()
-        }
+        // The audio permission is READ_MEDIA_AUDIO on Android 13+ and the legacy
+        // READ_EXTERNAL_STORAGE below it. Either grant refreshes the local library.
+        val granted = permissions[Manifest.permission.READ_MEDIA_AUDIO] == true ||
+            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true ||
+            ContextCompat.checkSelfPermission(
+                this,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    Manifest.permission.READ_MEDIA_AUDIO
+                } else {
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                }
+            ) == PackageManager.PERMISSION_GRANTED
+        if (granted) viewModel.refreshLocalStorage()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +117,9 @@ class MainActivity : ComponentActivity() {
      * through system settings so the 31 Dec 20:00 notification is exact.
      */
     private fun requestExactAlarmAccessIfNeeded() {
+        // SCHEDULE_EXACT_ALARM only exists from Android 12 (API 31); asking for it
+        // on Android 10/11 would throw and there is nothing to grant there.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         val alarmManager = getSystemService(AlarmManager::class.java) ?: return
         if (alarmManager.canScheduleExactAlarms()) return
 
@@ -127,11 +139,19 @@ class MainActivity : ComponentActivity() {
 
     private fun requestRequiredPermissions() {
         val permissions = mutableListOf<String>()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+        val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+
+        if (ContextCompat.checkSelfPermission(this, audioPermission) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(audioPermission)
+        }
+        // Notification permission only became a runtime grant in Android 13.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 

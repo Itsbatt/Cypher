@@ -114,18 +114,17 @@ object WrappedCardRenderer {
         }
 
         y += h * (if (compact) 0.05f else 0.045f)
-        val genre = stats.topGenres.firstOrNull()?.name
-        canvas.drawText("GÉNERO", margin, y, labelPaint)
-        y += h * 0.033f
-        canvas.drawText(genre ?: "Sin datos de género", margin, y, bodyPaint)
-
+        val repeated = stats.mostRepeatedTrack
+        canvas.drawText("CANCIÓN MÁS REPETIDA", margin, y, labelPaint)
         y += h * 0.036f
-        canvas.drawText("ÁLBUM", margin, y, labelPaint)
-        y += h * 0.033f
         canvas.drawText(
-            ellipsize(stats.topAlbum?.name ?: "Sin álbum identificado", bodyPaint, w - margin * 2f),
+            ellipsize(repeated?.title ?: "Sin datos todavía", bodyPaint, w - margin * 2f),
             margin, y, bodyPaint
         )
+        if (repeated != null) {
+            y += h * 0.033f
+            canvas.drawText("${repeated.playCount} reproducciones", margin, y, detailPaint)
+        }
 
         val footerY = h * 0.94f
         canvas.drawText("cypher", margin, footerY, footPaint)

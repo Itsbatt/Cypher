@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -75,6 +77,7 @@ import com.cypher.music.ui.theme.CypherLavenderDark
 import com.cypher.music.ui.theme.PaletteExtractor
 import com.cypher.music.ui.theme.ThemeResolver
 import com.cypher.music.ui.utils.AppHaptics
+import com.cypher.music.ui.utils.cypherContentMaxWidth
 import com.cypher.music.update.UpdateViewModel
 import com.cypher.music.ui.wrapped.WrappedScreen
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
@@ -352,8 +355,22 @@ fun MainScreen(
                 .alpha(0.005f)
         )
 
-        // Tab Content: 3 Primary Sections (Inicio, Biblioteca, Buscar)
-        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        // Tab Content: 3 Primary Sections (Inicio, Biblioteca, Buscar).
+        // On tablets the column is centred and capped so it never stretches the
+        // phone layout across the full panel width.
+        val contentMaxWidth = cypherContentMaxWidth()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = contentMaxWidth)
+                    .fillMaxHeight()
+            ) {
             when (currentTab) {
                 CypherTab.LISTEN_NOW -> {
                     ListenNowScreen(
@@ -466,6 +483,7 @@ fun MainScreen(
                     )
                 }
             }
+            }
         }
 
         // Bottom Controls: Floating MiniPlayer + Solid Capsule Dock
@@ -473,6 +491,7 @@ fun MainScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .widthIn(max = contentMaxWidth)
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {

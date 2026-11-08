@@ -7,6 +7,10 @@
 
     <!-- Permissions for Local Audio Files -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Android 9 and older expose the audio library through the legacy storage permission. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!-- Audio Recording Permission for in-app Voice Search -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

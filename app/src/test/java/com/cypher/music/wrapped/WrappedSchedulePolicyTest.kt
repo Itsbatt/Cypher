@@ -20,10 +20,10 @@ class WrappedSchedulePolicyTest {
 
     @Test
     fun `window follows an injected clock`() {
-        assertNull(WrappedAvailability.activeYear(clockAt("2026-11-30T23:59:00")))
-        assertEquals(2026, WrappedAvailability.activeYear(clockAt("2026-12-01T00:00:00")))
-        assertEquals(2026, WrappedAvailability.activeYear(clockAt("2027-01-07T23:59:00")))
-        assertNull(WrappedAvailability.activeYear(clockAt("2027-01-08T00:00:00")))
+        assertNull(WrappedAvailability.activeYear(clockAt("2026-12-14T23:59:00")))
+        assertEquals(2026, WrappedAvailability.activeYear(clockAt("2026-12-15T00:00:00")))
+        assertEquals(2026, WrappedAvailability.activeYear(clockAt("2027-01-10T23:59:00")))
+        assertNull(WrappedAvailability.activeYear(clockAt("2027-01-11T00:00:00")))
     }
 
     @Test

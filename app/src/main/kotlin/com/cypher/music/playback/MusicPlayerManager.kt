@@ -82,6 +82,13 @@ class MusicPlayerManager(private val context: Context) {
         var activeMediaLibrarySession: MediaLibrarySession? = null
         var activeInstance: MusicPlayerManager? = null
 
+        // How long a track may stay in "loading" before it is retried, and how
+        // many consecutive failures are tolerated before playback stops.
+        private const val STREAM_START_DEADLINE_MS = 15000L
+        private const val LOCAL_START_DEADLINE_MS = 15000L
+        private const val STALL_TICKS_BEFORE_RECOVERY = 20
+        private const val MAX_CONSECUTIVE_FAILURES = 3
+
         fun getInstance(context: Context): MusicPlayerManager {
             return activeInstance ?: synchronized(this) {
                 activeInstance ?: MusicPlayerManager(context.applicationContext).also {
@@ -97,6 +104,18 @@ class MusicPlayerManager(private val context: Context) {
     private var listeningTrackerJob: Job? = null
     private var sleepTimerJob: Job? = null
     private var fadeInJob: Job? = null
+
+    // Load supervision: the token invalidates late timeouts from a previous track,
+    // and the counters let a broken stream be retried once instead of freezing.
+    @Volatile
+    private var loadAttemptToken = 0
+    private var consecutiveFailures = 0
+    private var localRetryTrackId: String? = null
+
+    // Stall recovery for the WebView engine: a frozen clock is re-seeked once.
+    private var lastStallPositionMs = -1L
+    private var stalledTicks = 0
+    private var stallReloadTrackId: String? = null
 
     // Native DSP Loudness Enhancer (ReplayGain / Loudness Normalization)
     private val audioPrefs = context.getSharedPreferences("cypher_audio_prefs", Context.MODE_PRIVATE)
@@ -909,6 +928,19 @@ class MusicPlayerManager(private val context: Context) {
                         Log.w("MusicPlayerManager", "Direct stream unavailable. Switching to official IFrame player engine.")
                         youTubePlayer?.loadVideo(videoId, (_playbackPositionMs.value / 1000f))
                     }
+                } else if (track != null) {
+                    // Local / offline failures get one prepare() retry before the queue
+                    // moves on, so a transient decoder or file lock error self-heals.
+                    if (localRetryTrackId != track.id) {
+                        localRetryTrackId = track.id
+                        Log.w("MusicPlayerManager", "Retrying local playback once for '${track.title}'")
+                        _state.update { it.copy(isBuffering = true) }
+                        exoPlayer.prepare()
+                        exoPlayer.play()
+                    } else {
+                        localRetryTrackId = null
+                        onTrackLoadFailed(track, "ExoPlayer ${error.errorCodeName}")
+                    }
                 } else {
                     _state.update { it.copy(isBuffering = false, isPlaying = false) }
                 }
@@ -985,6 +1017,8 @@ class MusicPlayerManager(private val context: Context) {
                         when (state) {
                             PlayerConstants.PlayerState.PLAYING -> {
                                 bufferingWatchdogJob?.cancel()
+                                consecutiveFailures = 0
+                                localRetryTrackId = null
                                 _state.update { it.copy(isPlaying = true, isBuffering = false) }
                                 if (!exoPlayer.isPlaying) exoPlayer.play()
                                 PlaybackService.updateService(context)
@@ -1031,15 +1065,15 @@ class MusicPlayerManager(private val context: Context) {
 
                 override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
                     Log.e("AppleMusicPlayer", "YouTubePlayer onError: $error")
-                    bufferingWatchdogJob?.cancel()
-                    _state.update { it.copy(isBuffering = false, isPlaying = false) }
-
-                    if (error == PlayerConstants.PlayerError.VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER ||
-                        error == PlayerConstants.PlayerError.VIDEO_NOT_FOUND) {
-                        scope.launch {
-                            delay(1000)
-                            playNext()
-                        }
+                    // Every IFrame error goes through the same path: the track is
+                    // marked stopped and the queue advances, instead of only two
+                    // specific error codes being handled and the rest hanging.
+                    val failed = _state.value.currentTrack
+                    if (failed != null) {
+                        onTrackLoadFailed(failed, "IFrame error: $error")
+                    } else {
+                        bufferingWatchdogJob?.cancel()
+                        _state.update { it.copy(isBuffering = false, isPlaying = false) }
                     }
                 }
 
@@ -1092,6 +1126,25 @@ class MusicPlayerManager(private val context: Context) {
                             onListeningTimeAccumulated?.invoke(track, elapsed, countPlay)
                         }
                     }
+
+                    // YouTube audio lives in the WebView: if its clock stops moving
+                    // while we believe it is playing, recover or skip the track.
+                    if (track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline && !curState.isBuffering) {
+                        val position = curState.currentPositionMs
+                        if (position == lastStallPositionMs) {
+                            stalledTicks++
+                            if (stalledTicks >= STALL_TICKS_BEFORE_RECOVERY) {
+                                stalledTicks = 0
+                                recoverFromStall(track, position)
+                            }
+                        } else {
+                            lastStallPositionMs = position
+                            stalledTicks = 0
+                        }
+                    } else {
+                        lastStallPositionMs = -1L
+                        stalledTicks = 0
+                    }
                 }
                 lastTick = now
             }
@@ -1128,12 +1181,80 @@ class MusicPlayerManager(private val context: Context) {
                             streamUrlPrecacheMap[videoId] = CachedStreamUrl(url, System.currentTimeMillis())
                             Log.i("AppleMusicPlayer", "Gapless Pre-cache: Stream ready for $videoId (tier=${com.cypher.music.network.StreamingTelemetry.lastTierFor(videoId)})")
                         }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        // A newer track replaced this pre-cache: not a failure.
+                        throw e
                     } catch (e: Exception) {
                         Log.w("AppleMusicPlayer", "Gapless Pre-cache failed for $videoId", e)
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Waits for an actual playback start. Returns true when the track is really
+     * playing, the user paused, or a newer load replaced this one.
+     */
+    private suspend fun awaitTrackStart(token: Int, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (token != loadAttemptToken) return true
+            val snapshot = _state.value
+            if (snapshot.isPlaying && !snapshot.isBuffering) return true
+            if (userPausedDuringLoad) return true
+            delay(200)
+        }
+        return false
+    }
+
+    /**
+     * Single failure path for every engine: mark the track stopped (never playing),
+     * record it once, and move the queue forward so one bad stream cannot freeze
+     * playback. Three failures in a row stop the queue instead of looping forever.
+     */
+    private fun onTrackLoadFailed(track: Track, reason: String) {
+        Log.e("AppleMusicPlayer", "Playback failed for '${track.title}': $reason")
+        com.cypher.music.network.StreamingTelemetry.recordError(-1, reason, "PlaybackLoad")
+        bufferingWatchdogJob?.cancel()
+        _state.update { it.copy(isBuffering = false, isPlaying = false) }
+        PlaybackService.updateService(context)
+
+        consecutiveFailures++
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            Log.e("AppleMusicPlayer", "Stopping after $consecutiveFailures consecutive failures")
+            consecutiveFailures = 0
+            return
+        }
+
+        val queue = _state.value
+        val hasNext = queue.repeatMode != RepeatMode.OFF || queue.queueIndex + 1 < queue.queue.size
+        if (!hasNext) return
+        scope.launch {
+            delay(600)
+            val now = _state.value
+            if (now.currentTrack?.id == track.id && !now.isPlaying) playNext()
+        }
+    }
+
+    /**
+     * The WebView clock freezing while the UI believes it is playing is the
+     * "plays a part and stops" case. Re-seek once, then hand over to the failure
+     * path so the queue keeps moving.
+     */
+    private fun recoverFromStall(track: Track, positionMs: Long) {
+        if (stallReloadTrackId == track.id) {
+            stallReloadTrackId = null
+            onTrackLoadFailed(track, "playback clock stalled at ${positionMs}ms")
+            return
+        }
+        stallReloadTrackId = track.id
+        val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+        Log.w("AppleMusicPlayer", "Playback clock stalled at ${positionMs}ms; reloading $videoId")
+        requestedYouTubeVideoId = videoId
+        loadedYouTubeVideoId = null
+        _state.update { it.copy(isBuffering = true) }
+        youTubePlayer?.loadVideo(videoId, (positionMs / 1000f).coerceAtLeast(0f))
     }
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
@@ -1161,27 +1282,38 @@ class MusicPlayerManager(private val context: Context) {
         // Trigger pre-caching for subsequent queue tracks
         precacheNextTrack()
 
-        // Watchdog to guarantee UI never gets stuck in buffering or intermediate cued state
+        stallReloadTrackId = null
+        lastStallPositionMs = -1L
+        stalledTicks = 0
+
+        // Load supervisor. The old watchdog forced "isPlaying" after four seconds,
+        // which is how the UI ended up showing playback that had never started: the
+        // IFrame stayed cued, no ENDED event arrived, and the queue froze. Now the
+        // buffering state only ends on a real PLAYING/READY event; if the start
+        // never happens the track is reloaded once and then skipped honestly.
+        val loadToken = ++loadAttemptToken
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = scope.launch {
-            delay(4000)
-            if (!ResumePolicy.shouldForcePlay(userPausedDuringLoad, _state.value.isBuffering, _state.value.isPlaying)) {
-                Log.d("AppleMusicPlayer", "Buffering watchdog: user paused during load, not forcing play")
-                return@launch
+            val streaming = track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline
+            val deadline = if (streaming) STREAM_START_DEADLINE_MS else LOCAL_START_DEADLINE_MS
+            var started = awaitTrackStart(loadToken, deadline)
+            if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken) {
+                Log.w("AppleMusicPlayer", "Playback did not start in ${deadline}ms; retrying '${track.title}' once")
+                if (streaming) {
+                    val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+                    requestedYouTubeVideoId = videoId
+                    loadedYouTubeVideoId = null
+                    youTubePlayer?.loadVideo(videoId, 0f)
+                } else {
+                    _state.update { it.copy(isBuffering = true) }
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                }
+                started = awaitTrackStart(loadToken, deadline)
             }
-            Log.w("AppleMusicPlayer", "Buffering watchdog: forcing play on transition")
-            if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
-                youTubePlayer?.play()
-                if (!exoPlayer.isPlaying) exoPlayer.play()
+            if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken) {
+                onTrackLoadFailed(track, "playback did not start in ${deadline * 2}ms")
             }
-            delay(2000)
-            if (!ResumePolicy.shouldForcePlay(userPausedDuringLoad, _state.value.isBuffering, _state.value.isPlaying)) {
-                Log.d("AppleMusicPlayer", "Buffering watchdog: user paused, leaving state untouched")
-                return@launch
-            }
-            Log.w("AppleMusicPlayer", "Buffering watchdog: finalizing state")
-            _state.update { it.copy(isPlaying = true, isBuffering = false) }
-            PlaybackService.updateService(context)
         }
 
         // Start background PlaybackService
@@ -1360,7 +1492,17 @@ class MusicPlayerManager(private val context: Context) {
             _state.value.queueIndex + 1
         } else if (_state.value.repeatMode == RepeatMode.ALL) {
             0
-        } else return
+        } else {
+            // End of the queue: stop honestly. Returning here used to leave the UI
+            // showing "playing" forever after the last track finished.
+            bufferingWatchdogJob?.cancel()
+            youTubePlayer?.pause()
+            if (exoPlayer.isPlaying) exoPlayer.pause()
+            _playbackProgress.value = 1f
+            _state.update { it.copy(isPlaying = false, isBuffering = false) }
+            PlaybackService.updateService(context)
+            return
+        }
         playTrack(q[nextIdx], q)
     }
 

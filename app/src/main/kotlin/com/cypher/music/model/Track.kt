@@ -1,5 +1,7 @@
 package com.cypher.music.model
 
+import com.cypher.music.network.YouTubeArtwork
+
 enum class AudioSourceType {
     LOCAL,
     YOUTUBE
@@ -28,19 +30,7 @@ data class Track(
      * id, so Now Playing never renders an empty square.
      */
     val displayArtworkUrl: String?
-        get() {
-            artworkUrl?.takeIf { it.isNotBlank() }?.let { return it }
-            if (sourceType != AudioSourceType.YOUTUBE) return null
-            val source = streamUrl.ifBlank { id }.removePrefix("yt_")
-            val videoId = source
-                .substringAfterLast("v=")
-                .substringAfterLast("/")
-                .substringBefore("?")
-                .substringBefore("&")
-                .trim()
-            if (videoId.length < 6) return null
-            return "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg"
-        }
+        get() = YouTubeArtwork.bestArtwork(artworkUrl, sourceType, id, streamUrl)
 
     val formattedDuration: String
         get() {

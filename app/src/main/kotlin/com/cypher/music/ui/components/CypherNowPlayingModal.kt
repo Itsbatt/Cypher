@@ -95,6 +95,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.cypher.music.data.LiquidGlassConfig
 import com.cypher.music.data.ThemePreferences
 import com.cypher.music.model.AudioSourceType
@@ -314,10 +315,10 @@ fun CypherNowPlayingModal(
                                         .graphicsLayer { translationX = artworkFollowOffset },
                                     label = "ArtworkSlide"
                                 ) { shownTrack ->
-                                    AsyncImage(
-                                        model = shownTrack.displayArtworkUrl,
-                                        contentDescription = shownTrack.title,
-                                        contentScale = ContentScale.Crop,
+                                    // The shadow belongs to the container, not to the image.
+                                    // Applying it to AsyncImage made the painter draw nothing,
+                                    // which is why the hero cover stayed as an empty square.
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .shadow(
@@ -329,7 +330,22 @@ fun CypherNowPlayingModal(
                                             .clip(RoundedCornerShape(24.dp))
                                             .background(IosDarkCard)
                                             .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                                    )
+                                    ) {
+                                        val cover = shownTrack.displayArtworkUrl
+                                        if (!cover.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(cover)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = shownTrack.title,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
+                                        }
+                                    }
                                 }
                             }
                         }

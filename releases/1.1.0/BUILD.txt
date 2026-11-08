@@ -1,5 +1,6 @@
 CYPHER 1.1.0 (versionName 1.1.0, versionCode 13, minSdk 29)
-Compilado (UTC): 2026-11-08T19:38:21Z
-arm64-v8a: 2c21a7b60b9f3e45c0a19b5d860430fcd50cc45002f75e5e145396d622c403f2 (60911007 bytes)
-universal: 1f4d69a537de9d0982753ac68ba7ec2dcd23366c689596ea0ec6596c42f32a7a (104410443 bytes)
+Compilado (UTC): 2026-11-08T19:58:37Z
+arm64-v8a: 06b5172efc01147b7f4e9444c86b3bc7fb91a88b90f56c86953014fdd46086af (60912087 bytes)
+universal: d6c7ee666f4c3aed5cda7b94f3fb92699bcc222cfe6404fd4c0c79ad9f5b2db4 (104411523 bytes)
+Portadas: se descarta el host de miniaturas que responde HTTP 500 y se usa el fotograma de YouTube (maxres, con respaldo hq).
 Estado: NO PUBLICADO. En pruebas privadas; sin tag, sin release y sin push.

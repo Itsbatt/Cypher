@@ -3,6 +3,7 @@ package com.cypher.music.network
 import coil.intercept.Interceptor
 import coil.request.ErrorResult
 import coil.request.ImageResult
+import com.cypher.music.model.AudioSourceType
 
 /**
  * YouTube publishes several sizes for the same frame. The app used to hardcode
@@ -23,6 +24,53 @@ object YouTubeArtwork {
 
     /** Preferred artwork URL for a video id. */
     fun url(videoId: String): String = "https://i.ytimg.com/vi/$videoId/$MAX_RES"
+
+    private val RAW_VIDEO_ID = Regex("^[A-Za-z0-9_-]{8,16}$")
+    private val QUERY_VIDEO_ID = Regex("""[?&]v=([A-Za-z0-9_-]{8,16})""")
+
+    /**
+     * Hosts that actually serve an image. InnerTube's own Piped proxy answers HTTP 500
+     * for every stored cover, which is why whole screens showed empty squares; those
+     * URLs are replaced by the YouTube frame instead of being requested.
+     */
+    fun servesArtwork(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        return url.contains("i.ytimg.com") ||
+            url.contains("img.youtube.com") ||
+            url.contains("googleusercontent.com") ||
+            url.contains("ggpht.com")
+    }
+
+    /** Video id from a bare InnerTube id (`Ett9Opd_M6k`), a `v=` link or a full URL. */
+    fun videoIdFrom(source: String?): String? {
+        if (source.isNullOrBlank()) return null
+        val cleaned = source.trim()
+            .removePrefix("yt_")
+            .removePrefix("track_")
+            .substringBefore("?")
+            .substringBefore("&")
+        if (RAW_VIDEO_ID.matches(cleaned)) return cleaned
+        QUERY_VIDEO_ID.find(source)?.groupValues?.getOrNull(1)?.let { return it }
+        return source.substringAfterLast("/").takeIf { RAW_VIDEO_ID.matches(it) }
+    }
+
+    /**
+     * Single decision point for every cover in the UI: a host that works is kept,
+     * otherwise the real YouTube frame is derived from the track id.
+     */
+    fun bestArtwork(
+        artworkUrl: String?,
+        sourceType: AudioSourceType,
+        id: String,
+        streamUrl: String
+    ): String? {
+        val raw = artworkUrl?.takeIf { it.isNotBlank() }
+        if (sourceType != AudioSourceType.YOUTUBE) return raw
+        if (servesArtwork(raw)) return raw
+        val videoId = videoIdFrom(streamUrl) ?: videoIdFrom(id)
+        if (videoId != null) return url(videoId)
+        return raw
+    }
 
     /**
      * Promotes a thumbnail to the sharpest frame the provider offers. YouTube's

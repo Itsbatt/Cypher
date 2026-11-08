@@ -2,6 +2,7 @@ package com.cypher.music.data
 
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
+import com.cypher.music.network.YouTubeArtwork
 
 data class Playlist(
     val id: String,
@@ -71,7 +72,15 @@ data class RecentlyPlayedItem(
     val sourceType: AudioSourceType = AudioSourceType.LOCAL,
     val extraId: String? = null,
     val timestamp: Long = System.currentTimeMillis()
-)
+) {
+    /**
+     * Cover actually rendered: the stored one when present, otherwise the real
+     * YouTube frame derived from the stored video id. Recents used to render an
+     * empty square whenever the provider omitted the thumbnail.
+     */
+    val displayArtworkUrl: String?
+        get() = YouTubeArtwork.bestArtwork(artworkUrl, sourceType, id, streamUrl)
+}
 
 data class BackupImportSummary(
     val playlistsCount: Int = 0,

@@ -7,6 +7,9 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.cypher.music.network.YouTubeArtworkFallbackInterceptor
+import com.cypher.music.network.YouTubeDns
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +66,15 @@ class CypherApplication : Application(), ImageLoaderFactory {
      */
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .crossfade(140)
+        // The same resilient DNS the streaming engine uses: some networks fail to
+        // resolve the Google image hosts, which left every cover as a placeholder.
+        .okHttpClient {
+            OkHttpClient.Builder()
+                .dns(YouTubeDns())
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .build()
+        }
         .memoryCache {
             MemoryCache.Builder(this)
                 .maxSizePercent(0.20)

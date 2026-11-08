@@ -58,7 +58,7 @@ data class SharedPlaylistPayload(
             val vid = st.videoId?.trim()?.removePrefix("yt_")
             val isLocal = st.source.equals("LOCAL", ignoreCase = true)
             val trackId = if (!vid.isNullOrEmpty()) "yt_$vid" else UUID.randomUUID().toString()
-            val artwork = if (!vid.isNullOrEmpty()) "https://i.ytimg.com/vi/$vid/hqdefault.jpg" else null
+            val artwork = if (!vid.isNullOrEmpty()) com.cypher.music.network.YouTubeArtwork.url(vid) else null
             val stream = if (!vid.isNullOrEmpty()) "https://www.youtube.com/watch?v=$vid" else ""
 
             Track(

@@ -58,7 +58,7 @@ import com.cypher.music.ui.theme.AmbientArtworkColors
 import com.cypher.music.ui.theme.CypherLavender
 import com.cypher.music.ui.utils.AppHaptics
 
-private const val SLIDE_COUNT = 4
+private const val SLIDE_COUNT = 6
 private const val SLIDE_DURATION_MS = 7000
 
 /**
@@ -217,6 +217,8 @@ fun WrappedScreen(
                     0 -> WrappedMinutesSlide(stats = stats, year = year)
                     1 -> WrappedTopTracksSlide(stats = stats)
                     2 -> WrappedArtistsSlide(stats = stats)
+                    3 -> WrappedAlbumsSlide(stats = stats)
+                    4 -> WrappedGenresSlide(stats = stats)
                     else -> WrappedSummarySlide(stats = stats, onClose = onClose)
                 }
             }

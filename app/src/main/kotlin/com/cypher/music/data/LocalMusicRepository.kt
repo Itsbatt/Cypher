@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
 import kotlinx.coroutines.Dispatchers
@@ -21,8 +22,14 @@ import java.util.Locale
 class LocalMusicRepository(private val context: Context) {
 
     companion object {
+        private const val TAG = "LocalMusicRepository"
+
         // Minimum track length: 15 seconds to eliminate notification sounds & short voice clips
         private const val MIN_TRACK_DURATION_MS = 15000L
+
+        // Genre enumeration is one provider query per genre; cap it so a device with a
+        // pathological genre list cannot stall the library scan.
+        private const val MAX_GENRE_QUERIES = 80
 
         // Blacklisted directory segments (case-insensitive)
         private val EXCLUDED_PATH_TOKENS = listOf(
@@ -66,6 +73,7 @@ class LocalMusicRepository(private val context: Context) {
 
     suspend fun getLocalTracks(): List<Track> = withContext(Dispatchers.IO) {
         val trackList = mutableListOf<Track>()
+        val genreByAudioId = loadGenresByAudioId()
 
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
@@ -137,7 +145,8 @@ class LocalMusicRepository(private val context: Context) {
                             artworkUrl = artworkUri,
                             streamUrl = contentUri.toString(),
                             sourceType = AudioSourceType.LOCAL,
-                            path = filePath
+                            path = filePath,
+                            genre = genreByAudioId[id]
                         )
                     )
                 }
@@ -147,6 +156,55 @@ class LocalMusicRepository(private val context: Context) {
         }
 
         trackList
+    }
+
+    /**
+     * MediaStore exposes genres as a separate table with a member row per audio id.
+     * Reading it once per library scan gives Wrapped real genre names instead of
+     * guessing them. Any failure degrades to "no genre", never to a crash.
+     */
+    private fun loadGenresByAudioId(): Map<Long, String> {
+        val genres = HashMap<Long, String>()
+        val resolver = context.contentResolver
+        try {
+            resolver.query(
+                MediaStore.Audio.Genres.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Genres._ID, MediaStore.Audio.Genres.NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Genres._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Genres.NAME)
+                var scanned = 0
+                while (cursor.moveToNext() && scanned < MAX_GENRE_QUERIES) {
+                    val genreId = cursor.getLong(idColumn)
+                    val name = cursor.getString(nameColumn)?.trim().orEmpty()
+                    if (genreId <= 0L || name.isBlank() || name.equals("<unknown>", ignoreCase = true)) {
+                        continue
+                    }
+                    scanned++
+                    // Documented MediaStore shape; avoids the ambiguous overloaded helper.
+                    val membersUri = Uri.parse("content://media/external/audio/genres/$genreId/members")
+                    resolver.query(
+                        membersUri,
+                        arrayOf(MediaStore.Audio.Genres.Members.AUDIO_ID),
+                        null,
+                        null,
+                        null
+                    )?.use { members ->
+                        val audioColumn = members.getColumnIndexOrThrow(MediaStore.Audio.Genres.Members.AUDIO_ID)
+                        while (members.moveToNext()) {
+                            val audioId = members.getLong(audioColumn)
+                            if (!genres.containsKey(audioId)) genres[audioId] = name
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Genre metadata unavailable; Wrapped will omit genres", e)
+        }
+        return genres
     }
 
     /**

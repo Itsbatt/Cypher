@@ -538,6 +538,8 @@ fun MainScreen(
                     navigateToAlbum(album)
                 },
                 onAddToPlaylist = { viewModel.openAddToPlaylistSheet(it) },
+                onPlayNext = { viewModel.enqueueNext(it) },
+                onAddToQueue = { viewModel.addToQueue(it) },
                 onOpenSleepTimer = { viewModel.setSleepTimerSheetOpen(true) },
                 onOpenEqualizer = { viewModel.setEqualizerSheetOpen(true) },
                 onDownload = { track ->

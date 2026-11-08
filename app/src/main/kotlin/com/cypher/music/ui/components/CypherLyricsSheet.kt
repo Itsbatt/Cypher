@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -20,19 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +67,8 @@ import com.cypher.music.data.LyricsSettingsManager
 import com.cypher.music.model.Track
 import com.cypher.music.network.LrcLibService
 import com.cypher.music.network.TrackLyrics
+import com.cypher.music.ui.share.LyricsShareSheet
+import com.cypher.music.ui.share.MAX_SHARE_LINES
 import com.cypher.music.ui.theme.AmbientArtworkColors
 import com.cypher.music.ui.theme.IosDarkTextSecondary
 
@@ -95,6 +101,30 @@ fun CypherLyricsSheet(
     val lines = lyricsState?.lines ?: emptyList()
     val isSynced = lyricsState?.isSynced == true && lines.isNotEmpty()
 
+    val plainLines = remember(lyricsState?.plainLyrics) {
+        lyricsState?.plainLyrics
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+    }
+
+    // Fragment sharing: the user picks whole lines, up to a short fragment.
+    var selectionMode by remember(track.id) { mutableStateOf(false) }
+    var selectedIndices by remember(track.id) { mutableStateOf<Set<Int>>(emptySet()) }
+    var shareLines by remember(track.id) { mutableStateOf<List<String>?>(null) }
+    val hasLyrics = lines.isNotEmpty() || plainLines.isNotEmpty()
+
+    fun toggleSelection(index: Int) {
+        selectedIndices = if (selectedIndices.contains(index)) {
+            selectedIndices - index
+        } else if (selectedIndices.size >= MAX_SHARE_LINES) {
+            selectedIndices
+        } else {
+            selectedIndices + index
+        }
+    }
+
     val activeIndex = remember(currentPositionMs, lines, isSynced) {
         if (!isSynced) 0
         else {
@@ -105,8 +135,8 @@ fun CypherLyricsSheet(
 
     val listState = rememberLazyListState()
 
-    LaunchedEffect(activeIndex, isSynced) {
-        if (isSynced && activeIndex in lines.indices && !listState.isScrollInProgress) {
+    LaunchedEffect(activeIndex, isSynced, selectionMode) {
+        if (isSynced && activeIndex in lines.indices && !listState.isScrollInProgress && !selectionMode) {
             listState.animateScrollToItem(
                 (activeIndex - 1).coerceAtLeast(0)
             )
@@ -152,8 +182,12 @@ fun CypherLyricsSheet(
                         )
                     }
                     Text(
-                        text = if (isSynced) "LETRAS EN VIVO" else "LETRAS",
-                        color = Color.White.copy(alpha = 0.90f),
+                        text = when {
+                            selectionMode -> "SELECCIONA LAS LÍNEAS"
+                            isSynced -> "LETRAS EN VIVO"
+                            else -> "LETRAS"
+                        },
+                        color = if (selectionMode) accentColor else Color.White.copy(alpha = 0.90f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp,
@@ -161,175 +195,343 @@ fun CypherLyricsSheet(
                     )
                 }
 
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.15f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Cerrar letras",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (hasLyrics) {
+                        IconButton(
+                            onClick = {
+                                if (!selectionMode) selectedIndices = emptySet()
+                                selectionMode = !selectionMode
+                            },
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.15f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = if (selectionMode) "Cancelar selección" else "Compartir letra",
+                                tint = if (selectionMode) accentColor else Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.size(8.dp))
+                    }
 
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(
-                            color = accentColor,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Buscando letras...",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 13.sp
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Cerrar letras",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
-            } else if (isSynced) {
-                // Synced lyrics view with smooth scrolling, edge fade, and tap-to-seek
-                val textAlign = lyricsSettings.alignment.textAlign
-                val activeFontSize = lyricsSettings.fontSize.activeSp
-                val inactiveFontSize = lyricsSettings.fontSize.inactiveSp
+            }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    0.0f to Color.Transparent,
-                                    0.08f to Color.Black,
-                                    0.90f to Color.Black,
-                                    1.0f to Color.Transparent
-                                ),
-                                blendMode = BlendMode.DstIn
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                if (isLoading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                color = accentColor,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Buscando letras...",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp
                             )
                         }
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        itemsIndexed(lines) { index, line ->
-                            val isActive = index == activeIndex
-                            val lineAlpha by animateFloatAsState(
-                                targetValue = if (isActive) 1.0f else 0.40f,
-                                animationSpec = tween(300),
-                                label = "lineAlpha"
-                            )
-                            val lineScale by animateFloatAsState(
-                                targetValue = if (isActive) 1.03f else 0.98f,
-                                animationSpec = tween(300),
-                                label = "lineScale"
-                            )
+                    }
+                } else if (isSynced) {
+                    // Synced lyrics view with smooth scrolling, edge fade, and tap-to-seek
+                    val textAlign = lyricsSettings.alignment.textAlign
+                    val activeFontSize = lyricsSettings.fontSize.activeSp
+                    val inactiveFontSize = lyricsSettings.fontSize.inactiveSp
 
-                            Text(
-                                text = line.text.ifEmpty { "♪" },
-                                color = if (isActive) Color.White else Color.White.copy(alpha = 0.45f),
-                                fontSize = if (isActive) activeFontSize else inactiveFontSize,
-                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                                lineHeight = if (isActive) 34.sp else 28.sp,
-                                textAlign = textAlign,
-                                style = TextStyle(
-                                    shadow = if (isActive) Shadow(
-                                        color = Color.Black.copy(alpha = 0.6f),
-                                        blurRadius = 8f
-                                    ) else null
-                                ),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.08f to Color.Black,
+                                        0.90f to Color.Black,
+                                        1.0f to Color.Transparent
+                                    ),
+                                    blendMode = BlendMode.DstIn
+                                )
+                            }
+                    ) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            itemsIndexed(lines) { index, line ->
+                                val isActive = index == activeIndex
+                                val isSelected = selectedIndices.contains(index)
+                                val lineAlpha by animateFloatAsState(
+                                    targetValue = if (isActive || isSelected) 1.0f else 0.40f,
+                                    animationSpec = tween(300),
+                                    label = "lineAlpha"
+                                )
+                                val lineScale by animateFloatAsState(
+                                    targetValue = if (isActive) 1.03f else 0.98f,
+                                    animationSpec = tween(300),
+                                    label = "lineScale"
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) accentColor.copy(alpha = 0.14f)
+                                            else Color.Transparent
+                                        )
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            if (selectionMode) {
+                                                toggleSelection(index)
+                                            } else if (durationMs > 0) {
+                                                val targetProgress = (line.timeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                                                onSeekTo(targetProgress)
+                                            }
+                                        }
+                                        .padding(vertical = 6.dp, horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (selectionMode) {
+                                        SelectionDot(selected = isSelected, accentColor = accentColor)
+                                        Spacer(modifier = Modifier.size(10.dp))
+                                    }
+                                    Text(
+                                        text = line.text.ifEmpty { "♪" },
+                                        color = if (isActive || isSelected) Color.White else Color.White.copy(alpha = 0.45f),
+                                        fontSize = if (isActive) activeFontSize else inactiveFontSize,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                        lineHeight = if (isActive) 34.sp else 28.sp,
+                                        textAlign = textAlign,
+                                        style = TextStyle(
+                                            shadow = if (isActive) Shadow(
+                                                color = Color.Black.copy(alpha = 0.6f),
+                                                blurRadius = 8f
+                                            ) else null
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .scale(lineScale)
+                                            .alpha(lineAlpha)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (plainLines.isNotEmpty()) {
+                    // Plain lyrics: one row per line so a fragment can be selected.
+                    val textAlign = lyricsSettings.alignment.textAlign
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
+                    ) {
+                        itemsIndexed(plainLines) { index, line ->
+                            val isSelected = selectedIndices.contains(index)
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .scale(lineScale)
-                                    .alpha(lineAlpha)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) accentColor.copy(alpha = 0.14f)
+                                        else Color.Transparent
+                                    )
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
-                                        if (durationMs > 0) {
-                                            val targetProgress = (line.timeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                                            onSeekTo(targetProgress)
-                                        }
+                                        if (selectionMode) toggleSelection(index)
                                     }
-                                    .padding(vertical = 4.dp, horizontal = 4.dp)
-                            )
+                                    .padding(vertical = 5.dp, horizontal = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (selectionMode) {
+                                    SelectionDot(selected = isSelected, accentColor = accentColor)
+                                    Spacer(modifier = Modifier.size(10.dp))
+                                }
+                                Text(
+                                    text = line,
+                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
+                                    fontSize = lyricsSettings.fontSize.inactiveSp,
+                                    fontWeight = FontWeight.Normal,
+                                    lineHeight = 30.sp,
+                                    textAlign = textAlign,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
-                }
-            } else if (!lyricsState?.plainLyrics.isNullOrBlank()) {
-                // Plain unsynced lyrics view
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = 12.dp, bottom = 24.dp)
-                ) {
-                    Text(
-                        text = lyricsState?.plainLyrics ?: "",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = lyricsSettings.fontSize.inactiveSp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 30.sp,
-                        textAlign = lyricsSettings.alignment.textAlign,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            } else {
-                // No lyrics available fallback
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(bottom = 20.dp)
+                } else {
+                    // No lyrics available fallback
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f)),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(bottom = 20.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.MusicNote,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.4f),
-                                modifier = Modifier.size(28.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.08f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MusicNote,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Letras no disponibles",
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "No se encontraron letras sincronizadas para esta pista.",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = "Letras no disponibles",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "No se encontraron letras sincronizadas para esta pista.",
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 24.dp)
-                        )
                     }
                 }
             }
+
+            AnimatedVisibility(visible = selectionMode && !isLoading) {
+                SelectionBar(
+                    count = selectedIndices.size,
+                    accentColor = accentColor,
+                    onClear = { selectedIndices = emptySet() },
+                    onCreate = {
+                        val chosen = if (isSynced) {
+                            selectedIndices.sorted().mapNotNull { lines.getOrNull(it)?.text?.trim() }
+                        } else {
+                            selectedIndices.sorted().mapNotNull { plainLines.getOrNull(it)?.trim() }
+                        }.filter { it.isNotEmpty() }
+                        if (chosen.isNotEmpty()) shareLines = chosen
+                    }
+                )
+            }
+        }
+
+        shareLines?.let { fragment ->
+            LyricsShareSheet(
+                track = track,
+                lines = fragment,
+                accentColor = accentColor,
+                onDismiss = { shareLines = null }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectionDot(selected: Boolean, accentColor: Color) {
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .clip(CircleShape)
+            .background(if (selected) accentColor else Color.White.copy(alpha = 0.10f))
+            .border(
+                width = 1.dp,
+                color = if (selected) accentColor else Color.White.copy(alpha = 0.28f),
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = Color(0xFF160F1D),
+                modifier = Modifier.size(12.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectionBar(
+    count: Int,
+    accentColor: Color,
+    onClear: () -> Unit,
+    onCreate: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$count/$MAX_SHARE_LINES líneas",
+            color = IosDarkTextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = onClear, enabled = count > 0) {
+            Text(
+                text = "Limpiar",
+                color = Color.White.copy(alpha = 0.70f),
+                fontSize = 13.sp
+            )
+        }
+        Button(
+            onClick = onCreate,
+            enabled = count > 0,
+            shape = RoundedCornerShape(20.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = accentColor,
+                contentColor = Color(0xFF160F1D),
+                disabledContainerColor = accentColor.copy(alpha = 0.30f),
+                disabledContentColor = Color(0xFF160F1D).copy(alpha = 0.55f)
+            )
+        ) {
+            Text(
+                text = "Crear tarjeta",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

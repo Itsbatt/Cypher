@@ -17,7 +17,10 @@ data class Track(
     val path: String? = null,
     val isLiked: Boolean = false,
     val isAvailable: Boolean = true,
-    val isDownloaded: Boolean = false
+    val isDownloaded: Boolean = false,
+    // Real genre reported by the media store. Null when the platform has no tag,
+    // so Wrapped can state honestly that there is no genre data.
+    val genre: String? = null
 ) {
     val formattedDuration: String
         get() {

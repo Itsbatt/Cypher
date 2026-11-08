@@ -140,7 +140,7 @@ class YouTubeRepository {
                                 val thumbUrl = if (thumbs != null && thumbs.length() > 0) {
                                     thumbs.getJSONObject(thumbs.length() - 1).optString("url")
                                 } else {
-                                    "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                                    YouTubeArtwork.url(videoId)
                                 }
 
                                 val durationText = video.optJSONObject("lengthText")?.optString("simpleText") ?: "3:30"
@@ -197,7 +197,8 @@ class YouTubeRepository {
                                 artist = ArtistNormalizer.normalize(item.optString("uploaderName", "Artista")),
                                 album = "YouTube Music",
                                 durationMs = item.optLong("duration", 210L) * 1000L,
-                                artworkUrl = item.optString("thumbnail", "https://i.ytimg.com/vi/$vid/hqdefault.jpg"),
+                                artworkUrl = YouTubeArtwork.upgrade(item.optString("thumbnail")).takeUnless { it.isNullOrBlank() }
+                                    ?: YouTubeArtwork.url(vid),
                                 streamUrl = vid,
                                 sourceType = AudioSourceType.YOUTUBE
                             )
@@ -372,7 +373,7 @@ class YouTubeRepository {
                 artist = "Bad Bunny",
                 album = "Un Verano Sin Ti",
                 durationMs = 243000L,
-                artworkUrl = "https://i.ytimg.com/vi/juRFjpB5Ppg/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("juRFjpB5Ppg"),
                 streamUrl = "juRFjpB5Ppg",
                 sourceType = AudioSourceType.YOUTUBE
             ),
@@ -382,7 +383,7 @@ class YouTubeRepository {
                 artist = "Quevedo",
                 album = "Buenas Noches",
                 durationMs = 186000L,
-                artworkUrl = "https://i.ytimg.com/vi/QlZNGcVfeF0/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("QlZNGcVfeF0"),
                 streamUrl = "QlZNGcVfeF0",
                 sourceType = AudioSourceType.YOUTUBE
             ),
@@ -392,7 +393,7 @@ class YouTubeRepository {
                 artist = "The Weeknd ft. Daft Punk",
                 album = "Starboy",
                 durationMs = 230000L,
-                artworkUrl = "https://i.ytimg.com/vi/d_HlPboLRL8/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("d_HlPboLRL8"),
                 streamUrl = "d_HlPboLRL8",
                 sourceType = AudioSourceType.YOUTUBE
             ),
@@ -402,7 +403,7 @@ class YouTubeRepository {
                 artist = "The Weeknd",
                 album = "After Hours",
                 durationMs = 200000L,
-                artworkUrl = "https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("4NRXx6U8ABQ"),
                 streamUrl = "4NRXx6U8ABQ",
                 sourceType = AudioSourceType.YOUTUBE
             ),
@@ -412,7 +413,7 @@ class YouTubeRepository {
                 artist = "M83",
                 album = "Hurry Up, We're Dreaming",
                 durationMs = 244000L,
-                artworkUrl = "https://i.ytimg.com/vi/50VNCymT-Cs/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("50VNCymT-Cs"),
                 streamUrl = "50VNCymT-Cs",
                 sourceType = AudioSourceType.YOUTUBE
             ),
@@ -422,7 +423,7 @@ class YouTubeRepository {
                 artist = "Dua Lipa",
                 album = "Future Nostalgia",
                 durationMs = 203000L,
-                artworkUrl = "https://i.ytimg.com/vi/TUVcZfQe-Kw/hqdefault.jpg",
+                artworkUrl = YouTubeArtwork.url("TUVcZfQe-Kw"),
                 streamUrl = "TUVcZfQe-Kw",
                 sourceType = AudioSourceType.YOUTUBE
             )

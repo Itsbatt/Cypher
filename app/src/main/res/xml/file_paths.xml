@@ -2,4 +2,6 @@
 <paths>
     <!-- Downloaded update APKs handed to the system package installer. -->
     <cache-path name="updates" path="updates/" />
+    <!-- Exported lyric cards handed to Android's share sheet. -->
+    <cache-path name="shared" path="shared/" />
 </paths>

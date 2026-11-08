@@ -1,7 +1,8 @@
 # Cypher — Documentació Tècnica Integral i Historial Complet del Projecte
 
 > **Nom Oficial de l'Aplicació:** Cypher  
-> **Identificador del Paquet (Package Name):** `com.cypher.music`> **Versió:** 1.0.8 (Build 10) — Codi Obert (GPL-3.0)
+> **Identificador del Paquet (Package Name):** `com.cypher.music`  
+> **Versió:** 1.0.9 (Build 12) — Codi Obert (GPL-3.0)
 > **Ruta Local del Projecte:** `C:\Users\bat\.gemini\antigravity\scratch\meloflow`
 > **Target SDK:** Android 16 (API 36) | **Min SDK:** Android 13 (API 33)
 > **Llenguatges i Runtimes:** Kotlin 2.2, Java 21, Jetpack Compose (Material 3), AndroidX Media3, AGSL Shaders, Room v3
@@ -100,6 +101,33 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 
 
 ---
+
+### Fase 13: Compartir lletres, Wrapped anual ampliat, portades maxres i recomanacions (v1.0.9)
+
+- **Compartir fragments de lletres:** selecció de fins a 6 línies dins la fulla de
+  lletres, tres dissenys propis (Minimal, Portada, Tipografia) i dos formats
+  (Història 1080×1920, Quadrat 1080×1080). El render és un `Canvas` natiu a 1080 px
+  (`LyricsCardRenderer`), no una captura de Compose; la previsualització fa servir
+  el mateix renderer a 480 px, així que és WYSIWYG. Exportació a `cache/shared` i
+  `ACTION_SEND` amb FileProvider. El peu de la targeta limita el contingut a un
+  fragment i n'atribueix l'autoria.
+- **Wrapped anual:** el rollup `playback_daily` incorpora `album` i `genre`
+  (migració Room 6→7, sense pèrdua de dades). Sis diapositives: minuts, top 5
+  cançons, top 5 artistes amb percentatge i barres, top 5 àlbums, gèneres i
+  cançó més repetida, i resum. Els àlbums i gèneres surten de dades reals; si la
+  biblioteca no n'exposa, es mostra un estat honest en lloc d'inventar-los.
+- **Portades:** `YouTubeArtwork` demana `maxresdefault` (1280×720) i un
+  interceptor de Coil reintenta amb `hqdefault` quan el vídeo no té maxres. Un
+  únic `ImageLoader` a `CypherApplication` (memòria 20 %, disc 192 MB) i
+  `PaletteExtractor` amb caché acotada de 32 entrades; abans es creava un loader
+  per pista i el mapa creixia sense límit.
+- **Recomanacions:** motor existent sense serveis nous, amb deduplicació global,
+  exclusió del que s'acaba d'escoltar, gèneres reals de la biblioteca i estat
+  buit quan no hi ha historial. «Top Picks for You» passa a «Elegit per a tu».
+- **Reparacions:** menú contextual del reproductor («Reproduir a continuació» i
+  «Afegir a la cua» tenien lambdas buides), etiqueta accessible del botó de cua
+  («Cua de reproducció»), any del Wrapped derivat de la data real en lloc d'un
+  valor fix, i avís «Condició sempre certa» a Ajustos.
 
 ## 3. Arquitectura del Sistema i Tecnologies
 

@@ -224,7 +224,7 @@ fun ListenNowScreen(
             item {
                 Column(modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)) {
                     Text(
-                        text = "Top Picks for You",
+                        text = "Elegido para ti",
                         color = themeColors.textPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
@@ -336,6 +336,31 @@ fun ListenNowScreen(
         }
 
         
+
+        // Empty state: recommendations need real history, never invented filler.
+        if (dynamicSections.isEmpty()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "Aún no hay recomendaciones",
+                        color = themeColors.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "Escucha algunas canciones y CYPHER empezará a sugerir música de tu biblioteca y de los artistas que más suenan.",
+                        color = themeColors.textSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
 
         // -------------------------------------------------------------------------
         // 3. RECENTLY PLAYED: Historial real de reproducción

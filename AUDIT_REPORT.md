@@ -1,3 +1,40 @@
+# Auditoría Cypher — Informe
+
+## Ciclo 1.0.9 (noviembre 2026) — auditoría inicial, desarrollo y auditoría final
+
+### A. Auditoría inicial de la versión 1.0.8
+- Base: `main` en `57eb743`, `versionName 1.0.8` / `versionCode 11`, instalada en CPH2579 (720×1612, Android 16 / API 36).
+- Copia previa: `.git/audit/backup-pre-1.0.9-57eb743.zip` (sin sobrescribir las anteriores). Rama de trabajo `release/1.0.9`.
+- Recorrido con dump de accesibilidad + capturas: arranque, Inicio, Biblioteca, Buscar, playlist, reproducción, mini reproductor, reproductor completo, letras, cola, Ajustes, Wrapped, persistencia y segundo plano. `logcat -b crash` vacío, 0 `FATAL EXCEPTION`/ANR.
+- Fallos confirmados tras reproducirlos 3 veces cada uno:
+  1. **Reproductor → menú contextual:** «Reproducir a continuación» y «Añadir a la cola» ejecutaban lambdas vacías; la pulsación cerraba el menú sin efecto sobre la cola. Causa: callbacks no conectados en `CypherNowPlayingModal`. Corregido pasando `onPlayNext`/`onAddToQueue` desde `MainScreen`.
+  2. **Botón de cola sin nombre accesible:** el control aparecía como «A continuación» y no se podía localizar/etiquetar; `contentDescription` ausente. Corregido a «Cola de reproducción» (verificado por dump).
+  3. **«Top Picks for You»:** título en inglés en una interfaz íntegramente en español. Cambiado a «Elegido para ti» en Inicio.
+- Limitaciones reconocidas: inicio de sesión real de YouTube (requiere cuenta), búsqueda por voz (requiere micrófono), importación desde Spotify/YouTube con un ZIP del usuario, y calidad de audio DSP (no medible con ADB).
+
+### B. Desarrollo 1.0.9 (resumen)
+Compartir letras (3 diseños × 2 formatos, canvas nativo 1080 px, FileProvider + `ACTION_SEND`), Wrapped anual con `album`/`genre` reales (migración Room 6→7), portadas `maxres` con fallback y un único `ImageLoader` de Coil, caché de paleta acotada, recomendaciones con deduplicación y géneros reales, y estados vacíos honestos. Detalle completo en `docs/releases/RELEASE_NOTES_v1.0.9.md`.
+
+### C. Auditoría final en dispositivo
+- Migración 6→7 sobre la instalación existente: correcta; 22 playlists, 154 canciones, favoritos y descargas intactos tras `force-stop` + reapertura.
+- Nuevos fallos detectados y corregidos en esta fase (cada uno reproducido 2–3 veces antes y después):
+  1. **Top 5 canciones incoherente:** la lista se ordenaba por tiempo escuchado pero mostraba el número de reproducciones, así que el n.º 1 aparecía con 2× y el n.º 5 con 3×. Corregido mostrando el tiempo, que es el criterio real de orden.
+  2. **Pie de tarjeta «SENCILLO»:** el álbum centinela de las pistas de YouTube se imprimía como si fuera un disco. Ahora se filtran los centinelas y el pie dice «FRAGMENTO DE LETRA».
+  3. **Bloque de letra descentrado** en el diseño Minimal (hueco inferior con fragmentos cortos). Centrado vertical dentro del área reservada.
+  4. **Carátula de fondo poco nítida** en el diseño Portada al ampliar miniaturas pequeñas: se aplica un desenfoque intencionado (no se finge resolución) y el texto queda sobre un scrim.
+  5. **Aviso de compilación** «Condition is always true» en `SettingsScreen` tras hacer permanente la entrada de Wrapped: bloque reescrito sin la comprobación redundante.
+  6. **Año fijo en Wrapped:** `loadWrappedStats` usaba 2026 literal; ahora usa la fecha real, igual que el deep link y Ajustes.
+- Comprobaciones posteriores: las tres tarjetas y los dos formatos siguen renderizando; el menú nativo recibe la imagen; la cola abre y muestra su estado vacío; Wrapped recorre sus 6 diapositivas con datos reales (2157 min, 19 reproducciones, 100 % Milo J, día pico 8 de noviembre) y muestra estados honestos para álbum/género no disponibles.
+- `logcat -b crash` vacío en todas las rondas; PSS ≈ 118 MB en reposo y ≈ 134 MB reproduciendo con la cola abierta.
+
+### D. Pendiente / no verificado en este ciclo
+- Compartir a una app concreta más allá de abrir el menú nativo (se comprobó el chooser con Quick Share, Instagram, Mensajes, Bluetooth y Discord).
+- Álbumes y géneros de Wrapped con datos reales: la biblioteca de prueba es 100 % YouTube Music y no expone álbum/género; el código y los estados vacíos están verificados, el cálculo con datos no.
+- Importación/sincronización con cuentas reales de Spotify/YouTube y login de Google (no se introdujeron credenciales).
+- Soak prolongado (>30 min) y perfilado con Perfetto.
+
+---
+
 # Auditoría Cypher — Informe (fase 2, v1.0.4)
 
 ## A. Estado de partida

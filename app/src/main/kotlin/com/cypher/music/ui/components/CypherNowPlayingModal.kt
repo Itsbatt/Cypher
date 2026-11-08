@@ -130,6 +130,8 @@ fun CypherNowPlayingModal(
     onViewArtist: (String) -> Unit,
     onViewAlbum: (String) -> Unit,
     onAddToPlaylist: ((Track) -> Unit)? = null,
+    onPlayNext: ((Track) -> Unit)? = null,
+    onAddToQueue: ((Track) -> Unit)? = null,
     onOpenSleepTimer: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     onDownload: ((Track) -> Unit)? = null,
@@ -603,7 +605,7 @@ fun CypherNowPlayingModal(
                         IconButton(onClick = { showQueueSheet = true }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                                contentDescription = "A continuación",
+                                contentDescription = "Cola de reproducción",
                                 tint = if (showQueueSheet) accentColor else IosDarkTextSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -621,10 +623,12 @@ fun CypherNowPlayingModal(
             isFavorite = isFavorite,
             onDismiss = { showContextMenu = false },
             onPlayNext = {
-                // Play next in queue
+                showContextMenu = false
+                onPlayNext?.invoke(track)
             },
             onAddToQueue = {
-                // Add to queue
+                showContextMenu = false
+                onAddToQueue?.invoke(track)
             },
             onAddToPlaylist = {
                 showContextMenu = false

@@ -1,0 +1,5 @@
+CYPHER 1.0.9 (versionName 1.0.9, versionCode 12)
+Compilado (UTC): 2026-11-08T10:06:21Z
+Commit base: 57eb743
+Firma: Signer #1 certificate SHA-256 digest: 54415ff1751b71d0d15430b90c44cf04b58f4652f9c6838d1578e9292bc17720
+Estado: NO PUBLICADO - solo instalacion local y copia en el proyecto

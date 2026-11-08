@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         PlaybackDailyEntity.class,
         SearchQueryEntity.class
     },
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters({Converters.class})
@@ -80,6 +80,18 @@ public abstract class CypherDatabase extends RoomDatabase {
         }
     };
 
+    /**
+     * Wrapped ranks albums and genres, so the daily rollup keeps both. Nullable columns
+     * let existing rows stay valid: they simply have no album/genre until played again.
+     */
+    private static final Migration MIGRATION_6_7 = new Migration(6, 7) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE `playback_daily` ADD COLUMN `album` TEXT");
+            database.execSQL("ALTER TABLE `playback_daily` ADD COLUMN `genre` TEXT");
+        }
+    };
+
     public abstract PlaylistDao playlistDao();
     public abstract TrackDao trackDao();
     public abstract RecentlyPlayedDao recentlyPlayedDao();
@@ -96,7 +108,7 @@ public abstract class CypherDatabase extends RoomDatabase {
                         CypherDatabase.class,
                         DATABASE_NAME
                     )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build();
                 }
             }

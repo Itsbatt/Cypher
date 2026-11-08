@@ -3,6 +3,7 @@ package com.cypher.music.network.innertube
 import com.cypher.music.data.ArtistNormalizer
 import com.cypher.music.model.AudioSourceType
 import com.cypher.music.network.TitleCleaner
+import com.cypher.music.network.YouTubeArtwork
 import com.cypher.music.model.Track
 import org.json.JSONArray
 import org.json.JSONObject
@@ -164,9 +165,9 @@ object InnerTubePageParser {
             ?.optJSONObject("thumbnail")
             ?.optJSONArray("thumbnails")
         val artworkUrl = if (thumbnails != null && thumbnails.length() > 0) {
-            thumbnails.optJSONObject(thumbnails.length() - 1)?.optString("url")
+            YouTubeArtwork.upgrade(thumbnails.optJSONObject(thumbnails.length() - 1)?.optString("url"))
         } else {
-            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            YouTubeArtwork.url(videoId)
         }
 
         return Track(
@@ -211,7 +212,7 @@ object InnerTubePageParser {
             ?.optJSONObject("thumbnail")
             ?.optJSONArray("thumbnails")
         val coverUrl = if (thumbnails != null && thumbnails.length() > 0) {
-            thumbnails.optJSONObject(thumbnails.length() - 1)?.optString("url")
+            YouTubeArtwork.upgrade(thumbnails.optJSONObject(thumbnails.length() - 1)?.optString("url"))
         } else {
             null
         }

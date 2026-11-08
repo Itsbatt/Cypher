@@ -19,7 +19,9 @@ import com.cypher.music.data.UnifiedSearchResults
 import com.cypher.music.data.User
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.data.UserProfileStore
+import com.cypher.music.data.WrappedAlbumStat
 import com.cypher.music.data.WrappedArtistStat
+import com.cypher.music.data.WrappedGenreStat
 import com.cypher.music.data.WrappedPeakDay
 import com.cypher.music.data.WrappedPreferences
 import com.cypher.music.data.WrappedStats
@@ -272,6 +274,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     track.title,
                     track.artist,
                     track.artworkUrl,
+                    track.album.trim().takeIf {
+                        it.isNotBlank() &&
+                            !it.equals("Sencillo", true) &&
+                            !it.equals("YouTube Music", true) &&
+                            !it.equals("Álbum local", true)
+                    },
+                    track.genre?.trim()?.takeIf { it.isNotBlank() },
                     elapsedMs,
                     now,
                     isNewPlay
@@ -315,7 +324,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openWrapped(year: Int = WrappedAvailability.activeYear() ?: WrappedScheduler.YEAR) {
+    fun openWrapped(year: Int = WrappedAvailability.activeYear() ?: LocalDate.now().year) {
         _isWrappedOpen.value = true
         if (WrappedAvailability.activeYear() == year) {
             wrappedPreferences.markShown(year)
@@ -349,7 +358,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Loads the annual recap from the daily rollup (top 5, top 3 and peak day). */
-    fun loadWrappedStats(year: Int = WrappedScheduler.YEAR) {
+    fun loadWrappedStats(year: Int = localStorageYear()) {
         wrappedStatsJob?.cancel()
         wrappedStatsJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -376,10 +385,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 totalTimeMs = row.totalTimeMs
             )
         }
-        val topArtists = dao.getTopArtists(startDay, endDay, 3).mapIndexed { index, row ->
+        val totalMs = dao.getTotalListeningMs(startDay, endDay)
+        fun shareOf(ms: Long): Float =
+            if (totalMs <= 0L) 0f else (ms.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+
+        val topArtists = dao.getTopArtists(startDay, endDay, 5).mapIndexed { index, row ->
             WrappedArtistStat(
                 rank = index + 1,
                 name = row.artist ?: "Desconocido",
+                playCount = row.playCount,
+                totalTimeMs = row.totalTimeMs,
+                share = shareOf(row.totalTimeMs)
+            )
+        }
+        val topAlbums = dao.getTopAlbums(startDay, endDay, 5).mapIndexed { index, row ->
+            WrappedAlbumStat(
+                rank = index + 1,
+                name = row.album ?: "Desconocido",
+                artworkUrl = row.artworkUrl,
+                playCount = row.playCount,
+                totalTimeMs = row.totalTimeMs
+            )
+        }
+        val topGenres = dao.getTopGenres(startDay, endDay, 5).mapIndexed { index, row ->
+            WrappedGenreStat(
+                rank = index + 1,
+                name = row.genre ?: "Desconocido",
+                playCount = row.playCount,
+                totalTimeMs = row.totalTimeMs,
+                share = shareOf(row.totalTimeMs)
+            )
+        }
+        val mostRepeated = dao.getMostRepeatedTrack(startDay, endDay)?.let { row ->
+            WrappedTrackStat(
+                rank = 1,
+                title = row.title ?: "Desconocido",
+                artist = row.artist ?: "Desconocido",
+                artworkUrl = row.artworkUrl,
                 playCount = row.playCount,
                 totalTimeMs = row.totalTimeMs
             )
@@ -393,10 +435,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return WrappedStats(
             year = year,
-            totalListeningMs = dao.getTotalListeningMs(startDay, endDay),
+            totalListeningMs = totalMs,
             totalPlays = dao.getTotalPlays(startDay, endDay),
             topTracks = topTracks,
             topArtists = topArtists,
+            topAlbums = topAlbums,
+            topGenres = topGenres,
+            mostRepeatedTrack = mostRepeated,
             peakDay = peakDay
         )
     }
@@ -1302,6 +1347,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /** Year the Settings recap entry should open when the season window is closed. */
+    fun localStorageYear(): Int = WrappedAvailability.activeYear() ?: LocalDate.now().year
+
     // Dynamic Real Recommendation Engine with Artist Normalization & Smart YouTube Search
     fun refreshDynamicRecommendations() {
         recommendationJob?.cancel()
@@ -1329,7 +1377,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val targetArtists = (topAnalyticsArtists + recentArtists + favoriteArtists)
                 .distinct()
-                .take(4)
+                .take(3)
+
+            // Real genres come from MediaStore tags on local tracks; nothing is invented.
+            val favoriteGenres = localTracks.value
+                .mapNotNull { it.genre?.trim()?.takeIf { genre -> genre.isNotBlank() } }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .take(3)
+                .map { it.key }
+
+            // Avoid suggesting exactly what was just played, and never repeat a track
+            // across two sections: that is what made the home feel static.
+            val recentTitles = recents.map { it.title.lowercase() }.toSet()
+            val usedTrackIds = HashSet<String>()
 
             for (artist in targetArtists) {
                 val localArtistTracks = localTracks.value.filter { ArtistNormalizer.areSameArtist(it.artist, artist) }
@@ -1340,45 +1403,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     emptyList()
                 }
 
-                val combined = (localArtistTracks + onlineArtistTracks).distinctBy { it.id }.take(8)
+                val combined = (localArtistTracks + onlineArtistTracks)
+                    .filter { track ->
+                        track.id !in usedTrackIds && track.title.lowercase() !in recentTitles
+                    }
+                    .distinctBy { it.id }
+                    .take(8)
                 if (combined.isNotEmpty()) {
+                    usedTrackIds += combined.map { it.id }
                     sections.add(
                         RecommendationSection(
                             id = "rec_artist_$artist",
                             title = "Porque escuchaste a $artist",
-                            subtitle = "Recomendaciones reales basadas en tus gustos",
+                            subtitle = "Artistas que ya forman parte de tu historial",
                             tracks = combined
                         )
                     )
                 }
             }
 
-            // 4. Favorites section if user has favorites
-            if (favorites.isNotEmpty()) {
+            // 4. Library picks that match the genres actually present on the device.
+            val libraryPicks = localTracks.value
+                .filter { track ->
+                    track.id !in usedTrackIds &&
+                        track.title.lowercase() !in recentTitles &&
+                        (favoriteGenres.isEmpty() || track.genre in favoriteGenres)
+                }
+                .shuffled(kotlin.random.Random(recentTitles.size))
+                .take(10)
+            if (libraryPicks.isNotEmpty()) {
+                usedTrackIds += libraryPicks.map { it.id }
+                val genreLabel = favoriteGenres.firstOrNull()
                 sections.add(
                     RecommendationSection(
-                        id = "rec_favorites",
-                        title = "Tus canciones favoritas",
-                        subtitle = "Música destacada de tu colección",
-                        tracks = favorites.take(10)
+                        id = "rec_genre",
+                        title = if (genreLabel != null) "Más de $genreLabel" else "De tu biblioteca",
+                        subtitle = "Canciones que ya tienes y encajan con lo que escuchas",
+                        tracks = libraryPicks
                     )
                 )
             }
 
-            // 5. Smart Recommendations based on user's top genres/artists
+            // 5. Favorites, without repeating anything already suggested.
+            if (favorites.isNotEmpty()) {
+                val favoritePicks = favorites.filter { it.id !in usedTrackIds }.take(10)
+                if (favoritePicks.isNotEmpty()) {
+                    usedTrackIds += favoritePicks.map { it.id }
+                    sections.add(
+                        RecommendationSection(
+                            id = "rec_favorites",
+                            title = "Tus canciones favoritas",
+                            subtitle = "Música destacada de tu colección",
+                            tracks = favoritePicks
+                        )
+                    )
+                }
+            }
+
+            // 6. Smart Recommendations based on the user's real artists and genres.
             if (targetArtists.isNotEmpty()) {
                 val smartTracks = try {
-                    youTubeRepository.getSmartRecommendations(targetArtists, listOf("Pop", "Urbano"))
+                    youTubeRepository.getSmartRecommendations(targetArtists, favoriteGenres)
                 } catch (e: Exception) {
                     emptyList()
                 }
-                if (smartTracks.isNotEmpty()) {
+                val smartPicks = smartTracks.filter { it.id !in usedTrackIds }.take(8)
+                if (smartPicks.isNotEmpty()) {
                     sections.add(
                         RecommendationSection(
                             id = "rec_smart_mix",
                             title = "Mix personalizado para ti",
-                            subtitle = "Basado en tus artistas más reproducidos",
-                            tracks = smartTracks.take(8)
+                            subtitle = "Basado en tus artistas más escuchados",
+                            tracks = smartPicks
                         )
                     )
                 }

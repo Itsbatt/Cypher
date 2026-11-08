@@ -330,8 +330,6 @@ fun MainScreen(
                         .controls(0)
                         .autoplay(1)
                         .rel(0)
-                        .origin("https://www.youtube-nocookie.com")
-                        .privacyEnhancedMode(true)
                         .build()
 
                     initialize(object : AbstractYouTubePlayerListener() {

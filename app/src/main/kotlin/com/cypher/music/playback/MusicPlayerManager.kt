@@ -139,6 +139,9 @@ class MusicPlayerManager(private val context: Context) {
     @Volatile
     private var userPausedDuringLoad = false
 
+    /** Last time the IFrame reported a playback second; drives the fallback clock. */
+    private var lastSecondReportAt = 0L
+
     // Play-count policy: 30 s (or half of a short track) per session.
     private val playCountTracker = PlayCountTracker()
 
@@ -1138,6 +1141,7 @@ class MusicPlayerManager(private val context: Context) {
                             return
                         }
                         val pos = (second * 1000).toLong().coerceAtLeast(0L)
+                        lastSecondReportAt = System.currentTimeMillis()
                         _playbackPositionMs.value = pos
                         val dur = _state.value.durationMs
                         val frac = if (dur > 0) (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else 0f
@@ -1178,6 +1182,25 @@ class MusicPlayerManager(private val context: Context) {
                         )
                         withContext(Dispatchers.Main) {
                             onListeningTimeAccumulated?.invoke(track, elapsed, countPlay)
+                        }
+                    }
+
+                    // Some WebView builds never deliver onCurrentSecond, so the IFrame
+                    // clock stays at 0 even while audio plays. Advance a fallback clock
+                    // from real elapsed time instead of treating it as a stall (which
+                    // used to reload the track from the beginning and then skip).
+                    if (track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline &&
+                        curState.isPlaying && !curState.isBuffering &&
+                        now - lastSecondReportAt > 1500L
+                    ) {
+                        val dur = curState.durationMs
+                        val advanced = curState.currentPositionMs + elapsed
+                        val bounded = if (dur > 0) advanced.coerceAtMost(dur) else advanced
+                        lastSecondReportAt = now
+                        _playbackPositionMs.value = bounded
+                        _state.update { it.copy(currentPositionMs = bounded) }
+                        if (dur > 0) {
+                            _playbackProgress.value = (bounded.toFloat() / dur).coerceIn(0f, 1f)
                         }
                     }
 
@@ -1256,6 +1279,9 @@ class MusicPlayerManager(private val context: Context) {
             if (token != loadAttemptToken) return true
             val snapshot = _state.value
             if (snapshot.isPlaying && !snapshot.isBuffering) return true
+            // Advancing audio means the start already happened, even if the IFrame
+            // never reported PLAYING (some WebView builds skip that event).
+            if (snapshot.currentPositionMs > 1000L) return true
             if (userPausedDuringLoad) return true
             delay(200)
         }
@@ -1359,7 +1385,11 @@ class MusicPlayerManager(private val context: Context) {
                     val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
                     requestedYouTubeVideoId = videoId
                     loadedYouTubeVideoId = null
-                    youTubePlayer?.loadVideo(videoId, 0f)
+                    // Never restart from zero: resume where the audio actually is.
+                    youTubePlayer?.loadVideo(
+                        videoId,
+                        (_playbackPositionMs.value / 1000f).coerceAtLeast(0f)
+                    )
                 } else {
                     _state.update { it.copy(isBuffering = true) }
                     exoPlayer.prepare()
@@ -1367,7 +1397,11 @@ class MusicPlayerManager(private val context: Context) {
                 }
                 started = awaitTrackStart(loadToken, deadline)
             }
-            if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken) {
+            // Only treat a silent start as a failure: if the position moved, the
+            // track is audible and skipping it would cut real playback.
+            if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken &&
+                _playbackPositionMs.value <= 0L
+            ) {
                 onTrackLoadFailed(track, "playback did not start in ${deadline * 2}ms")
             }
         }

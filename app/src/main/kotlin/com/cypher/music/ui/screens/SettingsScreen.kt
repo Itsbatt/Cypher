@@ -98,6 +98,11 @@ import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.network.YouTubeAccountSession
 import com.cypher.music.ui.components.HexColorPickerDialog
+import androidx.compose.material.icons.filled.Home
+import com.cypher.music.ui.components.HomeCustomizationSheet
+import com.cypher.music.data.Playlist
+import com.cypher.music.data.HomeSection
+import com.cypher.music.data.HomePreferences
 import com.cypher.music.ui.components.UsernameDialog
 import com.cypher.music.ui.theme.ResolvedThemeColors
 import com.cypher.music.ui.utils.AppHaptics
@@ -126,6 +131,13 @@ fun SettingsScreen(
     onOpenSleepTimer: () -> Unit = {},
     onOpenLiquidGlassSettings: () -> Unit = {},
     onOpenWrapped: () -> Unit = {},
+    homePreferences: HomePreferences = HomePreferences(),
+    appPlaylists: List<Playlist> = emptyList(),
+    favoritePlaylistIds: Set<String> = emptySet(),
+    onMoveHomeSection: (Int, Int) -> Unit = { _, _ -> },
+    onToggleHomeSection: (HomeSection, Boolean) -> Unit = { _, _ -> },
+    onResetHomeSections: () -> Unit = {},
+    onToggleFavoritePlaylist: (String) -> Unit = {},
     sleepTimerMode: SleepTimerMode = SleepTimerMode.OFF,
     sleepTimerRemainingSeconds: Long? = null,
     onExportBackup: () -> String = { "" },
@@ -141,6 +153,7 @@ fun SettingsScreen(
     // entry here at all, so nothing can open an empty or off-season recap.
     val wrappedYear = WrappedAvailability.activeYear()
     var isUsernameDialogOpen by remember { mutableStateOf(false) }
+    var showHomeCustomization by remember { mutableStateOf(false) }
 
     // Which theme colour the hex picker is editing: accent, background or card.
     var hexColorTarget by remember { mutableStateOf<String?>(null) }
@@ -1030,6 +1043,82 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Section: Pantalla de inicio personalizable
+        item {
+            SettingsSectionHeader(
+                title = "Pantalla de inicio",
+                icon = Icons.Filled.Home,
+                tint = themeColors.accent
+            )
+
+            SettingsCard(themeColors = themeColors) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            showHomeCustomization = true
+                        }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(themeColors.accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Home,
+                                contentDescription = null,
+                                tint = themeColors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Secciones de inicio",
+                                color = themeColors.textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Elige qué aparece y en qué orden",
+                                color = themeColors.textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Abrir",
+                        color = themeColors.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            if (showHomeCustomization) {
+                HomeCustomizationSheet(
+                    preferences = homePreferences,
+                    playlists = appPlaylists,
+                    favoritePlaylistIds = favoritePlaylistIds,
+                    themeColors = themeColors,
+                    onMove = onMoveHomeSection,
+                    onToggle = onToggleHomeSection,
+                    onReset = onResetHomeSections,
+                    onToggleFavoritePlaylist = onToggleFavoritePlaylist,
+                    onDismiss = { showHomeCustomization = false }
+                )
+            }
         }
 
         // Section: Audio y Reproducción (Crossfade, Ecualizador DSP & Temporizador)

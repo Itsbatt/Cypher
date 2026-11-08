@@ -90,3 +90,18 @@ data class BackupImportSummary(
     val success: Boolean = true,
     val errorMessage: String? = null
 )
+
+/** A playlist with at least one downloaded song, shown as a single download group. */
+data class DownloadedPlaylist(
+    val playlist: Playlist,
+    val downloadedCount: Int,
+    val totalCount: Int
+) {
+    val isComplete: Boolean get() = totalCount > 0 && downloadedCount >= totalCount
+    val statusLabel: String
+        get() = when {
+            totalCount == 0 -> "Sin canciones"
+            isComplete -> "$downloadedCount canciones descargadas"
+            else -> "$downloadedCount de $totalCount descargadas"
+        }
+}

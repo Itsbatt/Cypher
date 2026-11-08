@@ -359,6 +359,10 @@ fun MainScreen(
         // On tablets the column is centred and capped so it never stretches the
         // phone layout across the full panel width.
         val contentMaxWidth = cypherContentMaxWidth()
+        val homePreferencesState by viewModel.homePreferences.collectAsState()
+        val favoritePlaylistIdsState by viewModel.favoritePlaylistIds.collectAsState()
+        val downloadedPlaylistsState by viewModel.downloadedPlaylists.collectAsState()
+        val failedDownloadsState by viewModel.failedDownloads.collectAsState()
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -371,6 +375,8 @@ fun MainScreen(
                     .widthIn(max = contentMaxWidth)
                     .fillMaxHeight()
             ) {
+            val librarySortState by viewModel.librarySort.collectAsState()
+            val addedDatesState by viewModel.trackAddedDates.collectAsState()
             when (currentTab) {
                 CypherTab.LISTEN_NOW -> {
                     ListenNowScreen(
@@ -381,6 +387,9 @@ fun MainScreen(
                         recentlyPlayed = recentlyPlayed,
                         currentTrackId = playerState.currentTrack?.id,
                         favoriteTrackIds = favoriteTrackIds,
+                        homeSections = homePreferencesState.sections,
+                        favoriteTracks = favoriteTracks,
+                        favoritePlaylists = playlists.filter { favoritePlaylistIdsState.contains(it.id) },
                         listeningStats = userListeningStats,
                         themePrefs = themePrefs,
                         themeColors = themeColors,
@@ -413,6 +422,12 @@ fun MainScreen(
                         selectedArtist = selectedArtist,
                         selectedAlbum = selectedAlbum,
                         selectedPlaylist = selectedPlaylist,
+                        librarySort = librarySortState,
+                        trackAddedDates = addedDatesState,
+                        onSortChange = { key, ascending -> viewModel.setLibrarySort(key, ascending) },
+                        downloadedPlaylists = downloadedPlaylistsState,
+                        failedDownloads = failedDownloadsState,
+                        onRetryDownload = { viewModel.retryDownload(it) },
                         themePrefs = themePrefs,
                         themeColors = themeColors,
                         bottomPadding = bottomContentPadding,
@@ -547,6 +562,7 @@ fun MainScreen(
                 onSetVolume = { viewModel.setVolume(it) },
                 onSelectQueueIndex = { viewModel.jumpToQueueIndex(it) },
                 onRemoveQueueIndex = { viewModel.removeFromQueue(it) },
+                            onClearQueue = { viewModel.clearQueue() },
                 onMoveQueueIndex = { from, to -> viewModel.moveQueueItem(from, to) },
                 onViewArtist = { artist ->
                     viewModel.setNowPlayingExpanded(false)
@@ -596,6 +612,13 @@ fun MainScreen(
                 themePrefs = themePrefs,
                 themeColors = themeColors,
                 bottomPadding = bottomContentPadding,
+                homePreferences = homePreferencesState,
+                appPlaylists = playlists,
+                favoritePlaylistIds = favoritePlaylistIdsState,
+                onMoveHomeSection = { from, to -> viewModel.moveHomeSection(from, to) },
+                onToggleHomeSection = { section, enabled -> viewModel.setHomeSectionEnabled(section, enabled) },
+                onResetHomeSections = { viewModel.resetHomeSections() },
+                onToggleFavoritePlaylist = { viewModel.toggleFavoritePlaylist(it) },
                 onUpdatePrefs = { viewModel.updateThemePreferences(it) },
                 onResetDefaults = { viewModel.resetThemePreferences() },
                 onUpdateUsername = { viewModel.updateUsername(it) },

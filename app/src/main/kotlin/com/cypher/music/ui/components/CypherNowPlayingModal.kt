@@ -127,6 +127,7 @@ fun CypherNowPlayingModal(
     onSetVolume: (Float) -> Unit,
     onSelectQueueIndex: (Int) -> Unit,
     onRemoveQueueIndex: (Int) -> Unit,
+    onClearQueue: () -> Unit = {},
     onMoveQueueIndex: (Int, Int) -> Unit = { _, _ -> },
     onViewArtist: (String) -> Unit,
     onViewAlbum: (String) -> Unit,
@@ -693,6 +694,7 @@ fun CypherNowPlayingModal(
             onSelectIndex = onSelectQueueIndex,
             onRemoveIndex = onRemoveQueueIndex,
             onMoveIndex = onMoveQueueIndex,
+            onClearQueue = onClearQueue,
             onDismiss = { showQueueSheet = false }
         )
     }

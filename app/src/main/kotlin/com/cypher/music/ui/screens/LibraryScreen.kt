@@ -8,6 +8,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.cypher.music.data.ArtistNormalizer
+import com.cypher.music.data.sortLibraryTracks
+import com.cypher.music.data.TrackSortKey
+import com.cypher.music.data.LibrarySortState
+import com.cypher.music.data.DownloadedPlaylist
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -130,6 +135,12 @@ fun LibraryScreen(
     onDownloadPlaylist: (Playlist) -> Unit = {},
     onDeletePlaylistDownloads: (Playlist) -> Unit = {},
     onRetryPlaylistSync: (String) -> Unit = {},
+    librarySort: LibrarySortState = LibrarySortState(),
+    trackAddedDates: Map<String, Long> = emptyMap(),
+    onSortChange: (TrackSortKey, Boolean) -> Unit = { _, _ -> },
+    downloadedPlaylists: List<DownloadedPlaylist> = emptyList(),
+    failedDownloads: Map<String, String> = emptyMap(),
+    onRetryDownload: (Track) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val allLibraryTracks = remember(localTracks, favoriteTracks) {
@@ -262,6 +273,9 @@ fun LibraryScreen(
                 TracksFullListView(
                     title = "Canciones",
                     tracks = allLibraryTracks,
+                    librarySort = librarySort,
+                    trackAddedDates = trackAddedDates,
+                    onSortChange = onSortChange,
                     currentTrackId = currentTrackId,
                     favoriteTrackIds = favoriteTrackIds,
                     themeColors = themeColors,
@@ -280,6 +294,9 @@ fun LibraryScreen(
                 TracksFullListView(
                     title = "Favoritos",
                     tracks = favoriteTracks,
+                    librarySort = librarySort,
+                    trackAddedDates = trackAddedDates,
+                    onSortChange = onSortChange,
                     currentTrackId = currentTrackId,
                     favoriteTrackIds = favoriteTrackIds,
                     themeColors = themeColors,
@@ -294,36 +311,25 @@ fun LibraryScreen(
                 )
             }
 
-            // Sub-view: Música descargada (Offline vault)
+            // Sub-view: Música descargada (playlists agrupadas + canciones individuales)
             section == "descargas" -> {
-                val exportContext = LocalContext.current
-                val exportScope = rememberCoroutineScope()
-                TracksFullListView(
-                    title = "Música descargada",
-                    tracks = downloadedTracks,
+                DownloadsSectionView(
+                    downloadedTracks = downloadedTracks,
+                    downloadedPlaylists = downloadedPlaylists,
+                    failedDownloads = failedDownloads,
+                    knownTracks = allLibraryTracks,
                     currentTrackId = currentTrackId,
                     favoriteTrackIds = favoriteTrackIds,
                     themeColors = themeColors,
                     bottomPadding = bottomPadding,
-                    emptyMessage = "No tienes música descargada aún. Usa 'Descargar canción' en el menú (•••) de cualquier canción para escucharla sin conexión.",
-                    onExport = {
-                        exportScope.launch {
-                            val total = downloadedTracks.count {
-                                MediaCacheManager.exportToMediaStore(exportContext, it)
-                            }
-                            Toast.makeText(
-                                exportContext,
-                                "Exportadas $total de ${downloadedTracks.size} canciones a Música",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    },
                     onBack = { onSectionChange(null) },
                     onTrackClick = onTrackClick,
                     onPlayNext = onPlayNext,
                     onAddToQueue = onAddToQueue,
                     onAddToPlaylist = onAddToPlaylist,
-                    onToggleFavorite = onToggleFavorite
+                    onToggleFavorite = onToggleFavorite,
+                    onOpenPlaylist = onPlaylistSelect,
+                    onRetryDownload = onRetryDownload
                 )
             }
 
@@ -332,6 +338,9 @@ fun LibraryScreen(
                 TracksFullListView(
                     title = "Música local",
                     tracks = localTracks,
+                    librarySort = librarySort,
+                    trackAddedDates = trackAddedDates,
+                    onSortChange = onSortChange,
                     currentTrackId = currentTrackId,
                     favoriteTrackIds = favoriteTrackIds,
                     themeColors = themeColors,
@@ -1088,22 +1097,20 @@ private fun TracksFullListView(
     onAddToQueue: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
     onToggleFavorite: (Track) -> Unit,
-    onExport: (() -> Unit)? = null
+    onExport: (() -> Unit)? = null,
+    librarySort: LibrarySortState = LibrarySortState(),
+    trackAddedDates: Map<String, Long> = emptyMap(),
+    onSortChange: (TrackSortKey, Boolean) -> Unit = { _, _ -> }
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var sortBy by remember { mutableStateOf("title") } // "title", "artist", "duration"
     var showSortMenu by remember { mutableStateOf(false) }
 
-    val filteredTracks = remember(tracks, searchQuery, sortBy) {
-        var list = if (searchQuery.isBlank()) tracks else tracks.filter {
+    // The chosen order is shared with the rest of the library and survives navigation.
+    val filteredTracks = remember(tracks, searchQuery, librarySort, trackAddedDates) {
+        val ordered = sortLibraryTracks(tracks, librarySort, trackAddedDates)
+        if (searchQuery.isBlank()) ordered else ordered.filter {
             it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true)
         }
-        list = when (sortBy) {
-            "artist" -> list.sortedBy { it.artist.lowercase() }
-            "duration" -> list.sortedByDescending { it.durationMs }
-            else -> list.sortedBy { it.title.lowercase() }
-        }
-        list
     }
 
     LazyColumn(
@@ -1162,17 +1169,25 @@ private fun TracksFullListView(
                     onDismissRequest = { showSortMenu = false },
                     modifier = Modifier.background(Color(0xFF222226))
                 ) {
+                    TrackSortKey.values().forEach { key ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (librarySort.key == key) "Seleccionado: " + key.title else key.title,
+                                    color = if (librarySort.key == key) themeColors.accent else Color.White
+                                )
+                            },
+                            onClick = { onSortChange(key, librarySort.ascending); showSortMenu = false }
+                        )
+                    }
                     DropdownMenuItem(
-                        text = { Text("Por título (A-Z)", color = Color.White) },
-                        onClick = { sortBy = "title"; showSortMenu = false }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Por artista", color = Color.White) },
-                        onClick = { sortBy = "artist"; showSortMenu = false }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Por duración", color = Color.White) },
-                        onClick = { sortBy = "duration"; showSortMenu = false }
+                        text = {
+                            Text(
+                                text = if (librarySort.ascending) "Orden ascendente (A-Z)" else "Orden descendente (Z-A)",
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        },
+                        onClick = { onSortChange(librarySort.key, !librarySort.ascending); showSortMenu = false }
                     )
                 }
             }

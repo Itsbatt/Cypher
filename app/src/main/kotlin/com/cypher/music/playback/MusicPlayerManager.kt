@@ -168,6 +168,60 @@ class MusicPlayerManager(private val context: Context) {
     private val _playbackPositionMs = MutableStateFlow(0L)
     val playbackPositionMs: StateFlow<Long> = _playbackPositionMs.asStateFlow()
 
+    // Session persistence: the current track, its real position and the whole queue are
+    // written on real changes (throttled while playing) so a kill or a reboot resumes
+    // where the user left instead of an empty player.
+    @Volatile
+    private var lastSessionPersistAt = 0L
+    private var pendingRestorePositionMs: Long? = null
+
+    init {
+        restoreSession()
+        scope.launch {
+            while (true) {
+                delay(5000)
+                persistSession()
+            }
+        }
+    }
+
+    private fun restoreSession() {
+        val restored = PlaybackSessionStore.load(context) ?: return
+        val index = restored.queueIndex.coerceIn(0, (restored.queue.size - 1).coerceAtLeast(0))
+        _state.value = PlayerState(
+            currentTrack = restored.track,
+            isPlaying = false,
+            isBuffering = false,
+            currentPositionMs = restored.positionMs,
+            durationMs = restored.track.durationMs,
+            queue = restored.queue,
+            queueIndex = if (restored.queue.isEmpty()) -1 else index,
+            isShuffle = restored.isShuffle,
+            repeatMode = restored.repeatMode
+        )
+        _playbackPositionMs.value = restored.positionMs
+        _playbackProgress.value = if (restored.track.durationMs > 0) {
+            (restored.positionMs.toFloat() / restored.track.durationMs).coerceIn(0f, 1f)
+        } else 0f
+        pendingRestorePositionMs = restored.positionMs.takeIf { it > 2000L }
+        isPlayingOffline = MediaCacheManager.isTrackDownloaded(context, restored.track.id)
+        Log.i("AppleMusicPlayer", "Restored session: '${restored.track.title}' at ${restored.positionMs}ms, queue=${restored.queue.size}")
+    }
+
+    private fun persistSession(force: Boolean = false) {
+        val snapshot = _state.value
+        if (snapshot.currentTrack == null) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastSessionPersistAt < 3000L) return
+        lastSessionPersistAt = now
+        runCatching {
+            PlaybackSessionStore.save(
+                context,
+                snapshot.copy(currentPositionMs = _playbackPositionMs.value.coerceAtLeast(0L))
+            )
+        }
+    }
+
     private var lastSeekTimestamp = 0L
 
     // 1. ExoPlayer with Persistent Streaming Cache
@@ -1258,6 +1312,7 @@ class MusicPlayerManager(private val context: Context) {
     }
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
+        pendingRestorePositionMs = null
         val index = newQueue.indexOfFirst { it.id == track.id }.let { if (it == -1) 0 else it }
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
@@ -1278,6 +1333,7 @@ class MusicPlayerManager(private val context: Context) {
                 durationMs = track.durationMs
             )
         }
+        persistSession(force = true)
 
         // Trigger pre-caching for subsequent queue tracks
         precacheNextTrack()
@@ -1408,6 +1464,22 @@ class MusicPlayerManager(private val context: Context) {
     }
 
     fun togglePlayPause() {
+        val restoredPosition = pendingRestorePositionMs
+        if (restoredPosition != null) {
+            // A restored session has state but no engine loaded, so toggling would play
+            // silence. Start the track and land on the saved position instead.
+            val restoredTrack = _state.value.currentTrack ?: return
+            pendingRestorePositionMs = null
+            val restoredQueue = _state.value.queue.ifEmpty { listOf(restoredTrack) }
+            val knownDuration = _state.value.durationMs.coerceAtLeast(restoredTrack.durationMs)
+            playTrack(restoredTrack, restoredQueue)
+            val fraction = if (knownDuration > 0) restoredPosition.toFloat() / knownDuration else 0f
+            scope.launch {
+                delay(1200)
+                seekToProgress(fraction)
+            }
+            return
+        }
         val track = _state.value.currentTrack ?: return
         if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
             if (exoPlayer.isPlaying) {
@@ -1501,6 +1573,7 @@ class MusicPlayerManager(private val context: Context) {
             _playbackProgress.value = 1f
             _state.update { it.copy(isPlaying = false, isBuffering = false) }
             PlaybackService.updateService(context)
+            persistSession(force = true)
             return
         }
         playTrack(q[nextIdx], q)
@@ -1533,6 +1606,7 @@ class MusicPlayerManager(private val context: Context) {
             _state.update { it.copy(isShuffle = nextShuffle) }
         }
         PlaybackService.updateService(context)
+        persistSession(force = true)
     }
 
     fun toggleRepeat() {
@@ -1543,35 +1617,83 @@ class MusicPlayerManager(private val context: Context) {
         }
         _state.update { it.copy(repeatMode = nextMode) }
         PlaybackService.updateService(context)
+        persistSession(force = true)
     }
 
-    fun enqueueNext(track: Track) {
+    /** Same song from the same source, so a local file never shadows a YouTube track. */
+    fun isTrackInQueue(track: Track): Boolean =
+        _state.value.queue.any { it.id == track.id && it.sourceType == track.sourceType }
+
+    /** Adds the song right after the current one. Returns false when it is already queued. */
+    fun enqueueNext(track: Track): Boolean {
+        if (isTrackInQueue(track)) return false
         val q = _state.value.queue.toMutableList()
         val insertIdx = if (_state.value.queueIndex >= 0) _state.value.queueIndex + 1 else 0
         q.add(insertIdx.coerceAtMost(q.size), track)
         _state.update { it.copy(queue = q) }
         PlaybackService.updateService(context)
+        persistSession(force = true)
+        return true
     }
 
-    fun addToQueue(track: Track) {
+    /** Appends at the end of the queue. Returns false when it is already queued. */
+    fun addToQueue(track: Track): Boolean {
+        if (isTrackInQueue(track)) return false
         val q = _state.value.queue.toMutableList()
         q.add(track)
         _state.update { it.copy(queue = q) }
         PlaybackService.updateService(context)
+        persistSession(force = true)
+        return true
+    }
+
+    /** Empties the queue but keeps playing the current song. Library and files untouched. */
+    fun clearQueue() {
+        val current = _state.value.currentTrack
+        val remaining = if (current != null) listOf(current) else emptyList()
+        _state.update {
+            it.copy(queue = remaining, queueIndex = if (remaining.isEmpty()) -1 else 0)
+        }
+        PlaybackService.updateService(context)
+        persistSession(force = true)
     }
 
     fun removeFromQueue(index: Int) {
-        val q = _state.value.queue.toMutableList()
-        if (index in q.indices) {
-            q.removeAt(index)
-            val newIdx = when {
-                index < _state.value.queueIndex -> _state.value.queueIndex - 1
-                index == _state.value.queueIndex -> _state.value.queueIndex.coerceAtMost(q.size - 1)
-                else -> _state.value.queueIndex
+        val snapshot = _state.value
+        val q = snapshot.queue.toMutableList()
+        if (index !in q.indices) return
+        val wasCurrent = index == snapshot.queueIndex
+        q.removeAt(index)
+        if (wasCurrent) {
+            if (q.isEmpty()) {
+                bufferingWatchdogJob?.cancel()
+                youTubePlayer?.pause()
+                if (exoPlayer.isPlaying) exoPlayer.pause()
+                _playbackProgress.value = 0f
+                _playbackPositionMs.value = 0L
+                _state.update {
+                    it.copy(queue = emptyList(), queueIndex = -1, isPlaying = false, isBuffering = false)
+                }
+                PlaybackService.updateService(context)
+                persistSession(force = true)
+                return
             }
-            _state.update { it.copy(queue = q, queueIndex = newIdx) }
-            PlaybackService.updateService(context)
+            // Removing the playing song must jump to the next one instead of leaving the
+            // player pointing at an item that no longer exists.
+            val nextIndex = index.coerceAtMost(q.size - 1)
+            _state.update { it.copy(queue = q, queueIndex = nextIndex) }
+            playTrack(q[nextIndex], q)
+            return
         }
+        val newIdx = when {
+            index < snapshot.queueIndex -> snapshot.queueIndex - 1
+            else -> snapshot.queueIndex
+        }
+        _state.update {
+            it.copy(queue = q, queueIndex = newIdx.coerceIn(-1, (q.size - 1).coerceAtLeast(-1)))
+        }
+        PlaybackService.updateService(context)
+        persistSession(force = true)
     }
 
     fun moveQueueItem(from: Int, to: Int) {
@@ -1588,6 +1710,7 @@ class MusicPlayerManager(private val context: Context) {
         }
         _state.update { it.copy(queue = q, queueIndex = newIndex.coerceIn(0, (q.size - 1).coerceAtLeast(0))) }
         PlaybackService.updateService(context)
+        persistSession(force = true)
     }
 
     fun jumpToQueueIndex(index: Int) {

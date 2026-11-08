@@ -27,8 +27,11 @@ import com.cypher.music.model.Track
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -67,6 +70,31 @@ object MediaCacheManager {
     // Live reactive playlist batch download progress: playlistId -> PlaylistDownloadProgress
     private val _playlistProgressMap = MutableStateFlow<Map<String, PlaylistDownloadProgress>>(emptyMap())
     val playlistProgressMap: StateFlow<Map<String, PlaylistDownloadProgress>> = _playlistProgressMap.asStateFlow()
+
+    // Failed downloads with a readable reason, so a row never stays "downloading" forever
+    // and the user can retry the exact song.
+    private val _failedDownloads = MutableStateFlow<Map<String, String>>(emptyMap())
+    val failedDownloads: StateFlow<Map<String, String>> = _failedDownloads.asStateFlow()
+
+    private val downloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun registerFailure(trackId: String, reason: String) {
+        _failedDownloads.update { it + (trackId to reason) }
+    }
+
+    fun clearFailure(trackId: String) {
+        if (_failedDownloads.value.containsKey(trackId)) {
+            _failedDownloads.update { it - trackId }
+        }
+    }
+
+    /** Retries one failed song in the background; progress flows as usual. */
+    fun retryDownload(context: Context, track: Track) {
+        if (isTrackDownloading(track.id)) return
+        downloadScope.launch {
+            downloadTrackOffline(context.applicationContext, track)
+        }
+    }
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
@@ -471,8 +499,10 @@ object MediaCacheManager {
         onProgress: (Float) -> Unit = {}
     ): File? = withContext(Dispatchers.IO) {
         val safeId = track.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        clearFailure(track.id)
         if (!hasFreeSpace(context)) {
             Log.w(TAG, "Not enough free space to download ${track.id}")
+            registerFailure(track.id, "No hay espacio libre suficiente")
             return@withContext null
         }
         enqueueDownload(context, track)
@@ -486,6 +516,7 @@ object MediaCacheManager {
                 roomDb.trackDao().setDownloaded(track.id, true, existing.absolutePath, System.currentTimeMillis())
                 _downloadedTrackIds.update { it + track.id }
                 removeQueuedDownload(context, track.id)
+                clearFailure(track.id)
                 return@withContext existing
             }
 
@@ -661,13 +692,16 @@ object MediaCacheManager {
                 roomDb.trackDao().setDownloaded(track.id, true, downloadedFile.absolutePath, System.currentTimeMillis())
                 _downloadedTrackIds.update { it + track.id }
                 removeQueuedDownload(context, track.id)
+                clearFailure(track.id)
                 downloadedFile
             } else {
                 Log.e(TAG, "Download failed or output file is empty/missing for track: ${track.id}")
+                registerFailure(track.id, "La descarga no produjo un archivo válido")
                 null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to download track offline", e)
+            registerFailure(track.id, e.message ?: "Error de red durante la descarga")
             null
         } finally {
             _downloadProgressMap.update { it - track.id }

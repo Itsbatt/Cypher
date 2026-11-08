@@ -55,6 +55,14 @@ import com.cypher.music.data.LiquidGlassConfig
 import com.cypher.music.data.LyricsSettingsManager
 import com.cypher.music.data.SearchCategory
 import com.cypher.music.data.SearchHistoryManager
+import com.cypher.music.data.UserViewPreferencesManager
+import com.cypher.music.data.LibrarySortState
+import com.cypher.music.data.HomePreferences
+import com.cypher.music.data.HomeSection
+import com.cypher.music.data.TrackSortKey
+import com.cypher.music.data.DownloadedPlaylist
+import com.cypher.music.playback.MediaCacheManager
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -97,6 +105,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val youtubeViewModel: YouTubeViewModel by lazy { YouTubeViewModel(application, youtubeAccountManager, youTubeRepository) }
     val shareViewModel: ShareViewModel by lazy { ShareViewModel(application, playlistRepository) }
     val lyricsSettingsManager: LyricsSettingsManager by lazy { LyricsSettingsManager(application) }
+
+    // Library ordering, customizable home, favourite playlists and failed downloads.
+    private val viewPreferences = UserViewPreferencesManager(application)
+    val librarySort: StateFlow<LibrarySortState> = viewPreferences.sort
+    val homePreferences: StateFlow<HomePreferences> = viewPreferences.home
+    val favoritePlaylistIds: StateFlow<Set<String>> = viewPreferences.favoritePlaylists
+    val trackAddedDates: StateFlow<Map<String, Long>> = viewPreferences.addedDates
+    val failedDownloads: StateFlow<Map<String, String>> = MediaCacheManager.failedDownloads
+
+    /** Playlists that own at least one downloaded song, so downloads stay organised. */
+    val downloadedPlaylists: StateFlow<List<DownloadedPlaylist>> = combine(
+        playlistRepository.playlists,
+        MediaCacheManager.downloadedTrackIds
+    ) { lists, ids ->
+        lists.mapNotNull { playlist ->
+            val downloaded = playlist.tracks.count { ids.contains(it.id) }
+            if (downloaded == 0) null else DownloadedPlaylist(playlist, downloaded, playlist.tracks.size)
+        }.sortedByDescending { it.downloadedCount }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Single Personal User Profile (persisted locally, reactive across the app)
     private val userProfileStore = UserProfileStore(application)
@@ -683,13 +710,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerManager.toggleRepeat()
     }
 
-    fun enqueueNext(track: Track) {
-        playerManager.enqueueNext(track)
-    }
+    fun enqueueNext(track: Track): Boolean = playerManager.enqueueNext(track)
 
-    fun addToQueue(track: Track) {
-        playerManager.addToQueue(track)
-    }
+    fun addToQueue(track: Track): Boolean = playerManager.addToQueue(track)
 
     fun removeFromQueue(index: Int) {
         playerManager.removeFromQueue(index)
@@ -702,6 +725,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun moveQueueItem(from: Int, to: Int) {
         playerManager.moveQueueItem(from, to)
     }
+
+    fun clearQueue() = playerManager.clearQueue()
+
+    fun retryDownload(track: Track) = MediaCacheManager.retryDownload(getApplication(), track)
+
+    fun setLibrarySort(key: TrackSortKey, ascending: Boolean) =
+        viewPreferences.setSort(LibrarySortState(key, ascending))
+
+    fun setHomeSectionEnabled(section: HomeSection, enabled: Boolean) =
+        viewPreferences.setHomeSectionEnabled(section, enabled)
+
+    fun moveHomeSection(from: Int, to: Int) = viewPreferences.moveHomeSection(from, to)
+
+    fun resetHomeSections() = viewPreferences.updateHome { HomePreferences() }
+
+    fun toggleFavoritePlaylist(playlistId: String) = viewPreferences.toggleFavoritePlaylist(playlistId)
+
+    fun noteKnownTracks(ids: Collection<String>) = viewPreferences.noteKnownTracks(ids)
 
     fun toggleFavorite(track: Track): Boolean {
         val result = favoritesManager.toggleFavorite(track)

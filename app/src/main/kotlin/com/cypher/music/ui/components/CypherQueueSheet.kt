@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -78,12 +80,14 @@ fun CypherQueueSheet(
     onSelectIndex: (Int) -> Unit,
     onRemoveIndex: (Int) -> Unit,
     onMoveIndex: (Int, Int) -> Unit = { _, _ -> },
+    onClearQueue: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val density = LocalDensity.current
     val rowHeightPx = with(density) { 58.dp.toPx() }
+    var showClearConfirm by remember { mutableStateOf(false) }
     var draggingIndex by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val latestQueue by rememberUpdatedState(queue)
@@ -134,6 +138,17 @@ fun CypherQueueSheet(
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { showClearConfirm = true },
+                        enabled = queue.size > 1
+                    ) {
+                        Text(
+                            text = "Vaciar",
+                            color = if (queue.size > 1) IosDarkTextSecondary else IosDarkTextSecondary.copy(alpha = 0.35f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                     IconButton(onClick = onToggleShuffle) {
                         Icon(
                             imageVector = Icons.Filled.Shuffle,
@@ -174,7 +189,7 @@ fun CypherQueueSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AsyncImage(
-                        model = currentTrack.artworkUrl,
+                        model = currentTrack.displayArtworkUrl,
                         contentDescription = currentTrack.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -200,6 +215,15 @@ fun CypherQueueSheet(
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    IconButton(onClick = { onRemoveIndex(queueIndex); onDismiss() }) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Quitar la canción actual de la cola",
+                            tint = IosDarkTextSecondary,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
@@ -429,6 +453,32 @@ fun CypherQueueSheet(
                 }
             }
         }
+    }
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Vaciar la cola", color = IosDarkTextPrimary) },
+            text = {
+                Text(
+                    "Se quitarán todas las canciones de la cola excepto la que está sonando. " +
+                        "Tu biblioteca, tus playlists y tus descargas no se tocan.",
+                    color = IosDarkTextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirm = false
+                    onClearQueue()
+                    AppHaptics.actionClick(true)
+                }) { Text("Vaciar", color = AppleMusicRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text("Cancelar", color = IosDarkTextSecondary)
+                }
+            },
+            containerColor = Color(0xFF222226)
+        )
     }
 }
 

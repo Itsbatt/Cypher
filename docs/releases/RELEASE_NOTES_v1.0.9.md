@@ -1,9 +1,8 @@
 # Cypher 1.0.9 (versionCode 12) — notas locales
 
-> **No publicada.** Esta versión está compilada, instalada y verificada en el
-> dispositivo, y guardada localmente. No se ha creado ninguna release, no se ha
-> subido ningún APK y no se ha anunciado nada. La publicación queda pendiente de
-> autorización expresa.
+> Publicada como **v1.0.9** en GitHub Releases, con los APK firmados y
+> `SHA256SUMS.txt`. La versión instalada en el dispositivo es idéntica al APK
+> publicado.
 
 ## Compartir fragmentos de letras
 
@@ -11,6 +10,8 @@
   elegir un **fragmento de hasta 6 líneas consecutivas** (nunca líneas sueltas):
   el primer toque marca el inicio y el segundo el final, y el bloque se ajusta
   solo para no pasar de 6. Funciona con letras sincronizadas y planas.
+- También se puede **mantener pulsada una línea y arrastrar** para extender el
+  bloque, con el mismo tope de 6 líneas y sin permitir huecos.
 - **Tarjeta CYPHER** generada con el canvas nativo a 1080 px reales, no una
   captura de pantalla reescalada:
   - **Minimal**: fondo oscuro, filete de acento, carátula y tipografía serif.
@@ -26,14 +27,27 @@
 - La tarjeta firma «CYPHER · FRAGMENTO DE LETRA» y limita el fragmento: no se
   reproduce la letra completa ni se eluden las condiciones de LRCLIB.
 
+## Guardar y compartir Wrapped
+
+- **Guardar en galería:** las tarjetas de letras y de Wrapped se pueden guardar
+  en `Pictures/Cypher` con MediaStore, además de compartirlas. Hasta ahora la
+  imagen solo vivía en la caché y podía desaparecer al limpiarla.
+- **Compartir Wrapped:** botón en la cabecera del resumen anual que abre la
+  previsualización con formatos Historia y Cuadrado, guardado en galería y
+  envío por el menú nativo. Reutiliza el sistema de tarjetas y la identidad de
+  CYPHER, sin duplicar el motor de exportación.
+
 ## Cypher Wrapped anual
 
 - Estadísticas ampliadas, todas calculadas con datos reales de `playback_daily`:
   minutos totales, top 5 canciones, top 5 artistas con **porcentaje de escucha**,
   top 5 álbumes, géneros favoritos, canción más repetida y día pico.
 - Los álbumes y géneros se guardan ahora en el rollup diario (migración 6→7,
-  sin borrar datos). Los géneros proceden de las etiquetas reales de MediaStore
-  en pistas locales; si no existen, la app lo dice en lugar de inventarlos.
+  sin borrar datos). En pistas de YouTube el **álbum se lee de la descripción
+  pública del vídeo** (bloque «Provided to YouTube by») al reproducir; si el
+  vídeo no lo publica se mantiene el estado vacío. Los géneros siguen saliendo
+  de etiquetas reales: YouTube no expone género en esa respuesta, así que la
+  diapositiva lo dice en lugar de inventarlo.
 - Rediseño de las seis diapositivas: listas con hairlines en vez de una tarjeta
   por fila, jerarquía tipográfica clara, barras finas de distribución y el mismo
   lenguaje visual sobrio de la referencia.
@@ -85,3 +99,10 @@
   persistencia tras `force-stop`, segundo plano.
 - `logcat -b crash` vacío. PSS ≈ 118 MB en reposo tras reabrir y ≈ 134 MB con
   reproducción activa y la cola abierta.
+- Compartir: menú nativo probado con Quick Share, Instagram, Mensajes, Bluetooth
+  y Discord. Guardado verificado en `/sdcard/Pictures/Cypher` para tarjeta de
+  letras y tarjeta de Wrapped.
+- Selección por arrastre verificada: pulsación larga y arrastre seleccionan 3 y
+  4 líneas consecutivas; el tope se detiene en 6.
+- Álbum real verificado en Wrapped: la pista de YouTube se registró con
+  `album=Tus Vueltas` y apareció en el top de álbumes.

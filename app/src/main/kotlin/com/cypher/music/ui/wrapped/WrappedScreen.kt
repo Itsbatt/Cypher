@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -54,6 +55,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.cypher.music.data.ThemePreferences
 import com.cypher.music.data.WrappedStats
+import com.cypher.music.ui.share.WrappedShareSheet
 import com.cypher.music.ui.theme.AmbientArtworkColors
 import com.cypher.music.ui.theme.CypherLavender
 import com.cypher.music.ui.utils.AppHaptics
@@ -90,6 +92,7 @@ fun WrappedScreen(
 
     var currentSlide by remember { mutableIntStateOf(0) }
     var paused by remember { mutableStateOf(false) }
+    var shareOpen by remember { mutableStateOf(false) }
     // A fresh Animatable per slide keeps pause/resume smooth and restarts at 0 on navigation.
     val progress = remember(currentSlide) { Animatable(0f) }
 
@@ -104,8 +107,8 @@ fun WrappedScreen(
         }
     }
 
-    LaunchedEffect(currentSlide, paused) {
-        if (paused) return@LaunchedEffect
+    LaunchedEffect(currentSlide, paused, shareOpen) {
+        if (paused || shareOpen) return@LaunchedEffect
         val remaining = ((1f - progress.value) * SLIDE_DURATION_MS).toInt().coerceAtLeast(1)
         progress.animateTo(1f, tween(durationMillis = remaining, easing = LinearEasing))
         goTo(currentSlide + 1)
@@ -256,6 +259,32 @@ fun WrappedScreen(
                     }
                 }
             }
+        }
+
+        if (shareOpen) {
+            WrappedShareSheet(
+                stats = stats,
+                accentColor = accent,
+                onDismiss = { shareOpen = false }
+            )
+        }
+
+        IconButton(
+            onClick = { shareOpen = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 30.dp, end = 54.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f))
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Share,
+                contentDescription = "Compartir Wrapped",
+                tint = Color.White.copy(alpha = 0.80f),
+                modifier = Modifier.size(17.dp)
+            )
         }
 
         IconButton(

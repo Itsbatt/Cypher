@@ -268,19 +268,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .atZone(ZoneId.systemDefault())
                     .toLocalDate()
                     .toString()
+                // YouTube Music publishes the album in the video description; read it
+                // once per play so Wrapped ranks real albums instead of the generic
+                // "YouTube Music" placeholder. Missing data stays null (never invented).
+                // Tracks restored from Room may not carry the resolved stream URL, so
+                // the video id is recovered from the stable "yt_" prefix as well.
+                val videoId = track.streamUrl.takeIf { it.isNotBlank() }
+                    ?: track.id.removePrefix("yt_").takeIf { track.id.startsWith("yt_") }
+                // resolve() memoises per video id, including misses, so calling it on
+                // every tick costs nothing after the first request.
+                val youtubeMeta = if (
+                    track.sourceType == com.cypher.music.model.AudioSourceType.YOUTUBE &&
+                    videoId != null
+                ) {
+                    com.cypher.music.network.YouTubeMetadata.resolve(videoId)
+                } else {
+                    null
+                }
                 playlistRepository.roomDb.playbackDailyDao().recordDailyPlayback(
                     day,
                     track.id,
                     track.title,
                     track.artist,
                     track.artworkUrl,
-                    track.album.trim().takeIf {
+                    youtubeMeta?.album ?: track.album.trim().takeIf {
                         it.isNotBlank() &&
                             !it.equals("Sencillo", true) &&
                             !it.equals("YouTube Music", true) &&
                             !it.equals("Álbum local", true)
                     },
-                    track.genre?.trim()?.takeIf { it.isNotBlank() },
+                    youtubeMeta?.genre ?: track.genre?.trim()?.takeIf { it.isNotBlank() },
                     elapsedMs,
                     now,
                     isNewPlay

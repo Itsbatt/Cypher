@@ -28,6 +28,30 @@ Compartir letras (3 diseños × 2 formatos, canvas nativo 1080 px, FileProvider 
 - Comprobaciones posteriores: las tres tarjetas y los dos formatos siguen renderizando; el menú nativo recibe la imagen; la cola abre y muestra su estado vacío; Wrapped recorre sus 6 diapositivas con datos reales (2157 min, 19 reproducciones, 100 % Milo J, día pico 8 de noviembre) y muestra estados honestos para álbum/género no disponibles.
 - `logcat -b crash` vacío en todas las rondas; PSS ≈ 118 MB en reposo y ≈ 134 MB reproduciendo con la cola abierta.
 
+### C.2 Ampliación final (antes de publicar)
+
+Cuatro incorporaciones pedidas tras la primera auditoría final:
+
+1. **Guardar tarjeta en galería** (`Pictures/Cypher` vía MediaStore) para letras y
+   Wrapped. Verificado: dos PNG reales en `/sdcard/Pictures/Cypher` (227 KB y 161 KB).
+2. **Selección por arrastre** en letras: pulsación larga y arrastre extienden el
+   bloque con el mismo tope de 6 líneas. Verificado en dispositivo con
+   `motionevent` (3 y 4 líneas consecutivas).
+3. **Compartir Wrapped** reutilizando el sistema de tarjetas, con formatos
+   Historia/Cuadrado y guardado propio. Verificado: hoja abierta, previsualización
+   renderizada y PNG guardado en galería.
+4. **Álbum real para pistas de YouTube** leyendo la descripción pública del vídeo
+   al reproducir. Verificado: `album=Tus Vueltas` registrado y visible en el top
+   de álbumes de Wrapped. **Género:** YouTube no expone género en esa respuesta,
+   así que sigue mostrándose el estado honesto y solo se rellena cuando la fuente
+   lo declara de forma explícita.
+
+Fallos encontrados durante esta ampliación y corregidos: prefijo `$` espurio en
+los títulos de la tarjeta de Wrapped, robo de metadatos por la redirección de
+`youtube.com` a `m.youtube.com` (se pide la URL móvil directamente), y ausencia
+inicial de resolución porque `streamUrl` puede venir vacío en pistas restauradas
+de Room (ahora se recupera el id del prefijo `yt_`).
+
 ### D. Pendiente / no verificado en este ciclo
 - Compartir a una app concreta más allá de abrir el menú nativo (se comprobó el chooser con Quick Share, Instagram, Mensajes, Bluetooth y Discord).
 - Álbumes y géneros de Wrapped con datos reales: la biblioteca de prueba es 100 % YouTube Music y no expone álbum/género; el código y los estados vacíos están verificados, el cálculo con datos no.

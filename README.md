@@ -19,7 +19,8 @@
 - **Private offline vault:** downloads on internal or removable MicroSD storage with `.nomedia` shielding.
 - **AGSL Liquid Glass UI:** GPU-accelerated background shaders with palette-driven ambient colors.
 - **Live synced lyrics** from LRCLIB with a built-in **share-card studio**: pick up to six consecutive lines, choose Minimal/Artwork/Typography, export 1080 px story or square cards and send them through the Android share sheet.
-- **Annual Cypher Wrapped:** minutes, top songs, artists with listening share, albums, genres and most-repeated track, all from real playback rollups (never invented).
+- **Annual Cypher Wrapped:** minutes, top songs, artists with listening share, albums (resolved from the public video description), genres and most-repeated track, all from real playback rollups (never invented), with its own shareable story/square card.
+- **Export anywhere:** every card can be saved to `Pictures/Cypher` through MediaStore or sent through the Android share sheet.
 - **In-app equalizer**, sleep timer, Android Auto media library, QR playlist sharing, and simple history-based recommendations with an honest empty state.
 - **Sharp artwork:** 1280×720 `maxres` YouTube thumbnails with an automatic `hqdefault` fallback, one shared Coil image loader and a bounded palette cache.
 - **In-app updates:** checks GitHub Releases, verifies the APK signature/hash and hands it to the system installer.

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +73,7 @@ import com.cypher.music.ui.share.LyricsShareSheet
 import com.cypher.music.ui.share.MAX_SHARE_LINES
 import com.cypher.music.ui.theme.AmbientArtworkColors
 import com.cypher.music.ui.theme.IosDarkTextSecondary
+import kotlin.math.roundToInt
 
 @Composable
 fun CypherLyricsSheet(
@@ -129,25 +132,33 @@ fun CypherLyricsSheet(
         selectionEnd = null
     }
 
+    fun beginSelection(index: Int) {
+        selectionAnchor = index
+        selectionEnd = index
+    }
+
+    fun extendSelection(index: Int, lineCount: Int) {
+        val anchor = selectionAnchor ?: run {
+            beginSelection(index)
+            return
+        }
+        // Grow towards the touched line but never past MAX lines, so the fragment
+        // stays short and contiguous from the chosen start.
+        val capped = if (index >= anchor) {
+            index.coerceAtMost(anchor + MAX_SHARE_LINES - 1)
+        } else {
+            index.coerceAtLeast(anchor - MAX_SHARE_LINES + 1)
+        }
+        selectionEnd = capped.coerceIn(0, (lineCount - 1).coerceAtLeast(0))
+    }
+
     fun selectLine(index: Int, lineCount: Int) {
         val anchor = selectionAnchor
         when {
-            anchor == null -> {
-                selectionAnchor = index
-                selectionEnd = index
-            }
+            anchor == null -> beginSelection(index)
             // Tapping the only selected line again clears the fragment.
             anchor == index && selectionEnd == index -> clearSelection()
-            else -> {
-                // Grow towards the tapped line but never past MAX lines, so the
-                // fragment stays short and contiguous from the chosen start.
-                val capped = if (index >= anchor) {
-                    index.coerceAtMost(anchor + MAX_SHARE_LINES - 1)
-                } else {
-                    index.coerceAtLeast(anchor - MAX_SHARE_LINES + 1)
-                }
-                selectionEnd = capped.coerceIn(0, (lineCount - 1).coerceAtLeast(0))
-            }
+            else -> extendSelection(index, lineCount)
         }
     }
 
@@ -346,6 +357,28 @@ fun CypherLyricsSheet(
                                                 onSeekTo(targetProgress)
                                             }
                                         }
+                                        .pointerInput(index, lines.size) {
+                                            var origin = 0f
+                                            var travelled = 0f
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    origin = index.toFloat()
+                                                    travelled = 0f
+                                                    selectionMode = true
+                                                    beginSelection(index)
+                                                },
+                                                onDrag = { change, amount ->
+                                                    travelled += amount.y
+                                                    val rowPx = 58.dp.toPx().coerceAtLeast(1f)
+                                                    val target = (origin + travelled / rowPx).roundToInt()
+                                                    extendSelection(
+                                                        target.coerceIn(0, lines.lastIndex.coerceAtLeast(0)),
+                                                        lines.size
+                                                    )
+                                                    change.consume()
+                                                }
+                                            )
+                                        }
                                         .padding(vertical = 6.dp, horizontal = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -397,6 +430,28 @@ fun CypherLyricsSheet(
                                         indication = null
                                     ) {
                                         if (selectionMode) selectLine(index, plainLines.size)
+                                    }
+                                    .pointerInput(index, plainLines.size) {
+                                        var origin = 0f
+                                        var travelled = 0f
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                origin = index.toFloat()
+                                                travelled = 0f
+                                                selectionMode = true
+                                                beginSelection(index)
+                                            },
+                                            onDrag = { change, amount ->
+                                                travelled += amount.y
+                                                val rowPx = 58.dp.toPx().coerceAtLeast(1f)
+                                                val target = (origin + travelled / rowPx).roundToInt()
+                                                extendSelection(
+                                                    target.coerceIn(0, plainLines.lastIndex.coerceAtLeast(0)),
+                                                    plainLines.size
+                                                )
+                                                change.consume()
+                                            }
+                                        )
                                     }
                                     .padding(vertical = 5.dp, horizontal = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically

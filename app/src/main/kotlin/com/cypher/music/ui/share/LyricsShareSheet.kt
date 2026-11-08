@@ -2,6 +2,7 @@ package com.cypher.music.ui.share
 
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +32,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +76,7 @@ fun LyricsShareSheet(
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var rendering by remember { mutableStateOf(true) }
     var exporting by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     val data = remember(track, lines, accentColor) {
         LyricsCardData(
@@ -241,59 +244,108 @@ fun LyricsShareSheet(
                     .padding(top = 14.dp)
             )
 
-            Button(
-                onClick = {
-                    if (exporting) return@Button
-                    exporting = true
-                    scope.launch {
-                        try {
-                            val full = LyricsCardRenderer.render(
-                                context = context,
-                                data = data,
-                                design = design,
-                                format = format
-                            )
-                            LyricsShare.share(context, full, data, format)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "No se pudo compartir la tarjeta", Toast.LENGTH_SHORT).show()
-                        } finally {
-                            exporting = false
-                        }
-                    }
-                },
-                enabled = !exporting && !rendering,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 10.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(26.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor,
-                    contentColor = Color(0xFF160F1D),
-                    disabledContainerColor = accentColor.copy(alpha = 0.35f),
-                    disabledContentColor = Color(0xFF160F1D).copy(alpha = 0.6f)
-                )
+                    .padding(top = 12.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (exporting) {
-                    CircularProgressIndicator(
-                        color = Color(0xFF160F1D),
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
+                OutlinedButton(
+                    onClick = {
+                        if (saving || exporting) return@OutlinedButton
+                        saving = true
+                        scope.launch {
+                            try {
+                                val full = LyricsCardRenderer.render(
+                                    context = context,
+                                    data = data,
+                                    design = design,
+                                    format = format
+                                )
+                                val uri = LyricsShare.saveToGallery(
+                                    context,
+                                    full,
+                                    "cypher-letra-${format.name.lowercase()}.png"
+                                )
+                                val message = if (uri != null) {
+                                    "Guardado en Pictures/Cypher"
+                                } else {
+                                    "No se pudo guardar la tarjeta"
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            } finally {
+                                saving = false
+                            }
+                        }
+                    },
+                    enabled = !saving && !exporting && !rendering,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                ) {
+                    Text(
+                        text = "Guardar",
+                        color = Color(0xFFF8F6FB),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Text(
-                    text = if (exporting) "Generando…" else "Compartir",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
+
+                Button(
+                    onClick = {
+                        if (exporting || saving) return@Button
+                        exporting = true
+                        scope.launch {
+                            try {
+                                val full = LyricsCardRenderer.render(
+                                    context = context,
+                                    data = data,
+                                    design = design,
+                                    format = format
+                                )
+                                LyricsShare.share(context, full, data, format)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No se pudo compartir la tarjeta", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                exporting = false
+                            }
+                        }
+                    },
+                    enabled = !exporting && !saving && !rendering,
+                    modifier = Modifier
+                        .weight(1.25f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentColor,
+                        contentColor = Color(0xFF160F1D),
+                        disabledContainerColor = accentColor.copy(alpha = 0.35f),
+                        disabledContentColor = Color(0xFF160F1D).copy(alpha = 0.6f)
+                    )
+                ) {
+                    if (exporting) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF160F1D),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = if (exporting) "Generando…" else "Compartir",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

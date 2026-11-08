@@ -124,6 +124,17 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 - **Recomanacions:** motor existent sense serveis nous, amb deduplicació global,
   exclusió del que s'acaba d'escoltar, gèneres reals de la biblioteca i estat
   buit quan no hi ha historial. «Top Picks for You» passa a «Elegit per a tu».
+- **Galeria:** les targetes de lletres i de Wrapped es poden desar a
+  `Pictures/Cypher` amb MediaStore, a més de compartir-les; abans només vivien a
+  la memòria cau.
+- **Compartir Wrapped:** `WrappedCardRenderer` + `WrappedShareSheet` reutilitzen
+  el llenguatge visual de les targetes, amb formats Història i Quadrat, desat a
+  la galeria i enviament pel menú natiu.
+- **Metadades reals:** en pistes de YouTube, l'àlbum es llegeix de la descripció
+  pública del vídeo (`YouTubeMetadata`, amb memòria cau per id). El gènere només
+  s'omple quan la font el declara; si no, es manté l'estat honest.
+- **Selecció per arrossegament:** mantenir premuda una línia i arrossegar estén
+  el bloc, sempre contigu i amb el topall de 6 línies.
 - **Reparacions:** menú contextual del reproductor («Reproduir a continuació» i
   «Afegir a la cua» tenien lambdas buides), etiqueta accessible del botó de cua
   («Cua de reproducció»), any del Wrapped derivat de la data real en lloc d'un

@@ -1,2 +1,2 @@
-9fd3bcd1267d8e8e5b7f03d63158fad32a8c37c6468b1f394fb33d0b2d897fb7 *Cypher-1.0.9-arm64-v8a-release.apk
-1f5e06beb1146da7b16e6071877fdf082d4af3079e8c9ec8323e7059cf3f669e *Cypher-1.0.9-universal-release.apk
+f4a1bb27bf7f946b5f3ee318339edd827c936e364c90b5b9d97c34cc1db99a5f *Cypher-1.0.9-arm64-v8a-release.apk
+df4783e81bc3243c1366bfcb895e39dc5c39b6fe680b7b2c1fafb2b767be6bf7 *Cypher-1.0.9-universal-release.apk

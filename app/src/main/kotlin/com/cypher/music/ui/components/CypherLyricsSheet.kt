@@ -109,19 +109,45 @@ fun CypherLyricsSheet(
             ?: emptyList()
     }
 
-    // Fragment sharing: the user picks whole lines, up to a short fragment.
+    // Fragment sharing: the first tap sets the start of the fragment and the next
+    // one its end, so the shared block is always a run of consecutive lines.
     var selectionMode by remember(track.id) { mutableStateOf(false) }
-    var selectedIndices by remember(track.id) { mutableStateOf<Set<Int>>(emptySet()) }
+    var selectionAnchor by remember(track.id) { mutableStateOf<Int?>(null) }
+    var selectionEnd by remember(track.id) { mutableStateOf<Int?>(null) }
     var shareLines by remember(track.id) { mutableStateOf<List<String>?>(null) }
     val hasLyrics = lines.isNotEmpty() || plainLines.isNotEmpty()
 
-    fun toggleSelection(index: Int) {
-        selectedIndices = if (selectedIndices.contains(index)) {
-            selectedIndices - index
-        } else if (selectedIndices.size >= MAX_SHARE_LINES) {
-            selectedIndices
-        } else {
-            selectedIndices + index
+    val selectedIndices: Set<Int> = remember(selectionAnchor, selectionEnd) {
+        val anchor = selectionAnchor
+        val end = selectionEnd
+        if (anchor == null || end == null) emptySet()
+        else (minOf(anchor, end)..maxOf(anchor, end)).toSet()
+    }
+
+    fun clearSelection() {
+        selectionAnchor = null
+        selectionEnd = null
+    }
+
+    fun selectLine(index: Int, lineCount: Int) {
+        val anchor = selectionAnchor
+        when {
+            anchor == null -> {
+                selectionAnchor = index
+                selectionEnd = index
+            }
+            // Tapping the only selected line again clears the fragment.
+            anchor == index && selectionEnd == index -> clearSelection()
+            else -> {
+                // Grow towards the tapped line but never past MAX lines, so the
+                // fragment stays short and contiguous from the chosen start.
+                val capped = if (index >= anchor) {
+                    index.coerceAtMost(anchor + MAX_SHARE_LINES - 1)
+                } else {
+                    index.coerceAtLeast(anchor - MAX_SHARE_LINES + 1)
+                }
+                selectionEnd = capped.coerceIn(0, (lineCount - 1).coerceAtLeast(0))
+            }
         }
     }
 
@@ -183,7 +209,7 @@ fun CypherLyricsSheet(
                     }
                     Text(
                         text = when {
-                            selectionMode -> "SELECCIONA LAS LÍNEAS"
+                            selectionMode -> "FRAGMENTO SEGUIDO"
                             isSynced -> "LETRAS EN VIVO"
                             else -> "LETRAS"
                         },
@@ -199,7 +225,7 @@ fun CypherLyricsSheet(
                     if (hasLyrics) {
                         IconButton(
                             onClick = {
-                                if (!selectionMode) selectedIndices = emptySet()
+                                clearSelection()
                                 selectionMode = !selectionMode
                             },
                             modifier = Modifier
@@ -314,7 +340,7 @@ fun CypherLyricsSheet(
                                             indication = null
                                         ) {
                                             if (selectionMode) {
-                                                toggleSelection(index)
+                                                selectLine(index, lines.size)
                                             } else if (durationMs > 0) {
                                                 val targetProgress = (line.timeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                                                 onSeekTo(targetProgress)
@@ -370,7 +396,7 @@ fun CypherLyricsSheet(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
-                                        if (selectionMode) toggleSelection(index)
+                                        if (selectionMode) selectLine(index, plainLines.size)
                                     }
                                     .padding(vertical = 5.dp, horizontal = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -439,7 +465,7 @@ fun CypherLyricsSheet(
                 SelectionBar(
                     count = selectedIndices.size,
                     accentColor = accentColor,
-                    onClear = { selectedIndices = emptySet() },
+                    onClear = { clearSelection() },
                     onCreate = {
                         val chosen = if (isSynced) {
                             selectedIndices.sorted().mapNotNull { lines.getOrNull(it)?.text?.trim() }
@@ -502,7 +528,7 @@ private fun SelectionBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "$count/$MAX_SHARE_LINES líneas",
+            text = if (count == 0) "Toca la primera línea" else "$count/$MAX_SHARE_LINES líneas seguidas",
             color = IosDarkTextSecondary,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold

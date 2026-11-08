@@ -8,8 +8,9 @@
 ## Compartir fragmentos de letras
 
 - Nuevo botón **Compartir** en la hoja de letras. Activa la selección y permite
-  marcar y desmarcar líneas (máximo 6) tanto en letras sincronizadas como en
-  letras planas.
+  elegir un **fragmento de hasta 6 líneas consecutivas** (nunca líneas sueltas):
+  el primer toque marca el inicio y el segundo el final, y el bloque se ajusta
+  solo para no pasar de 6. Funciona con letras sincronizadas y planas.
 - **Tarjeta CYPHER** generada con el canvas nativo a 1080 px reales, no una
   captura de pantalla reescalada:
   - **Minimal**: fondo oscuro, filete de acento, carátula y tipografía serif.

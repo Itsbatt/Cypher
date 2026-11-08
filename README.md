@@ -18,7 +18,7 @@
 - **Spotify migration without an account:** import a ZIP of playlists or a single CSV/JSON export, or paste a public playlist link. No OAuth, no Client ID, no Premium.
 - **Private offline vault:** downloads on internal or removable MicroSD storage with `.nomedia` shielding.
 - **AGSL Liquid Glass UI:** GPU-accelerated background shaders with palette-driven ambient colors.
-- **Live synced lyrics** from LRCLIB with a built-in **share-card studio**: pick up to six lines, choose Minimal/Artwork/Typography, export 1080 px story or square cards and send them through the Android share sheet.
+- **Live synced lyrics** from LRCLIB with a built-in **share-card studio**: pick up to six consecutive lines, choose Minimal/Artwork/Typography, export 1080 px story or square cards and send them through the Android share sheet.
 - **Annual Cypher Wrapped:** minutes, top songs, artists with listening share, albums, genres and most-repeated track, all from real playback rollups (never invented).
 - **In-app equalizer**, sleep timer, Android Auto media library, QR playlist sharing, and simple history-based recommendations with an honest empty state.
 - **Sharp artwork:** 1280×720 `maxres` YouTube thumbnails with an automatic `hqdefault` fallback, one shared Coil image loader and a bounded palette cache.

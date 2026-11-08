@@ -1,5 +1,5 @@
 CYPHER 1.1.0 (versionName 1.1.0, versionCode 13, minSdk 29)
-Compilado (UTC): 2026-11-08T19:27:56Z
-arm64-v8a: 16cd869276e4d268c30bd7800f303e00d93f4b89129e4a884cefd6e39f6c9175 (60908703 bytes)
-universal: f1c29ec8e871f6425a19f9fe97f750dc5d339d56de67ec6ccca81a0156019810 (104408139 bytes)
+Compilado (UTC): 2026-11-08T19:38:21Z
+arm64-v8a: 2c21a7b60b9f3e45c0a19b5d860430fcd50cc45002f75e5e145396d622c403f2 (60911007 bytes)
+universal: 1f4d69a537de9d0982753ac68ba7ec2dcd23366c689596ea0ec6596c42f32a7a (104410443 bytes)
 Estado: NO PUBLICADO. En pruebas privadas; sin tag, sin release y sin push.

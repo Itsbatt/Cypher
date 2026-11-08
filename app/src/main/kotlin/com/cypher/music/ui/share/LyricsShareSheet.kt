@@ -83,7 +83,7 @@ fun LyricsShareSheet(
             trackTitle = track.title,
             artist = track.artist,
             album = track.album,
-            artworkUrl = track.artworkUrl,
+            artworkUrl = track.displayArtworkUrl,
             lines = lines,
             accent = accentColor
         )

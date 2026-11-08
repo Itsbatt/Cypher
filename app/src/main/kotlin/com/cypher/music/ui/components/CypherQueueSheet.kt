@@ -322,7 +322,7 @@ fun CypherQueueSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
-                                model = track.artworkUrl,
+                                model = track.displayArtworkUrl,
                                 contentDescription = track.title,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier

@@ -22,6 +22,26 @@ data class Track(
     // so Wrapped can state honestly that there is no genre data.
     val genre: String? = null
 ) {
+    /**
+     * Cover actually used by the UI. When the provider omits the thumbnail (InnerTube
+     * does this for some shelves) the real YouTube frame is derived from the track
+     * id, so Now Playing never renders an empty square.
+     */
+    val displayArtworkUrl: String?
+        get() {
+            artworkUrl?.takeIf { it.isNotBlank() }?.let { return it }
+            if (sourceType != AudioSourceType.YOUTUBE) return null
+            val source = streamUrl.ifBlank { id }.removePrefix("yt_")
+            val videoId = source
+                .substringAfterLast("v=")
+                .substringAfterLast("/")
+                .substringBefore("?")
+                .substringBefore("&")
+                .trim()
+            if (videoId.length < 6) return null
+            return "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg"
+        }
+
     val formattedDuration: String
         get() {
             val totalSeconds = durationMs / 1000

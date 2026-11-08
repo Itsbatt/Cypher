@@ -181,9 +181,9 @@ fun CypherMiniPlayer(
                         ) {
                             ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
 
-                            if (!shownTrack.artworkUrl.isNullOrBlank()) {
+                            if (!shownTrack.displayArtworkUrl.isNullOrBlank()) {
                                 AsyncImage(
-                                    model = shownTrack.artworkUrl,
+                                    model = shownTrack.displayArtworkUrl,
                                     contentDescription = shownTrack.title,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()

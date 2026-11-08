@@ -905,7 +905,7 @@ private fun ArtistsListView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
-                    model = artistTracks.firstOrNull()?.artworkUrl,
+                    model = artistTracks.firstOrNull()?.displayArtworkUrl,
                     contentDescription = artist,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1040,9 +1040,9 @@ private fun AlbumsGridView(
                         contentAlignment = Alignment.Center
                     ) {
                         ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
-                        if (!albumTracks.firstOrNull()?.artworkUrl.isNullOrBlank()) {
+                        if (!albumTracks.firstOrNull()?.displayArtworkUrl.isNullOrBlank()) {
                             AsyncImage(
-                                model = albumTracks.firstOrNull()?.artworkUrl,
+                                model = albumTracks.firstOrNull()?.displayArtworkUrl,
                                 contentDescription = album,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -1282,7 +1282,7 @@ private fun ArtistDetailView(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AsyncImage(
-                    model = tracks.firstOrNull()?.artworkUrl,
+                    model = tracks.firstOrNull()?.displayArtworkUrl,
                     contentDescription = artistName,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1365,9 +1365,9 @@ private fun AlbumDetailView(
                     contentAlignment = Alignment.Center
                 ) {
                     ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
-                    if (!tracks.firstOrNull()?.artworkUrl.isNullOrBlank()) {
+                    if (!tracks.firstOrNull()?.displayArtworkUrl.isNullOrBlank()) {
                         AsyncImage(
-                            model = tracks.firstOrNull()?.artworkUrl,
+                            model = tracks.firstOrNull()?.displayArtworkUrl,
                             contentDescription = albumName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

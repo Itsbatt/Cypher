@@ -148,8 +148,8 @@ fun CypherNowPlayingModal(
 
     // Extract dynamic ambient color palette for Liquid Glass background
     var ambientColors by remember { mutableStateOf(AmbientArtworkColors()) }
-    LaunchedEffect(track.artworkUrl) {
-        ambientColors = PaletteExtractor.extractColors(context, track.artworkUrl)
+    LaunchedEffect(track.displayArtworkUrl) {
+        ambientColors = PaletteExtractor.extractColors(context, track.displayArtworkUrl)
     }
 
     // Spring scale physics on album artwork
@@ -315,7 +315,7 @@ fun CypherNowPlayingModal(
                                     label = "ArtworkSlide"
                                 ) { shownTrack ->
                                     AsyncImage(
-                                        model = shownTrack.artworkUrl,
+                                        model = shownTrack.displayArtworkUrl,
                                         contentDescription = shownTrack.title,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier

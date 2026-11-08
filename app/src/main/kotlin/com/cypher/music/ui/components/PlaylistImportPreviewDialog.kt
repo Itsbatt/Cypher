@@ -181,9 +181,9 @@ fun PlaylistImportPreviewDialog(
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.White.copy(alpha = 0.08f))
                             ) {
-                                if (!track.artworkUrl.isNullOrBlank()) {
+                                if (!track.displayArtworkUrl.isNullOrBlank()) {
                                     AsyncImage(
-                                        model = track.artworkUrl,
+                                        model = track.displayArtworkUrl,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()

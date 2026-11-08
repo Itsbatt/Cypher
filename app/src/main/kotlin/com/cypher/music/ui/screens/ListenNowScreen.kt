@@ -481,9 +481,9 @@ fun ListenNowScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 ArtworkPlaceholder(modifier = Modifier.fillMaxSize())
-                                if (!track.artworkUrl.isNullOrBlank()) {
+                                if (!track.displayArtworkUrl.isNullOrBlank()) {
                                     AsyncImage(
-                                        model = track.artworkUrl,
+                                        model = track.displayArtworkUrl,
                                         contentDescription = track.title,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()

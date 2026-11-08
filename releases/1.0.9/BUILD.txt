@@ -1,5 +1,8 @@
 CYPHER 1.0.9 (versionName 1.0.9, versionCode 12)
-Compilado (UTC): 2026-11-08T10:26:03Z
-Commit base: 8043187
+Compilado (UTC): 2026-11-08T10:52:52Z
+Commit: 24d05bc
 Firma: Signer #1 SHA-256 54415ff1751b71d0d15430b90c44cf04b58f4652f9c6838d1578e9292bc17720 (CN=Cypher)
-Estado: NO PUBLICADO - solo instalacion local y copia en el proyecto
+arm64-v8a: d3fab78b95acbf7112652a9eee9603f9347fdd8b404e6d75a5b5221b523137da (60709439 bytes)
+universal: fe0becb2e993150f61088caffb8bcb0a5340959de85854cd22b7c4bb698fffef (104208871 bytes)
+Release: https://github.com/Itsbatt/Cypher/releases/tag/v1.0.9
+Estado: PUBLICADO en GitHub Releases v1.0.9

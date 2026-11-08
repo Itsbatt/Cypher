@@ -145,3 +145,21 @@ Resultado medido en la tableta SM-T580:
 Por tanto el streaming en esa tableta **sigue sin funcionar** y **no se ha publicado nada**: la 1.2.0 no cumple el criterio de superar las pruebas en ambos dispositivos. Los cambios quedan en commits locales.
 
 Siguiente paso técnico: ajustar la fuente de datos de ExoPlayer para esa URL (cabeceras/UA, sin caché compartida, o pista de audio DASH) y repetir esta batería antes de publicar.
+
+---
+
+## Cierre: causa confirmada y publicación
+
+El usuario confirmó que **el audio sí se escucha** en ambos dispositivos. Eso descarta que falle el motor: lo que fallaba era la telemetría del IFrame (no llegan `PLAYING` ni `onCurrentSecond` en WebView 81) y la reacción de la app a ese silencio.
+
+- Se retiró el respaldo por URL directa (ExoPlayer rechazaba la URL de yt-dlp con `EOFException` y además podía cortar audio que ya sonaba).
+- El supervisor ya no recarga ni salta una pista de streaming sin un error explícito.
+- La posición se mantiene con un reloj de respaldo y se resincroniza con el IFrame cuando este informa.
+
+Verificación final en la tablet SM-T580 (Android 10), tras los cambios: reproductor abierto, posición **0:21 → 0:26 → 0:32 → 0:37**, restante −2:57 → −2:41, estado `Pausar`, sin reinicios ni saltos. Duración correcta (3:44). Una pista concreta (`Por Ese Hombre (Segunda Parte)`) sigue devolviendo error de IFrame por restricción del vídeo y se salta, como debe.
+
+Publicación autorizada por el usuario y completada:
+- `main` en `bc77523`; tag `v1.2.0`; rama `release/1.2.0`.
+- Release: https://github.com/Itsbatt/Cypher/releases/tag/v1.2.0 (no borrador).
+- Assets: `app-arm64-v8a-release.apk` (60 964 491 B), `app-universal-release.apk` (104 463 927 B), `SHA256SUMS.txt` (184 B).
+- APK instalada y comprobada en SM-T580 y SM-S901E con `versionName 1.2.0`.

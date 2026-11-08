@@ -142,6 +142,9 @@ class MusicPlayerManager(private val context: Context) {
     /** Last time the IFrame reported a playback second; drives the fallback clock. */
     private var lastSecondReportAt = 0L
 
+    /** Track already switched to the direct stream, so the fallback runs once. */
+    private var directStreamTrackId: String? = null
+
     // Play-count policy: 30 s (or half of a short track) per session.
     private val playCountTracker = PlayCountTracker()
 
@@ -1127,7 +1130,9 @@ class MusicPlayerManager(private val context: Context) {
                     // specific error codes being handled and the rest hanging.
                     val failed = _state.value.currentTrack
                     if (failed != null) {
-                        onTrackLoadFailed(failed, "IFrame error: $error")
+                        if (!tryDirectStreamFallback(failed, "IFrame error: $error")) {
+                            onTrackLoadFailed(failed, "IFrame error: $error")
+                        }
                     } else {
                         bufferingWatchdogJob?.cancel()
                         _state.update { it.copy(isBuffering = false, isPlaying = false) }
@@ -1337,6 +1342,66 @@ class MusicPlayerManager(private val context: Context) {
         youTubePlayer?.loadVideo(videoId, (positionMs / 1000f).coerceAtLeast(0f))
     }
 
+    /**
+     * Some WebView builds cannot start the YouTube IFrame at all (error 2 or no
+     * PLAYING event). When that happens the direct audio URL is resolved and
+     * played through ExoPlayer, the same engine used for downloads, which also
+     * gives native position and duration.
+     *
+     * Runs at most once per track and only before any audio has played, so the
+     * normal IFrame path, downloads and local files keep their behaviour. If the
+     * direct URL also fails, the usual skip path applies.
+     */
+    private fun tryDirectStreamFallback(track: Track, reason: String): Boolean {
+        if (track.sourceType != AudioSourceType.YOUTUBE) return false
+        if (isPlayingOffline) return false
+        if (directStreamTrackId == track.id) return false
+        if (_playbackPositionMs.value > 3000L) return false
+        directStreamTrackId = track.id
+        Log.w("AppleMusicPlayer", "IFrame failed ($reason); trying direct stream for '${track.title}'")
+        scope.launch {
+            val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+            val url = try {
+                com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+            } catch (e: Exception) {
+                Log.e("AppleMusicPlayer", "Direct stream resolution failed for $videoId", e)
+                null
+            }
+            if (url.isNullOrEmpty()) {
+                Log.e("AppleMusicPlayer", "No direct stream for $videoId; skipping")
+                onTrackLoadFailed(track, "direct stream unavailable")
+                return@launch
+            }
+            if (_state.value.currentTrack?.id != track.id) return@launch
+            val metadata = MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.artist)
+                .setAlbumTitle(track.album)
+                .setArtworkUri(track.artworkUrl?.let { Uri.parse(it) })
+                .build()
+            youTubePlayer?.pause()
+            isPlayingOffline = true
+            _state.update { it.copy(isBuffering = true, isPlaying = true) }
+            startLocalProgressTracker()
+            exoPlayer.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true
+            )
+            exoPlayer.volume = 1f
+            exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
+            exoPlayer.setMediaItem(
+                MediaItem.Builder().setUri(Uri.parse(url)).setMediaMetadata(metadata).build()
+            )
+            exoPlayer.prepare()
+            exoPlayer.play()
+            Log.i("AppleMusicPlayer", "Direct stream fallback playing '${track.title}'")
+        }
+        return true
+    }
+
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
         pendingRestorePositionMs = null
         val index = newQueue.indexOfFirst { it.id == track.id }.let { if (it == -1) 0 else it }
@@ -1402,7 +1467,9 @@ class MusicPlayerManager(private val context: Context) {
             if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken &&
                 _playbackPositionMs.value <= 0L
             ) {
-                onTrackLoadFailed(track, "playback did not start in ${deadline * 2}ms")
+                if (!tryDirectStreamFallback(track, "start timeout")) {
+                    onTrackLoadFailed(track, "playback did not start in ${deadline * 2}ms")
+                }
             }
         }
 

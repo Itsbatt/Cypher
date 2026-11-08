@@ -130,3 +130,18 @@ Método: uso real por ADB (`input tap`), lectura de la interfaz con `uiautomator
 - En el móvil moderno la reproducción es estable en las pruebas realizadas (posición, duración, pausa, siguiente y anterior), pero principalmente con pistas descargadas.
 - Los cambios aplicados eliminan dos causas reales del síntoma (reinicio desde el segundo 0 y salto con audio en curso) y desacoplan la barra del callback del IFrame, pero **no bastan** para la tableta: allí el problema de fondo es el motor IFrame sobre WebView 81.
 - Recomendación: implementar el respaldo por URL directa con ExoPlayer antes de publicar, y repetir esta batería en ambos dispositivos.
+
+---
+
+## Actualización (misma sesión): respaldo por URL directa
+
+Se añadió un respaldo que, cuando el IFrame falla, resuelve la URL directa con `YouTubeRepository.getStreamUrl` (yt-dlp, pista 140) y la reproduce con ExoPlayer, reutilizando la ruta de descargas (posición, duración y fin de pista nativos). Se ejecuta una sola vez por pista y solo antes de que suene audio; si falla, se mantiene el salto habitual.
+
+Resultado medido en la tableta SM-T580:
+- El respaldo se activa correctamente (`IFrame failed ... trying direct stream`, `Direct stream fallback playing 'Mañana'`).
+- ExoPlayer rechaza la URL con `ERROR_CODE_IO_UNSPECIFIED (2000)` y `EOFException` en la lectura inicial, así que la pista acaba saltando igual.
+- Posición en el reproductor: 0:00 durante 32 s; duración correcta (3:44).
+
+Por tanto el streaming en esa tableta **sigue sin funcionar** y **no se ha publicado nada**: la 1.2.0 no cumple el criterio de superar las pruebas en ambos dispositivos. Los cambios quedan en commits locales.
+
+Siguiente paso técnico: ajustar la fuente de datos de ExoPlayer para esa URL (cabeceras/UA, sin caché compartida, o pista de audio DASH) y repetir esta batería antes de publicar.

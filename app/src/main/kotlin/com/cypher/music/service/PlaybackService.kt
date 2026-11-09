@@ -16,11 +16,11 @@ import android.os.Build
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.MediaStyleNotificationHelper
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -187,11 +187,12 @@ class PlaybackService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val mediaStyle = MediaStyle()
-            .setShowActionsInCompactView(0, 1, 2)
-
-        MusicPlayerManager.activeMediaSession?.let { session ->
-            mediaStyle.setMediaSession(session.sessionCompatToken)
+        // media3 owns the notification style now: it reads the session directly and
+        // keeps the compact actions and the large icon in sync without the legacy
+        // androidx.media token bridge.
+        val mediaStyle = MusicPlayerManager.activeMediaSession?.let { session ->
+            MediaStyleNotificationHelper.MediaStyle(session)
+                .setShowActionsInCompactView(0, 1, 2)
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -200,7 +201,6 @@ class PlaybackService : MediaLibraryService() {
             .setContentText(artist)
             .setSubText(album.ifEmpty { null })
             .setContentIntent(contentPendingIntent)
-            .setStyle(mediaStyle)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(isPlaying)
@@ -211,6 +211,8 @@ class PlaybackService : MediaLibraryService() {
                 togglePendingIntent
             )
             .addAction(R.drawable.ic_skip_next, "Next", nextPendingIntent)
+
+        mediaStyle?.let { builder.setStyle(it) }
 
         if (lastArtworkBitmap != null) {
             builder.setLargeIcon(lastArtworkBitmap)

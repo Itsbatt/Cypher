@@ -165,9 +165,8 @@ dependencies {
   implementation(libs.media3.session)
   implementation(libs.media3.ui)
   implementation(libs.media3.common)
-  implementation("androidx.media3:media3-datasource:1.5.1")
-  implementation("androidx.media3:media3-database:1.5.1")
-  implementation("androidx.media:media:1.7.0")
+  implementation(libs.media3.datasource)
+  implementation(libs.media3.database)
   implementation("com.google.guava:guava:33.3.1-android")
   implementation("androidx.palette:palette-ktx:1.0.0")
 

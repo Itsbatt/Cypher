@@ -758,9 +758,13 @@ fun MainScreen(
                 onCopyFailed = {
                     val text = spotifyTransfer.summary?.exportText().orEmpty()
                     val clipboard = context.getSystemService(ClipboardManager::class.java)
-                    clipboard?.setPrimaryClip(
-                        ClipData.newPlainText("Canciones no encontradas", text)
-                    )
+                    val clip = ClipData.newPlainText("Canciones no encontradas", text)
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        clip.description.extras = android.os.PersistableBundle().apply {
+                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                    }
+                    clipboard?.setPrimaryClip(clip)
                     Toast.makeText(context, "Lista copiada", Toast.LENGTH_SHORT).show()
                 },
                 onShareFailed = {

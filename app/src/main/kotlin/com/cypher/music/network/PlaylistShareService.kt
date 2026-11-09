@@ -100,17 +100,7 @@ object PlaylistShareService {
         }
 
         // 2. Extract code from URL or clean raw code
-        val cleanedCode = trimmed
-            .removePrefix("https://dpaste.org/")
-            .removePrefix("http://dpaste.org/")
-            .removePrefix("https://paste.c-net.org/")
-            .removePrefix("http://paste.c-net.org/")
-            .removePrefix("cypher://p/")
-            .removePrefix("https://cypher.app/p/")
-            .removePrefix("http://cypher.app/p/")
-            .removeSuffix("/raw")
-            .removeSuffix(".txt")
-            .trim()
+        val cleanedCode = extractShortCode(trimmed)
 
         if (cleanedCode.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("Código de playlist vacío o inválido."))
@@ -130,6 +120,31 @@ object PlaylistShareService {
         } else {
             Result.failure(IllegalArgumentException("No se encontró ninguna playlist con el código '$cleanedCode'. Verifica el código o la conexión a internet."))
         }
+    }
+
+    /**
+     * Pulls the shortcode out of anything a user may paste: a full link with or
+     * without scheme, a link with a trailing slash, query string or fragment, a
+     * cypher:// code, or the bare code. Prefix matching ignores case because
+     * links copied from browsers often come capitalised differently.
+     */
+    private fun extractShortCode(raw: String): String {
+        var value = raw.trim()
+        val prefixes = listOf(
+            "https://dpaste.org/", "http://dpaste.org/", "dpaste.org/",
+            "https://paste.c-net.org/", "http://paste.c-net.org/", "paste.c-net.org/",
+            "cypher://p/",
+            "https://cypher.app/p/", "http://cypher.app/p/", "cypher.app/p/"
+        )
+        for (prefix in prefixes) {
+            if (value.startsWith(prefix, ignoreCase = true)) {
+                value = value.substring(prefix.length)
+                break
+            }
+        }
+        value = value.substringBefore('?').substringBefore('#').trim().trim('/')
+        value = value.removeSuffix("/raw").removeSuffix(".txt").trim().trim('/')
+        return value
     }
 
     private fun uploadToDpaste(json: String): String? {

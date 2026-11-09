@@ -2,6 +2,7 @@ package com.cypher.music
 
 import android.Manifest
 import android.app.AlarmManager
+import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -9,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -93,9 +95,26 @@ class MainActivity : ComponentActivity() {
         val action = intent.action ?: return
         if (action == Intent.ACTION_VIEW || action == "android.intent.action.MUSIC_PLAYER") {
             val dataUri = intent.data ?: return
+            // Only audio handed over as a content or file URI is playable. Anything
+            // else (http, custom schemes, relative paths) is ignored instead of
+            // being resolved against the app's own storage.
+            if (dataUri.scheme !in ACCEPTED_AUDIO_SCHEMES) {
+                Log.w(TAG, "Ignoring audio intent with unsupported scheme: ${dataUri.scheme}")
+                return
+            }
             val displayName = queryDisplayName(dataUri) ?: "Canción de audio"
             viewModel.playFromUri(dataUri, displayName)
         }
+    }
+
+    private companion object {
+        private const val TAG = "MainActivity"
+
+        /** Audio is only accepted as a content:// or file:// URI. */
+        private val ACCEPTED_AUDIO_SCHEMES = setOf(
+            ContentResolver.SCHEME_CONTENT,
+            ContentResolver.SCHEME_FILE
+        )
     }
 
     private fun queryDisplayName(uri: Uri): String? {

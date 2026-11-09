@@ -266,6 +266,11 @@ fun SharePlaylistDialog(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("Código Cypher", code)
+                                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                    clip.description.extras = android.os.PersistableBundle().apply {
+                                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                    }
+                                }
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Código copiado: $code", Toast.LENGTH_SHORT).show()
                             },

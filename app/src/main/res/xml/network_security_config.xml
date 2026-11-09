@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cypher only talks to HTTPS endpoints (YouTube, yt-dlp releases, lyrics,
+    playlist sharing). Cleartext stays disabled everywhere so a downgraded
+    connection fails instead of leaking playback URLs or share codes.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

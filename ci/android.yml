@@ -7,12 +7,25 @@ on:
   pull_request:
   workflow_dispatch:
 
+# One run per branch/tag: a new push cancels the previous one instead of queueing.
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Tests + APK
     runs-on: ubuntu-latest
+    env:
+      # Optional: add these four repository secrets to publish signed APKs from CI.
+      # Without them the job still runs the tests and uploads the unsigned APKs as artifacts.
+      CYPHER_KEYSTORE_BASE64: ${{ secrets.CYPHER_KEYSTORE_BASE64 }}
+      CYPHER_KEYSTORE_PASSWORD: ${{ secrets.CYPHER_KEYSTORE_PASSWORD }}
+      CYPHER_KEY_ALIAS: ${{ secrets.CYPHER_KEY_ALIAS }}
+      CYPHER_KEY_PASSWORD: ${{ secrets.CYPHER_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +36,24 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: JVM unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Restore release keystore
+        if: env.CYPHER_KEYSTORE_BASE64 != ''
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$CYPHER_KEYSTORE_BASE64" | base64 --decode > keystore/ci-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=keystore/ci-release.jks
+          storePassword=$CYPHER_KEYSTORE_PASSWORD
+          keyAlias=$CYPHER_KEY_ALIAS
+          keyPassword=$CYPHER_KEY_PASSWORD
+          EOF
 
       - name: Build release APKs
         run: ./gradlew :app:assembleRelease --stacktrace
@@ -33,18 +62,18 @@ jobs:
         with:
           name: cypher-release-apks
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
-      - name: Attach SHA256SUMS.txt to the GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish APKs to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v') && env.CYPHER_KEYSTORE_BASE64 != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p release-assets
-          gh release download "$GITHUB_REF_NAME" --dir release-assets --pattern "*.apk" || true
-          if compgen -G "release-assets/*.apk" > /dev/null; then
-            (cd release-assets && sha256sum *.apk) > SHA256SUMS.txt
-            gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --clobber
-          else
-            echo "No APK assets on $GITHUB_REF_NAME; skipping checksum upload"
-          fi
+          cd app/build/outputs/apk/release
+          rm -f *-unsigned.apk
+          sha256sum *.apk > SHA256SUMS.txt
+          notes="docs/releases/RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "Cypher ${GITHUB_REF_NAME#v}" --notes-file "$notes"
+          gh release upload "$GITHUB_REF_NAME" *.apk SHA256SUMS.txt --clobber

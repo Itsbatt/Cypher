@@ -47,11 +47,23 @@ object StreamUrlPolicy {
 /**
  * Replaces the old fixed 3000 ms transition window: a PAUSED event is only
  * ignored while the IFrame is still reporting the previous video.
+ *
+ * The IFrame reports PAUSED twice around a track change: when the previous
+ * video is torn down and again in the gap before the requested video is
+ * loaded ([loadedVideoId] is null there). Accepting either one as a real pause
+ * is what left a streaming song stopped right after skipping from an
+ * offline/downloaded one, so only a pause that reports the requested video, or
+ * one the user asked for, counts.
  */
 object TrackTransitionGuard {
-    fun shouldIgnorePause(loadedVideoId: String?, requestedVideoId: String?): Boolean {
+    fun shouldIgnorePause(
+        loadedVideoId: String?,
+        requestedVideoId: String?,
+        userPaused: Boolean = false
+    ): Boolean {
+        if (userPaused) return false
         if (requestedVideoId.isNullOrBlank()) return false
-        if (loadedVideoId.isNullOrBlank()) return false
+        if (loadedVideoId.isNullOrBlank()) return true
         return loadedVideoId != requestedVideoId
     }
 }

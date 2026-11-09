@@ -147,6 +147,10 @@ class MusicPlayerManager(private val context: Context) {
     @Volatile
     private var userPausedDuringLoad = false
 
+    // A spurious PAUSED during a track change must never leave the new song stopped:
+    // the IFrame is nudged back into play, at most twice per track.
+    private var ignoredPauseRecoveries = 0
+
     /** Last time the IFrame reported a playback second; drives the fallback clock. */
     private var lastSecondReportAt = 0L
 
@@ -1029,8 +1033,13 @@ class MusicPlayerManager(private val context: Context) {
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
-                    if (TrackTransitionGuard.shouldIgnorePause(loadedYouTubeVideoId, requestedYouTubeVideoId)) {
-                        Log.d("AppleMusicPlayer", "onPlayWhenReadyChanged: skipped while the IFrame still reports the previous video")
+                    if (TrackTransitionGuard.shouldIgnorePause(
+                            loadedVideoId = loadedYouTubeVideoId,
+                            requestedVideoId = requestedYouTubeVideoId,
+                            userPaused = userPausedDuringLoad
+                        )
+                    ) {
+                        Log.d("AppleMusicPlayer", "onPlayWhenReadyChanged: skipped while the IFrame still loads $requestedYouTubeVideoId")
                         return
                     }
                     if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST ||
@@ -1098,9 +1107,20 @@ class MusicPlayerManager(private val context: Context) {
                                 precacheNextTrack()
                             }
                             PlayerConstants.PlayerState.PAUSED -> {
-                                if (TrackTransitionGuard.shouldIgnorePause(loadedYouTubeVideoId, requestedYouTubeVideoId)) {
+                                if (TrackTransitionGuard.shouldIgnorePause(
+                                        loadedVideoId = loadedYouTubeVideoId,
+                                        requestedVideoId = requestedYouTubeVideoId,
+                                        userPaused = userPausedDuringLoad
+                                    )
+                                ) {
                                     Log.d("AppleMusicPlayer", "PAUSED ignored: IFrame still on $loadedYouTubeVideoId, requested $requestedYouTubeVideoId")
-                                    // Spurious pause from the previous video teardown.
+                                    // Spurious pause from the previous video teardown or from the
+                                    // gap before the new one loads. Nudge the IFrame so the new
+                                    // song cannot stay cued while the queue believes it plays.
+                                    if (_state.value.isPlaying && ignoredPauseRecoveries < 2) {
+                                        ignoredPauseRecoveries++
+                                        youTubePlayer?.play()
+                                    }
                                 } else {
                                     bufferingWatchdogJob?.cancel()
                                     _state.update { it.copy(isPlaying = false, isBuffering = false) }
@@ -1377,6 +1397,7 @@ class MusicPlayerManager(private val context: Context) {
 
         Log.d("AppleMusicPlayer", "playTrack: '${track.title}' (${track.sourceType})")
         userPausedDuringLoad = false
+        ignoredPauseRecoveries = 0
         playCountTracker.startSession(track.id)
 
         _playbackPositionMs.value = 0L

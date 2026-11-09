@@ -1,15 +1,25 @@
 # Android CI
 
-`android.yml` es el workflow de GitHub Actions: ejecuta los tests JVM, compila
-los APK y, en tags `v*`, calcula y adjunta `SHA256SUMS.txt` a la release.
+El workflow vive ahora en `.github/workflows/android.yml`, que es donde GitHub
+Actions lo ejecuta. `android.yml` estaba en esta carpeta porque el token con el
+que se hizo el push no tenía el scope `workflow`; para activarlo basta con
+empujar el archivo a `.github/workflows/` con un token que sí lo tenga.
 
-Está aquí y no en `.github/workflows/` porque el token con el que se hizo el
-push no tenía el scope `workflow`. Para activarlo, cuando haya un token o una
-sesión con ese permiso:
+Qué hace:
+
+- En cada push a `main` y en cada pull request: ejecuta los tests JVM
+  (`:app:testDebugUnitTest`) y compila los APK de release.
+- Sube los APK como artefacto `cypher-release-apks`.
+- Al empujar un tag `v*`: además calcula `SHA256SUMS.txt` y sube los APK y el
+  fichero de sumas a la release de ese tag (`gh release upload --clobber`).
+
+Firma: el workflow lee el keystore de los secretos `CYPHER_KEYSTORE_BASE64`,
+`CYPHER_KEYSTORE_PASSWORD`, `CYPHER_KEY_ALIAS` y `CYPHER_KEY_PASSWORD`. Sin
+ellos los tests y la compilación siguen corriendo, pero los APK quedan sin firmar
+y no se publican en la release.
+
+Para publicar una versión desde cero, con los secretos ya configurados:
 
 ```bash
-mkdir -p .github/workflows
-git mv ci/android.yml .github/workflows/android.yml
-git commit -m "ci: activate the android workflow"
-git push
+git tag v1.4.0 && git push origin v1.4.0
 ```

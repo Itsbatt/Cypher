@@ -1,0 +1,2 @@
+89336b8cd0a3028753610afdefb790d5480088f71b5e6da9c48f78dacabc1331 *app-arm64-v8a-release.apk
+695b0ae87d0bd4f47b45a865140db0aa70f7cb352e6c5c70d3954930a0a3f444 *app-universal-release.apk

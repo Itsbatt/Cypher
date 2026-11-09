@@ -587,6 +587,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerManager.attachYouTubePlayer(ytPlayer)
     }
 
+    val playbackNotice: StateFlow<String?> = playerManager.playbackNotice
+
+    fun clearPlaybackNotice() = playerManager.clearPlaybackNotice()
+
     fun selectTab(tab: CypherTab) {
         _currentTab.value = tab
     }

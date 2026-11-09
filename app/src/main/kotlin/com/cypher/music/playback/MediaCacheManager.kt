@@ -56,6 +56,10 @@ object MediaCacheManager {
     private const val TAG = "MediaCacheManager"
     private const val MAX_CACHE_SIZE_BYTES = 2L * 1024 * 1024 * 1024 // 2 GB
     private const val MIN_FREE_BYTES = 80L * 1024 * 1024
+
+    // Anything smaller cannot be a playable container. Kept low so very short
+    // tracks are not rejected as invalid downloads.
+    private const val MIN_AUDIO_BYTES = 1024L
     private const val DOWNLOAD_QUEUE_PREFS = "cypher_download_queue"
     private const val DOWNLOAD_QUEUE_KEY = "pending"
 
@@ -156,6 +160,9 @@ object MediaCacheManager {
     }
 
     @Volatile
+    private var vaultDirCache: File? = null
+
+    @Volatile
     private var simpleCacheInstance: SimpleCache? = null
 
     @Volatile
@@ -208,6 +215,9 @@ object MediaCacheManager {
      * Safely migrates legacy downloads from context.filesDir to the new location.
      */
     fun getOfflineVaultDir(context: Context): File {
+        // Resolved once per process: callers include UI code, so this must never walk
+        // volumes or migrate files on every lookup.
+        vaultDirCache?.let { if (it.exists()) return it }
         val externalDirs = ContextCompat.getExternalFilesDirs(context, null)
         // Prefer removable SD card if mounted and accessible
         val targetBase = externalDirs.firstOrNull { dir ->
@@ -246,6 +256,7 @@ object MediaCacheManager {
             }
         }
 
+        vaultDirCache = vaultDir
         return vaultDir
     }
 
@@ -296,7 +307,7 @@ object MediaCacheManager {
      * error page renamed with an audio extension.
      */
     private fun hasAudioSignature(file: File): Boolean {
-        if (!file.exists() || file.length() <= 10000) return false
+        if (!file.exists() || file.length() <= MIN_AUDIO_BYTES) return false
         return try {
             FileInputStream(file).use { input ->
                 val header = ByteArray(12)
@@ -510,7 +521,7 @@ object MediaCacheManager {
             ensureInitialized(context)
 
             val existing = getOfflineTrackFile(context, track.id)
-            if (existing != null && existing.exists() && existing.length() > 10000) {
+            if (existing != null && existing.exists() && existing.length() > MIN_AUDIO_BYTES) {
                 val roomDb = CypherDatabase.getInstance(context)
                 roomDb.trackDao().insertTrack(track.toEntity(isDownloaded = true, downloadedUri = existing.absolutePath))
                 roomDb.trackDao().setDownloaded(track.id, true, existing.absolutePath, System.currentTimeMillis())
@@ -636,7 +647,7 @@ object MediaCacheManager {
                                                 output.flush()
                                             }
                                         }
-                                        downloadSuccess = (targetFile.exists() && targetFile.length() > 10000)
+                                        downloadSuccess = (targetFile.exists() && targetFile.length() > MIN_AUDIO_BYTES)
                                     }
                                 }
                             }
@@ -653,30 +664,33 @@ object MediaCacheManager {
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .build()
 
-                val response = httpClient.newCall(req).execute()
-                val contentType = response.header("Content-Type").orEmpty().lowercase()
-                val isAudioResponse = contentType.startsWith("audio/") ||
-                    contentType.startsWith("application/octet-stream") ||
-                    contentType.isEmpty()
-                if (response.isSuccessful && isAudioResponse) {
-                    val body = response.body
-                    if (body != null) {
-                        val totalBytes = body.contentLength()
-                        var downloadedBytes = 0L
-                        body.byteStream().use { input ->
-                            FileOutputStream(targetFile).use { output ->
-                                val buffer = ByteArray(8192)
-                                var read: Int
-                                while (input.read(buffer).also { read = it } != -1) {
-                                    output.write(buffer, 0, read)
-                                    downloadedBytes += read
-                                    if (totalBytes > 0) {
-                                        val frac = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                                        _downloadProgressMap.update { it + (track.id to frac) }
-                                        onProgress(frac)
+                // The response must be closed: without use{} every direct download
+                // leaked its socket and file descriptor.
+                httpClient.newCall(req).execute().use { response ->
+                    val contentType = response.header("Content-Type").orEmpty().lowercase()
+                    val isAudioResponse = contentType.startsWith("audio/") ||
+                        contentType.startsWith("application/octet-stream") ||
+                        contentType.isEmpty()
+                    if (response.isSuccessful && isAudioResponse) {
+                        val body = response.body
+                        if (body != null) {
+                            val totalBytes = body.contentLength()
+                            var downloadedBytes = 0L
+                            body.byteStream().use { input ->
+                                FileOutputStream(targetFile).use { output ->
+                                    val buffer = ByteArray(8192)
+                                    var read: Int
+                                    while (input.read(buffer).also { read = it } != -1) {
+                                        output.write(buffer, 0, read)
+                                        downloadedBytes += read
+                                        if (totalBytes > 0) {
+                                            val frac = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                                            _downloadProgressMap.update { it + (track.id to frac) }
+                                            onProgress(frac)
+                                        }
                                     }
+                                    output.flush()
                                 }
-                                output.flush()
                             }
                         }
                     }
@@ -685,7 +699,7 @@ object MediaCacheManager {
 
             // Verify downloaded file in the private vault
             val downloadedFile = getOfflineTrackFile(context, track.id)
-            if (downloadedFile != null && downloadedFile.exists() && downloadedFile.length() > 10000) {
+            if (downloadedFile != null && downloadedFile.exists() && downloadedFile.length() > MIN_AUDIO_BYTES) {
                 Log.i(TAG, "Successfully downloaded: ${downloadedFile.name} (${downloadedFile.length()} bytes)")
                 val roomDb = CypherDatabase.getInstance(context)
                 roomDb.trackDao().insertTrack(track.toEntity(isDownloaded = true, downloadedUri = downloadedFile.absolutePath))
@@ -696,6 +710,11 @@ object MediaCacheManager {
                 downloadedFile
             } else {
                 Log.e(TAG, "Download failed or output file is empty/missing for track: ${track.id}")
+                // A rejected download used to leave its junk behind for ever.
+                for (ext in listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")) {
+                    val junk = File(vaultDir, "$safeId.$ext")
+                    if (junk.exists() && !hasAudioSignature(junk)) junk.delete()
+                }
                 registerFailure(track.id, "La descarga no produjo un archivo válido")
                 null
             }
@@ -761,13 +780,20 @@ object MediaCacheManager {
     suspend fun deleteOfflineTrack(context: Context, trackId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val safeId = trackId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            val dir = getOfflineVaultDir(context)
             val extensions = listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")
+            // Lookup checks every volume, so deletion must too; otherwise a download
+            // on a secondary volume stayed on disk while the UI said it was removed.
+            val dirs = (listOf(getOfflineVaultDir(context)) +
+                ContextCompat.getExternalFilesDirs(context, null).filterNotNull()
+                    .map { File(it, "offline_vault") })
+                .distinctBy { it.absolutePath }
             var deleted = false
-            for (ext in extensions) {
-                val f = File(dir, "$safeId.$ext")
-                if (f.exists()) {
-                    deleted = f.delete() || deleted
+            for (dir in dirs) {
+                for (ext in extensions) {
+                    val f = File(dir, "$safeId.$ext")
+                    if (f.exists()) {
+                        deleted = f.delete() || deleted
+                    }
                 }
             }
             val roomDb = CypherDatabase.getInstance(context)

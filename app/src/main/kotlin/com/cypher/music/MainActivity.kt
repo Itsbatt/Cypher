@@ -2,6 +2,7 @@ package com.cypher.music
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.SearchManager
 import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.cypher.music.ui.components.CypherTab
 import com.cypher.music.ui.main.MainViewModel
 import com.cypher.music.ui.theme.CypherTheme
 import com.cypher.music.wrapped.WrappedScheduler
@@ -93,6 +95,19 @@ class MainActivity : ComponentActivity() {
         }
 
         val action = intent.action ?: return
+
+        // Assistant, Bixby and the system search bar send the query here. The intent
+        // was declared in the manifest but never handled, so voice search did nothing.
+        if (action == Intent.ACTION_SEARCH || action == "android.media.action.MEDIA_PLAY_FROM_SEARCH") {
+            val query = intent.getStringExtra(SearchManager.QUERY)
+                ?: intent.getStringExtra("query")
+            if (!query.isNullOrBlank()) {
+                viewModel.selectTab(CypherTab.SEARCH)
+                viewModel.onSearchQueryChange(query)
+            }
+            return
+        }
+
         if (action == Intent.ACTION_VIEW || action == "android.intent.action.MUSIC_PLAYER") {
             val dataUri = intent.data ?: return
             // Only audio handed over as a content or file URI is playable. Anything

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -43,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -106,7 +109,6 @@ fun MainScreen(
     viewModel: MainViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
-    Log.d("AppleMusicPlayer", "MainScreen entered composition")
     val context = LocalContext.current
 
     val currentUser by viewModel.currentUser.collectAsState()
@@ -124,8 +126,6 @@ fun MainScreen(
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
-    val playbackProgress by viewModel.playbackProgress.collectAsState()
-    val playbackPositionMs by viewModel.playbackPositionMs.collectAsState()
 
     val favoriteTracks by viewModel.favoriteTracks.collectAsState()
     val favoriteTrackIds by viewModel.favoriteTrackIds.collectAsState()
@@ -170,6 +170,15 @@ fun MainScreen(
     }
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.state.collectAsState()
+    val playbackNotice by viewModel.playbackNotice.collectAsState()
+
+    // A track that cannot start is reported once instead of being skipped in silence.
+    LaunchedEffect(playbackNotice) {
+        playbackNotice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearPlaybackNotice()
+        }
+    }
 
     // Initialize Haptic Engine for micro-ticks & controls
     LaunchedEffect(Unit) {
@@ -372,6 +381,9 @@ fun MainScreen(
                     .fillMaxWidth()
                     .widthIn(max = contentMaxWidth)
                     .fillMaxHeight()
+                    // The tab content ends above the floating controls instead of being
+                    // drawn underneath them and cut in half by the dock.
+                    .padding(bottom = bottomContentPadding)
             ) {
             val librarySortState by viewModel.librarySort.collectAsState()
             val addedDatesState by viewModel.trackAddedDates.collectAsState()
@@ -543,6 +555,10 @@ fun MainScreen(
             enter = slideInVertically(initialOffsetY = { it }),
             exit = slideOutVertically(targetOffsetY = { it })
         ) {
+            // Collected inside the sheet so the 250 ms progress ticks recompose the
+            // modal only, not the whole app.
+            val playbackProgress by viewModel.playbackProgress.collectAsState()
+            val playbackPositionMs by viewModel.playbackPositionMs.collectAsState()
             CypherNowPlayingModal(
                 playerState = playerState,
                 isFavorite = viewModel.isFavorite(playerState.currentTrack?.id ?: ""),

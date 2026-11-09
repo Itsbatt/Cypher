@@ -1,6 +1,7 @@
 package com.cypher.music.model
 
 import com.cypher.music.network.YouTubeArtwork
+import java.util.Locale
 
 enum class AudioSourceType {
     LOCAL,
@@ -37,6 +38,7 @@ data class Track(
             val totalSeconds = durationMs / 1000
             val minutes = totalSeconds / 60
             val seconds = totalSeconds % 60
-            return String.format("%d:%02d", minutes, seconds)
+            // Locale.ROOT keeps latin digits in every language.
+            return String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
         }
 }

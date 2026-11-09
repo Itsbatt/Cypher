@@ -98,7 +98,8 @@ fun CypherTrackRow(
 
     val isDownloading = downloadProgressMap.containsKey(track.id)
     val downloadProgress = downloadProgressMap[track.id] ?: 0f
-    val isDownloaded = track.isDownloaded || downloadedTrackIds.contains(track.id) || MediaCacheManager.isTrackDownloaded(context, track.id)
+    // Driven by the reactive set (synced at app start) so drawing a row never touches disk.
+    val isDownloaded = track.isDownloaded || downloadedTrackIds.contains(track.id)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -296,8 +297,13 @@ fun CypherTrackRow(
             },
             onDeleteDownload = {
                 scope.launch {
-                    MediaCacheManager.deleteOfflineTrack(context, track.id)
-                    Toast.makeText(context, "Descarga eliminada: \"${track.title}\"", Toast.LENGTH_SHORT).show()
+                    val deleted = MediaCacheManager.deleteOfflineTrack(context, track.id)
+                    val message = if (deleted) {
+                        "Descarga eliminada: \"${track.title}\""
+                    } else {
+                        "No se pudo eliminar la descarga de \"${track.title}\""
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 }
             }
         )

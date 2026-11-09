@@ -204,13 +204,13 @@ class PlaybackService : MediaLibraryService() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(isPlaying)
-            .addAction(R.drawable.ic_skip_previous, "Previous", prevPendingIntent)
+            .addAction(R.drawable.ic_skip_previous, "Anterior", prevPendingIntent)
             .addAction(
                 if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow,
-                if (isPlaying) "Pause" else "Play",
+                if (isPlaying) "Pausar" else "Reproducir",
                 togglePendingIntent
             )
-            .addAction(R.drawable.ic_skip_next, "Next", nextPendingIntent)
+            .addAction(R.drawable.ic_skip_next, "Siguiente", nextPendingIntent)
 
         mediaStyle?.let { builder.setStyle(it) }
 
@@ -228,7 +228,11 @@ class PlaybackService : MediaLibraryService() {
 
         // Asynchronously load high-res album artwork if needed
         val artUrl = currentTrack?.artworkUrl
-        if (!artUrl.isNullOrEmpty() && artUrl != lastArtworkUrl) {
+        if (artUrl.isNullOrEmpty()) {
+            // Never inherit the previous cover when the new track has no artwork.
+            lastArtworkUrl = null
+            lastArtworkBitmap = null
+        } else if (artUrl != lastArtworkUrl) {
             lastArtworkUrl = artUrl
             serviceScope.launch(Dispatchers.IO) {
                 try {

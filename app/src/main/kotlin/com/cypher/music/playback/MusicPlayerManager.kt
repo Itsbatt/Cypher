@@ -111,6 +111,14 @@ class MusicPlayerManager(private val context: Context) {
     private var loadAttemptToken = 0
     private var consecutiveFailures = 0
     private var localRetryTrackId: String? = null
+    private var iframeRetryTrackId: String? = null
+
+    // Queue order kept while shuffle is on, so turning it off restores the playlist.
+    private var shuffleBackup: List<Track>? = null
+
+    // State only carries the position once per second: the 250 ms ticks feed the
+    // dedicated progress flows and must not recompose the whole screen.
+    private var lastStatePositionPushAt = 0L
 
     // Stall recovery for the WebView engine: a frozen clock is re-seeked once.
     private var lastStallPositionMs = -1L
@@ -147,6 +155,14 @@ class MusicPlayerManager(private val context: Context) {
 
     // Native DSP Equalizer Manager
     val equalizerManager = EqualizerManager(context)
+
+    // A song that cannot start is announced instead of vanishing silently.
+    private val _playbackNotice = MutableStateFlow<String?>(null)
+    val playbackNotice: StateFlow<String?> = _playbackNotice.asStateFlow()
+
+    fun clearPlaybackNotice() {
+        _playbackNotice.value = null
+    }
 
     // Sleep Timer states
     private val _sleepTimerMode = MutableStateFlow(SleepTimerMode.OFF)
@@ -1127,6 +1143,18 @@ class MusicPlayerManager(private val context: Context) {
                     // specific error codes being handled and the rest hanging.
                     val failed = _state.value.currentTrack
                     if (failed != null) {
+                        // A fresh embed sometimes answers error 2 for a video that works
+                        // on the next load. Retry once before losing the song.
+                        if (iframeRetryTrackId != failed.id) {
+                            iframeRetryTrackId = failed.id
+                            val videoId = extractVideoId(failed.streamUrl.ifEmpty { failed.id })
+                            Log.w("AppleMusicPlayer", "IFrame error $error; retrying once for $videoId")
+                            requestedYouTubeVideoId = videoId
+                            loadedYouTubeVideoId = null
+                            _state.update { it.copy(isBuffering = true) }
+                            youTubePlayer?.loadVideo(videoId, 0f)
+                            return
+                        }
                         onTrackLoadFailed(failed, "IFrame error: $error")
                     } else {
                         bufferingWatchdogJob?.cancel()
@@ -1300,6 +1328,7 @@ class MusicPlayerManager(private val context: Context) {
      */
     private fun onTrackLoadFailed(track: Track, reason: String) {
         Log.e("AppleMusicPlayer", "Playback failed for '${track.title}': $reason")
+        _playbackNotice.value = "No se pudo reproducir «${track.title}». Se pasa a la siguiente."
         com.cypher.music.network.StreamingTelemetry.recordError(-1, reason, "PlaybackLoad")
         bufferingWatchdogJob?.cancel()
         _state.update { it.copy(isBuffering = false, isPlaying = false) }
@@ -1373,6 +1402,9 @@ class MusicPlayerManager(private val context: Context) {
         lastStallPositionMs = -1L
         stalledTicks = 0
         lastSecondReportAt = System.currentTimeMillis()
+        iframeRetryTrackId = null
+        lastStatePositionPushAt = 0L
+        if (newQueue.map { it.id } != _state.value.queue.map { it.id }) shuffleBackup = null
 
         // Load supervisor. The old watchdog forced "isPlaying" after four seconds,
         // which is how the UI ended up showing playback that had never started: the
@@ -1434,12 +1466,11 @@ class MusicPlayerManager(private val context: Context) {
                         .build(),
                     true
                 )
-                exoPlayer.volume = 1f
-                exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
                 // The silent carrier used for streaming sets ExoPlayer volume to 0.
                 // Restore it here, otherwise offline/local tracks stay muted while the
                 // UI keeps advancing (the downloaded-track silence bug).
                 exoPlayer.volume = 1f
+                exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
                 val fileUri = if (isPlayingOffline && offlineFile != null) Uri.fromFile(offlineFile) else Uri.parse(track.streamUrl)
                 val mediaItem = MediaItem.Builder()
                     .setUri(fileUri)
@@ -1615,11 +1646,14 @@ class MusicPlayerManager(private val context: Context) {
             seekToProgress(0f)
             return
         }
-        val prevIdx = if (_state.value.queueIndex - 1 >= 0) {
-            _state.value.queueIndex - 1
-        } else {
-            q.size - 1
+        val currentIndex = _state.value.queueIndex
+        if (currentIndex <= 0 && _state.value.repeatMode != RepeatMode.ALL) {
+            // Start of the queue: restart it instead of wrapping to the last song, so
+            // previous and next stop at the same boundary.
+            seekToProgress(0f)
+            return
         }
+        val prevIdx = if (currentIndex - 1 >= 0) currentIndex - 1 else q.size - 1
         playTrack(q[prevIdx], q)
     }
 
@@ -1628,9 +1662,22 @@ class MusicPlayerManager(private val context: Context) {
         val q = _state.value.queue
         val curTrack = _state.value.currentTrack
         if (nextShuffle && q.size > 2 && curTrack != null) {
+            shuffleBackup = q
             val remaining = q.filter { it.id != curTrack.id }.shuffled()
             val newQ = listOf(curTrack) + remaining
             _state.update { it.copy(isShuffle = true, queue = newQ, queueIndex = 0) }
+        } else if (!nextShuffle) {
+            // Turning shuffle off returns the queue to the order the user had.
+            val backup = shuffleBackup
+            shuffleBackup = null
+            if (backup != null && backup.isNotEmpty()) {
+                val restoredIndex = backup.indexOfFirst { it.id == curTrack?.id }.coerceAtLeast(0)
+                _state.update {
+                    it.copy(isShuffle = false, queue = backup, queueIndex = restoredIndex)
+                }
+            } else {
+                _state.update { it.copy(isShuffle = false) }
+            }
         } else {
             _state.update { it.copy(isShuffle = nextShuffle) }
         }
@@ -1860,7 +1907,11 @@ class MusicPlayerManager(private val context: Context) {
                     _playbackPositionMs.value = pos
                     val frac = if (dur > 0) (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f) else 0f
                     _playbackProgress.value = frac
-                    _state.update { it.copy(currentPositionMs = pos) }
+                    val now = System.currentTimeMillis()
+                    if (now - lastStatePositionPushAt >= 1000L) {
+                        lastStatePositionPushAt = now
+                        _state.update { it.copy(currentPositionMs = pos) }
+                    }
 
                     checkVolumeTransitions(pos, dur)
                     if (dur > 0 && (dur - pos) in 1000L..25000L) {

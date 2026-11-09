@@ -16,12 +16,12 @@
 - Las duraciones usan dígitos latinos en cualquier idioma.
 
 ## Interfaz
-- El contenido de Inicio y Biblioteca termina por encima del mini reproductor y del dock: se acabaron los títulos cortados bajo los controles.
+- El contenido vuelve a desplazarse por detrás del mini reproductor, que conserva su aspecto transparente, y cada lista reserva espacio al final para que el dock no tape el último título.
 - La pantalla principal deja de recomponerse con cada tick de progreso; solo se actualiza la barra.
 
 ## Librerías
 - media3 1.11.1 (exoplayer, session, ui, datasource, database) y sin la dependencia heredada `androidx.media`.
 
 ## Notas
-- `versionCode` 16, `versionName` 1.3.0.
+- `versionCode` 17, `versionName` 1.3.0.
 - Probado en CPH2579 y en la tablet SM-T580.

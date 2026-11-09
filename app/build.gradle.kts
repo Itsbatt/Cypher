@@ -28,7 +28,7 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 29
     targetSdk = 36
-    versionCode = 16
+    versionCode = 17
     versionName = "1.3.0"
 
     // Identifies this exact compilation inside the APK. Two builds that only differ in

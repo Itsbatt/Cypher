@@ -228,6 +228,7 @@ class MusicPlayerManager(private val context: Context) {
         } else 0f
         pendingRestorePositionMs = restored.positionMs.takeIf { it > 2000L }
         isPlayingOffline = MediaCacheManager.isTrackDownloaded(context, restored.track.id)
+        streamingViaExo = false
         Log.i("AppleMusicPlayer", "Restored session: '${restored.track.title}' at ${restored.positionMs}ms, queue=${restored.queue.size}")
     }
 
@@ -268,11 +269,24 @@ class MusicPlayerManager(private val context: Context) {
     private var isYouTubeListenerAttached = false
     private var isPlayingOffline: Boolean = false
 
+    // True when ExoPlayer renders a streaming track from a resolved direct URL.
+    // The WebView IFrame stays on BUFFERING on several devices, so a resolved
+    // stream is what actually produces audio; the IFrame is only a fallback.
+    @Volatile
+    private var streamingViaExo: Boolean = false
+
+    /** True when ExoPlayer, not the IFrame, is the engine rendering the audio. */
+    private val exoOwnsAudio: Boolean
+        get() {
+            val track = _state.value.currentTrack ?: return false
+            return track.sourceType == AudioSourceType.LOCAL || isPlayingOffline || streamingViaExo
+        }
+
     // 3. Android System MediaSession Player Forwarder
     private val forwardingPlayer = object : ForwardingPlayer(exoPlayer) {
         override fun getDuration(): Long {
             val cur = _state.value
-            return if (cur.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+            return if (cur.currentTrack != null && !exoOwnsAudio) {
                 cur.durationMs.coerceAtLeast(0L)
             } else {
                 super.getDuration()
@@ -281,7 +295,7 @@ class MusicPlayerManager(private val context: Context) {
 
         override fun getCurrentPosition(): Long {
             val cur = _state.value
-            return if (cur.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+            return if (cur.currentTrack != null && !exoOwnsAudio) {
                 _playbackPositionMs.value.coerceAtLeast(0L)
             } else {
                 super.getCurrentPosition()
@@ -290,7 +304,7 @@ class MusicPlayerManager(private val context: Context) {
 
         override fun isPlaying(): Boolean {
             val cur = _state.value
-            return if (cur.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+            return if (cur.currentTrack != null && !exoOwnsAudio) {
                 cur.isPlaying
             } else {
                 super.isPlaying()
@@ -299,7 +313,7 @@ class MusicPlayerManager(private val context: Context) {
 
         override fun getPlaybackState(): Int {
             val cur = _state.value
-            return if (cur.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+            return if (cur.currentTrack != null && !exoOwnsAudio) {
                 if (cur.isBuffering) Player.STATE_BUFFERING else Player.STATE_READY
             } else {
                 super.getPlaybackState()
@@ -308,7 +322,7 @@ class MusicPlayerManager(private val context: Context) {
 
         override fun getPlayWhenReady(): Boolean {
             val cur = _state.value
-            return if (cur.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+            return if (cur.currentTrack != null && !exoOwnsAudio) {
                 cur.isPlaying
             } else {
                 super.getPlayWhenReady()
@@ -992,6 +1006,8 @@ class MusicPlayerManager(private val context: Context) {
                                     .setUri(Uri.parse(freshUrl))
                                     .setMediaMetadata(metadata)
                                     .build()
+                                streamingViaExo = true
+                                exoPlayer.volume = 1f
                                 exoPlayer.setMediaItem(mediaItem, savedPos)
                                 exoPlayer.prepare()
                                 exoPlayer.play()
@@ -1003,8 +1019,26 @@ class MusicPlayerManager(private val context: Context) {
                             attempt++
                         }
                         Log.w("MusicPlayerManager", "Direct stream unavailable. Switching to official IFrame player engine.")
+                        streamingViaExo = false
                         youTubePlayer?.loadVideo(videoId, (_playbackPositionMs.value / 1000f))
                     }
+                } else if (track != null && streamingViaExo &&
+                    track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline
+                ) {
+                    // The resolved URL was rejected: drop it and hand the song to the
+                    // IFrame engine instead of failing the track.
+                    val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
+                    Log.w("MusicPlayerManager", "ExoPlayer stream error; IFrame fallback for $videoId")
+                    streamUrlPrecacheMap.remove(videoId)
+                    startStreamingViaIframe(
+                        track,
+                        videoId,
+                        MediaMetadata.Builder()
+                            .setTitle(track.title)
+                            .setArtist(track.artist)
+                            .setAlbumTitle(track.album)
+                            .build()
+                    )
                 } else if (track != null) {
                     // Local / offline failures get one prepare() retry before the queue
                     // moves on, so a transient decoder or file lock error self-heals.
@@ -1024,7 +1058,7 @@ class MusicPlayerManager(private val context: Context) {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (_state.value.currentTrack?.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+                if (exoOwnsAudio) {
                     _state.update { it.copy(isPlaying = isPlaying) }
                     if (isPlaying) startLocalProgressTracker() else stopLocalProgressTracker()
                     PlaybackService.updateService(context)
@@ -1032,7 +1066,7 @@ class MusicPlayerManager(private val context: Context) {
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+                if (_state.value.currentTrack?.sourceType == AudioSourceType.YOUTUBE && !exoOwnsAudio) {
                     if (TrackTransitionGuard.shouldIgnorePause(
                             loadedVideoId = loadedYouTubeVideoId,
                             requestedVideoId = requestedYouTubeVideoId,
@@ -1056,7 +1090,7 @@ class MusicPlayerManager(private val context: Context) {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (_state.value.currentTrack?.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+                if (exoOwnsAudio) {
                     when (playbackState) {
                         Player.STATE_BUFFERING -> _state.update { it.copy(isBuffering = true) }
                         Player.STATE_READY -> _state.update {
@@ -1184,7 +1218,7 @@ class MusicPlayerManager(private val context: Context) {
 
                 override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) {
                     val curTrack = _state.value.currentTrack
-                    if (curTrack?.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline) {
+                    if (curTrack?.sourceType == AudioSourceType.YOUTUBE && !exoOwnsAudio) {
                         if (System.currentTimeMillis() - lastSeekTimestamp < 600L) {
                             return
                         }
@@ -1237,7 +1271,7 @@ class MusicPlayerManager(private val context: Context) {
                     // clock stays at 0 even while audio plays. Advance a fallback clock
                     // from real elapsed time instead of treating it as a stall (which
                     // used to reload the track from the beginning and then skip).
-                    if (track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline &&
+                    if (track.sourceType == AudioSourceType.YOUTUBE && !exoOwnsAudio &&
                         !userPausedDuringLoad && now - lastSecondReportAt > 1500L
                     ) {
                         val dur = curState.durationMs
@@ -1259,7 +1293,7 @@ class MusicPlayerManager(private val context: Context) {
 
                     // YouTube audio lives in the WebView: if its clock stops moving
                     // while we believe it is playing, recover or skip the track.
-                    if (track.sourceType == AudioSourceType.YOUTUBE && !isPlayingOffline && !curState.isBuffering) {
+                    if (track.sourceType == AudioSourceType.YOUTUBE && !exoOwnsAudio && !curState.isBuffering) {
                         val position = curState.currentPositionMs
                         if (position == lastStallPositionMs) {
                             stalledTicks++
@@ -1440,7 +1474,7 @@ class MusicPlayerManager(private val context: Context) {
             val started = awaitTrackStart(loadToken, deadline)
             if (!started && !userPausedDuringLoad && loadToken == loadAttemptToken) {
                 if (streaming) {
-                    Log.w("AppleMusicPlayer", "No IFrame start event for '${track.title}'; keeping playback")
+                    Log.w("AppleMusicPlayer", "No start event for '${track.title}' yet; keeping playback")
                 } else {
                     Log.w("AppleMusicPlayer", "Playback did not start in ${deadline}ms; retrying '${track.title}' once")
                     _state.update { it.copy(isBuffering = true) }
@@ -1508,32 +1542,10 @@ class MusicPlayerManager(private val context: Context) {
                 requestedYouTubeVideoId = videoId
                 loadedYouTubeVideoId = null
                 Log.d("AppleMusicPlayer", "Target YouTube videoId: $videoId")
-
-                try {
-                    exoPlayer.setAudioAttributes(AudioAttributes.DEFAULT, false)
-                    exoPlayer.volume = 0f
-                    exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
-                    val silentUri = Uri.parse("android.resource://${context.packageName}/${com.cypher.music.R.raw.silence}")
-                    val activeItem = MediaItem.Builder()
-                        .setMediaId(track.id)
-                        .setUri(silentUri)
-                        .setMediaMetadata(metadata)
-                        .build()
-                    exoPlayer.setMediaItem(activeItem)
-                    exoPlayer.prepare()
-                    exoPlayer.play()
-                } catch (e: Exception) {
-                    Log.w("AppleMusicPlayer", "Failed to start silent carrier in ExoPlayer", e)
-                }
-
-                val player = youTubePlayer
-                if (player != null) {
-                    Log.d("AppleMusicPlayer", "Calling youTubePlayer.loadVideo($videoId)")
-                    player.loadVideo(videoId, 0f)
-                } else {
-                    Log.w("AppleMusicPlayer", "youTubePlayer not attached yet, queued as pending: $videoId")
-                    pendingYouTubeVideoId = videoId
-                }
+                // Streams are rendered by ExoPlayer from a resolved direct URL: the
+                // WebView IFrame hangs on BUFFERING on several devices, which left the
+                // app showing a playing song while only the silent carrier advanced.
+                startStreamingViaExo(track, videoId, loadToken, metadata)
             }
 
             // Smooth crossfade fade-in for incoming track
@@ -1541,6 +1553,104 @@ class MusicPlayerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e("AppleMusicPlayer", "Error in playTrack", e)
             _state.update { it.copy(isBuffering = false) }
+        }
+    }
+
+    /**
+     * Plays a YouTube track with ExoPlayer from a direct stream URL, falling back to
+     * the official IFrame engine only when no URL can be resolved.
+     */
+    private fun startStreamingViaExo(
+        track: Track,
+        videoId: String,
+        token: Int,
+        metadata: MediaMetadata
+    ) {
+        streamingViaExo = false
+        pendingYouTubeVideoId = null
+        scope.launch {
+            val cached = streamUrlPrecacheMap[videoId]
+            val cachedUrl = cached
+                ?.takeIf { StreamUrlPolicy.isFresh(it.resolvedAtMs, System.currentTimeMillis()) }
+                ?.url
+            val directUrl = cachedUrl ?: try {
+                withContext(Dispatchers.IO) {
+                    com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("AppleMusicPlayer", "Could not resolve a direct stream for $videoId", e)
+                null
+            }
+            if (token != loadAttemptToken) return@launch
+            if (directUrl.isNullOrBlank()) {
+                Log.w("AppleMusicPlayer", "No direct stream for $videoId; using the IFrame engine")
+                startStreamingViaIframe(track, videoId, metadata)
+                return@launch
+            }
+            streamUrlPrecacheMap[videoId] = CachedStreamUrl(directUrl, System.currentTimeMillis())
+            youTubePlayer?.pause()
+            streamingViaExo = true
+            exoPlayer.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true
+            )
+            exoPlayer.volume = 1f
+            exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
+            exoPlayer.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(Uri.parse(directUrl))
+                    .setMediaMetadata(metadata)
+                    .build()
+            )
+            exoPlayer.prepare()
+            exoPlayer.play()
+            startLocalProgressTracker()
+            Log.i(
+                "AppleMusicPlayer",
+                "Playing '${track.title}' via ExoPlayer (stream, tier=" +
+                    "${com.cypher.music.network.StreamingTelemetry.lastTierFor(videoId)})"
+            )
+            startFadeIn()
+        }
+    }
+
+    /**
+     * The official IFrame engine: a silent ExoPlayer carrier for the media session
+     * plus the WebView player. Used only when a direct stream cannot be resolved.
+     */
+    private fun startStreamingViaIframe(track: Track, videoId: String, metadata: MediaMetadata) {
+        streamingViaExo = false
+        requestedYouTubeVideoId = videoId
+        loadedYouTubeVideoId = null
+        try {
+            exoPlayer.setAudioAttributes(AudioAttributes.DEFAULT, false)
+            exoPlayer.volume = 0f
+            exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
+            val silentUri = Uri.parse("android.resource://${context.packageName}/${com.cypher.music.R.raw.silence}")
+            val activeItem = MediaItem.Builder()
+                .setMediaId(track.id)
+                .setUri(silentUri)
+                .setMediaMetadata(metadata)
+                .build()
+            exoPlayer.setMediaItem(activeItem)
+            exoPlayer.prepare()
+            exoPlayer.play()
+        } catch (e: Exception) {
+            Log.w("AppleMusicPlayer", "Failed to start silent carrier in ExoPlayer", e)
+        }
+
+        val player = youTubePlayer
+        if (player != null) {
+            Log.d("AppleMusicPlayer", "Calling youTubePlayer.loadVideo($videoId)")
+            player.loadVideo(videoId, 0f)
+        } else {
+            Log.w("AppleMusicPlayer", "youTubePlayer not attached yet, queued as pending: $videoId")
+            pendingYouTubeVideoId = videoId
         }
     }
 
@@ -1562,7 +1672,7 @@ class MusicPlayerManager(private val context: Context) {
             return
         }
         val track = _state.value.currentTrack ?: return
-        if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+        if (exoOwnsAudio) {
             if (exoPlayer.isPlaying) {
                 exoPlayer.pause()
             } else {
@@ -1585,8 +1695,7 @@ class MusicPlayerManager(private val context: Context) {
     }
 
     fun pause() {
-        val track = _state.value.currentTrack
-        if (track?.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+        if (exoOwnsAudio) {
             exoPlayer.pause()
         } else {
             userPausedDuringLoad = true
@@ -1609,7 +1718,7 @@ class MusicPlayerManager(private val context: Context) {
         val snapshot = _state.value
         val track = snapshot.currentTrack ?: return
         if (!snapshot.isPlaying) return
-        if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) return
+        if (exoOwnsAudio) return
 
         youTubePlayer?.pause()
         if (exoPlayer.isPlaying) exoPlayer.pause()
@@ -1626,7 +1735,7 @@ class MusicPlayerManager(private val context: Context) {
         _playbackProgress.value = clampedFrac
         _state.update { it.copy(currentPositionMs = targetMs) }
 
-        if (track.sourceType == AudioSourceType.LOCAL || isPlayingOffline) {
+        if (exoOwnsAudio) {
             exoPlayer.seekTo(targetMs)
         } else {
             youTubePlayer?.seekTo(targetMs / 1000f)
@@ -1820,14 +1929,9 @@ class MusicPlayerManager(private val context: Context) {
     // Master volume setter handling both Local ExoPlayer and YouTube WebView
     fun setMasterPlaybackVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, 1f)
-        val track = _state.value.currentTrack
-        // Offline downloads are YouTube tracks but play through ExoPlayer, so they
-        // must be routed here too; otherwise fade-in/volume changes never touch them.
-        val ownsAudio = PlaybackOutputPolicy.usesExoPlayer(
-            isLocalSource = track?.sourceType == AudioSourceType.LOCAL,
-            isOfflineDownload = isPlayingOffline
-        )
-        if (ownsAudio) {
+        // Local files, downloads and streams rendered by ExoPlayer share one volume
+        // knob; only the IFrame fallback needs the WebView volume instead.
+        if (exoOwnsAudio) {
             exoPlayer.volume = clamped
         } else {
             youTubePlayer?.setVolume((clamped * 100).toInt())
@@ -1921,8 +2025,7 @@ class MusicPlayerManager(private val context: Context) {
         progressJob?.cancel()
         progressJob = scope.launch {
             while (isActive) {
-                val isLocalOrOffline = _state.value.currentTrack?.sourceType == AudioSourceType.LOCAL || isPlayingOffline
-                if (isLocalOrOffline && exoPlayer.isPlaying) {
+                if (exoOwnsAudio && exoPlayer.isPlaying) {
                     val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
                     val dur = exoPlayer.duration.coerceAtLeast(0L)
                     _playbackPositionMs.value = pos

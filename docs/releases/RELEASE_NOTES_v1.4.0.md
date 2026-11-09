@@ -5,7 +5,7 @@
 - Si esa pausa falsa llega igualmente, el reproductor vuelve a arrancar el vídeo (como máximo dos veces por canción) en lugar de dejar la cola parada.
 
 ## Proyecto
-- GitHub Actions: los tests JVM y la compilación del APK corren en cada push a `main`, y al empujar un tag `v*` se publican los APK y `SHA256SUMS.txt` en la release.
+- Workflow de GitHub Actions en `ci/android.yml`: tests JVM, compilación de los APK y publicación firmada al empujar un tag `v*`. Queda activado en cuanto un push con scope `workflow` lo mueva a `.github/workflows/`.
 
 ## Notas
 - `versionCode` 19, `versionName` 1.4.0.

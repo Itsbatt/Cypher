@@ -8,6 +8,7 @@ import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
 import android.util.Log
+import com.cypher.music.utils.DiagnosticsLog
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
@@ -18,7 +19,10 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.cypher.music.data.DownloadDeletionResult
+import com.cypher.music.data.DownloadStats
 import com.cypher.music.data.Playlist
+import com.cypher.music.data.deletableDownloadIds
 import com.cypher.music.data.room.CypherDatabase
 import com.cypher.music.data.room.toDomain
 import com.cypher.music.data.room.toEntity
@@ -62,6 +66,9 @@ object MediaCacheManager {
     private const val MIN_AUDIO_BYTES = 1024L
     private const val DOWNLOAD_QUEUE_PREFS = "cypher_download_queue"
     private const val DOWNLOAD_QUEUE_KEY = "pending"
+
+    /** Containers a download can end up in, shared by lookup, deletion and cleanup. */
+    private val AUDIO_EXTENSIONS = listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")
 
     // Live reactive state: trackId -> progress (0.0f .. 1.0f). If present, it's currently downloading.
     private val _downloadProgressMap = MutableStateFlow<Map<String, Float>>(emptyMap())
@@ -279,7 +286,7 @@ object MediaCacheManager {
      */
     fun getOfflineTrackFile(context: Context, trackId: String): File? {
         val safeId = trackId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-        val extensions = listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")
+        val extensions = AUDIO_EXTENSIONS
 
         // 1. Primary Scoped Storage Vault
         val primaryDir = getOfflineVaultDir(context)
@@ -710,8 +717,12 @@ object MediaCacheManager {
                 downloadedFile
             } else {
                 Log.e(TAG, "Download failed or output file is empty/missing for track: ${track.id}")
+                DiagnosticsLog.error(
+                    "Descargas",
+                    "La descarga de «${track.title}» no produjo un archivo válido"
+                )
                 // A rejected download used to leave its junk behind for ever.
-                for (ext in listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")) {
+                for (ext in AUDIO_EXTENSIONS) {
                     val junk = File(vaultDir, "$safeId.$ext")
                     if (junk.exists() && !hasAudioSignature(junk)) junk.delete()
                 }
@@ -720,6 +731,7 @@ object MediaCacheManager {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to download track offline", e)
+            DiagnosticsLog.error("Descargas", "Falló la descarga de «${track.title}»", e)
             registerFailure(track.id, e.message ?: "Error de red durante la descarga")
             null
         } finally {
@@ -780,16 +792,12 @@ object MediaCacheManager {
     suspend fun deleteOfflineTrack(context: Context, trackId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val safeId = trackId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            val extensions = listOf("flac", "wav", "m4a", "webm", "opus", "mp3", "aac", "ogg")
             // Lookup checks every volume, so deletion must too; otherwise a download
             // on a secondary volume stayed on disk while the UI said it was removed.
-            val dirs = (listOf(getOfflineVaultDir(context)) +
-                ContextCompat.getExternalFilesDirs(context, null).filterNotNull()
-                    .map { File(it, "offline_vault") })
-                .distinctBy { it.absolutePath }
+            val dirs = offlineVaultDirs(context)
             var deleted = false
             for (dir in dirs) {
-                for (ext in extensions) {
+                for (ext in AUDIO_EXTENSIONS) {
                     val f = File(dir, "$safeId.$ext")
                     if (f.exists()) {
                         deleted = f.delete() || deleted
@@ -805,4 +813,98 @@ object MediaCacheManager {
             false
         }
     }
+
+    /**
+     * Every folder that can hold offline downloads: the resolved vault plus the
+     * app-specific folder of each mounted volume (a card may have been reinserted
+     * since the download) and the legacy internal folder.
+     */
+    private fun offlineVaultDirs(context: Context): List<File> =
+        (listOf(getOfflineVaultDir(context)) +
+            ContextCompat.getExternalFilesDirs(context, null).filterNotNull()
+                .map { File(it, "offline_vault") } +
+            listOf(File(context.filesDir, "offline_vault")))
+            .distinctBy { it.absolutePath }
+
+    /** Track ids that currently have a file in any download folder. */
+    private fun downloadedIdsOnDisk(context: Context): Set<String> {
+        val ids = mutableSetOf<String>()
+        for (dir in offlineVaultDirs(context)) {
+            dir.listFiles()?.forEach { file ->
+                if (file.isFile && file.name != ".nomedia" &&
+                    AUDIO_EXTENSIONS.contains(file.extension.lowercase())
+                ) {
+                    ids.add(file.name.substringBeforeLast('.'))
+                }
+            }
+        }
+        return ids
+    }
+
+    /**
+     * Space used by the offline downloads, counted from the files on disk so a
+     * stale Room row never inflates the figure shown in Ajustes.
+     */
+    fun downloadStats(context: Context): DownloadStats {
+        var count = 0
+        var bytes = 0L
+        runCatching {
+            for (dir in offlineVaultDirs(context)) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile && file.name != ".nomedia" &&
+                        AUDIO_EXTENSIONS.contains(file.extension.lowercase()) &&
+                        hasAudioSignature(file)
+                    ) {
+                        count++
+                        bytes += file.length()
+                    }
+                }
+            }
+        }
+        return DownloadStats(
+            fileCount = count,
+            totalBytes = bytes,
+            activeDownloads = _downloadProgressMap.value.size
+        )
+    }
+
+    /**
+     * Deletes every finished download, leaving the ones still being written alone.
+     * Each file goes through [deleteOfflineTrack], so the Room flag and the reactive
+     * downloaded-id set stay in sync without a second deletion path.
+     */
+    suspend fun deleteAllDownloads(context: Context): DownloadDeletionResult =
+        withContext(Dispatchers.IO) {
+            val active = _downloadProgressMap.value.keys
+            val knownIds = _downloadedTrackIds.value
+            val onDisk = downloadedIdsOnDisk(context)
+            val skippedActive = active.count { onDisk.contains(it) || knownIds.contains(it) }
+            val candidates = deletableDownloadIds(knownIds + onDisk, active)
+
+            var deleted = 0
+            for (id in candidates) {
+                if (deleteOfflineTrack(context, id)) deleted++
+            }
+
+            // A row whose file vanished without the app noticing still has to lose
+            // its "downloaded" flag, otherwise the library keeps offering a file
+            // that is not there.
+            val roomDb = runCatching { CypherDatabase.getInstance(context) }.getOrNull()
+            if (roomDb != null) {
+                val staleRows = runCatching { roomDb.trackDao().getDownloadedTracks() }
+                    .getOrDefault(emptyList())
+                for (row in staleRows) {
+                    if (!active.contains(row.id) && getOfflineTrackFile(context, row.id) == null) {
+                        runCatching {
+                            roomDb.trackDao().setDownloaded(
+                                row.id, false, null, System.currentTimeMillis()
+                            )
+                            _downloadedTrackIds.update { it - row.id }
+                        }
+                    }
+                }
+            }
+
+            DownloadDeletionResult(deleted = deleted, skippedActive = skippedActive)
+        }
 }

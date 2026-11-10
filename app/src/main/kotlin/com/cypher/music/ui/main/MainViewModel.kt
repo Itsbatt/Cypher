@@ -53,6 +53,7 @@ import com.cypher.music.wrapped.WrappedAvailability
 import com.cypher.music.wrapped.WrappedScheduler
 import com.cypher.music.data.LiquidGlassConfig
 import com.cypher.music.data.LyricsSettingsManager
+import com.cypher.music.data.MotionPreferences
 import com.cypher.music.data.SearchCategory
 import com.cypher.music.data.SearchHistoryManager
 import com.cypher.music.data.UserViewPreferencesManager
@@ -61,6 +62,8 @@ import com.cypher.music.data.HomePreferences
 import com.cypher.music.data.HomeSection
 import com.cypher.music.data.TrackSortKey
 import com.cypher.music.data.DownloadedPlaylist
+import com.cypher.music.data.DownloadDeletionResult
+import com.cypher.music.data.DownloadStats
 import com.cypher.music.playback.MediaCacheManager
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -97,6 +100,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val favoritesManager = FavoritesManager(application, viewModelScope)
     private val volumeManager = AudioVolumeManager(application)
     private val themePreferencesManager = ThemePreferencesManager(application)
+    private val motionPreferences = MotionPreferences(application)
+    val reducedMotion: StateFlow<Boolean> = motionPreferences.reducedMotion
     val youtubeAccountManager = YouTubeAccountManager(application)
 
     // Decoupled Domain-Specific ViewModels (SOLID architecture)
@@ -805,6 +810,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deletePlaylistDownloads(playlist: com.cypher.music.data.Playlist, onComplete: (() -> Unit)? = null) {
         libraryViewModel.deletePlaylistDownloads(playlist, onComplete)
+    }
+
+    // Space used by the offline downloads. Scanned from disk on IO because the
+    // figure must match what is really stored, not what Room believes.
+    private val _downloadStats = MutableStateFlow(DownloadStats())
+    val downloadStats: StateFlow<DownloadStats> = _downloadStats.asStateFlow()
+
+    fun refreshDownloadStats() {
+        viewModelScope.launch {
+            _downloadStats.value = withContext(Dispatchers.IO) {
+                MediaCacheManager.downloadStats(getApplication())
+            }
+        }
+    }
+
+    /**
+     * Deletes every finished download. Files that are still being written are left
+     * alone and reported back so the UI can say so instead of failing silently.
+     */
+    fun deleteAllDownloads(onComplete: (DownloadDeletionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                MediaCacheManager.deleteAllDownloads(getApplication())
+            }
+            libraryViewModel.refreshDownloadedTracks()
+            refreshDownloadStats()
+            onComplete(result)
+        }
     }
 
     fun onSearchQueryChange(query: String) {
@@ -1635,13 +1668,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Backup & Restore Database
-    fun exportDatabaseBackup(): String {
-        return try {
+    // Room forbids queries on the main thread, so the whole snapshot (database +
+    // settings) is built on IO and returned to the caller that writes the file.
+    suspend fun exportDatabaseBackup(): String = withContext(Dispatchers.IO) {
+        try {
             val playlists = playlistRepository.roomDb.playlistDao().getAllPlaylistsWithTracks()
             val favs = playlistRepository.roomDb.trackDao().getFavoriteTracks()
 
             val root = org.json.JSONObject()
-            root.put("version", 3)
+            root.put("version", 4)
             root.put("appName", "Cypher")
             root.put("timestamp", System.currentTimeMillis())
 
@@ -1688,9 +1723,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             root.put("favorites", favArray)
 
+            // Settings only: audio files, covers and downloads are never part of the file.
+            root.put("settings", org.json.JSONObject().apply {
+                put("theme", themePreferencesManager.exportJson())
+                put("lyrics", lyricsSettingsManager.exportJson())
+                put("home", viewPreferences.exportJson())
+                put("motion", motionPreferences.exportJson())
+            })
+
             root.toString(2)
         } catch (e: Exception) {
-            "{}"
+            Log.e("MainViewModel", "No se pudo generar la copia de seguridad", e)
+            com.cypher.music.utils.DiagnosticsLog.error("Copia de seguridad", "Falló la exportación", e)
+            ""
         }
     }
 
@@ -1744,6 +1789,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            val settingsRestored = applyBackupSettings(root.optJSONObject("settings"))
+
             playlistRepository.loadData()
             refreshListeningStats()
             refreshDynamicRecommendations()
@@ -1753,11 +1800,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tracksCount = 0,
                 favoritesCount = favArray.length(),
                 analyticsCount = 0,
-                success = true
+                success = true,
+                settingsRestored = settingsRestored
             )
         } catch (e: Exception) {
             BackupImportSummary(success = false, errorMessage = e.message)
         }
+    }
+
+    /** Restores the optional "settings" block; older backups simply do not have it. */
+    private fun applyBackupSettings(settings: org.json.JSONObject?): Boolean {
+        if (settings == null) return false
+        var restored = false
+        settings.optString("theme", "").takeIf { it.isNotBlank() }
+            ?.let { restored = themePreferencesManager.importJson(it) || restored }
+        settings.optString("lyrics", "").takeIf { it.isNotBlank() }
+            ?.let { restored = lyricsSettingsManager.importJson(it) || restored }
+        settings.optString("home", "").takeIf { it.isNotBlank() }
+            ?.let { restored = viewPreferences.importJson(it) || restored }
+        settings.optString("motion", "").takeIf { it.isNotBlank() }
+            ?.let { motionPreferences.importJson(it); restored = true }
+        return restored
+    }
+
+    fun setReducedMotion(enabled: Boolean) {
+        motionPreferences.setReducedMotion(enabled)
     }
 
     // QR Code and Short Code Sharing & Import

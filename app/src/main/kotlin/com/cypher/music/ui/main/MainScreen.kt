@@ -115,6 +115,7 @@ fun MainScreen(
     val playerState by viewModel.playerState.collectAsState()
     val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+    val reducedMotion by viewModel.reducedMotion.collectAsState()
     val themePrefs by viewModel.themePreferences.collectAsState()
 
     val localTracks by viewModel.localTracks.collectAsState()
@@ -168,6 +169,7 @@ fun MainScreen(
     val updateViewModel: UpdateViewModel = viewModel()
     val updateState by updateViewModel.state.collectAsState()
     val playbackNotice by viewModel.playbackNotice.collectAsState()
+    val downloadStats by viewModel.downloadStats.collectAsState()
 
     // A track that cannot start is reported once instead of being skipped in silence.
     LaunchedEffect(playbackNotice) {
@@ -648,6 +650,23 @@ fun MainScreen(
                 sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
                 onExportBackup = { viewModel.exportDatabaseBackup() },
                 onImportBackup = { viewModel.importDatabaseBackup(it) },
+                reducedMotion = reducedMotion,
+                onToggleReducedMotion = { viewModel.setReducedMotion(it) },
+                downloadStats = downloadStats,
+                onRefreshDownloadStats = { viewModel.refreshDownloadStats() },
+                onDeleteAllDownloads = {
+                    viewModel.deleteAllDownloads { result ->
+                        val message = when {
+                            result.deleted == 0 && result.skippedActive == 0 ->
+                                "No había descargas que borrar"
+                            result.skippedActive > 0 ->
+                                "Borradas ${result.deleted} descargas · ${result.skippedActive} en curso sin tocar"
+                            result.deleted == 1 -> "Descarga borrada"
+                            else -> "Borradas ${result.deleted} descargas"
+                        }
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    }
+                },
                 onBack = { viewModel.setSettingsOpen(false) }
             )
         }

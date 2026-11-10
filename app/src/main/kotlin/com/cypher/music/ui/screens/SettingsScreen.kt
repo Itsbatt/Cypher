@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +57,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +88,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
@@ -94,6 +98,9 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.ui.platform.LocalContext
 import com.cypher.music.data.BackupImportSummary
 import com.cypher.music.data.CrossfadeOptions
+import com.cypher.music.data.DownloadStats
+import com.cypher.music.data.describeDownloadStats
+import com.cypher.music.data.formatDownloadSize
 import com.cypher.music.playback.SleepTimerMode
 import com.cypher.music.data.UserListeningStats
 import com.cypher.music.network.YouTubeAccountSession
@@ -106,6 +113,15 @@ import com.cypher.music.data.HomePreferences
 import com.cypher.music.ui.components.UsernameDialog
 import com.cypher.music.ui.theme.ResolvedThemeColors
 import com.cypher.music.ui.utils.AppHaptics
+import com.cypher.music.data.LegalNoticeStore
+import com.cypher.music.ui.components.LegalNoticeDialog
+import com.cypher.music.utils.DiagnosticsLog
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -140,8 +156,13 @@ fun SettingsScreen(
     onToggleFavoritePlaylist: (String) -> Unit = {},
     sleepTimerMode: SleepTimerMode = SleepTimerMode.OFF,
     sleepTimerRemainingSeconds: Long? = null,
-    onExportBackup: () -> String = { "" },
+    onExportBackup: suspend () -> String = { "" },
     onImportBackup: (String) -> BackupImportSummary = { BackupImportSummary(0, 0, 0) },
+    downloadStats: DownloadStats = DownloadStats(),
+    onRefreshDownloadStats: () -> Unit = {},
+    onDeleteAllDownloads: () -> Unit = {},
+    reducedMotion: Boolean = false,
+    onToggleReducedMotion: (Boolean) -> Unit = {},
     bottomPadding: androidx.compose.ui.unit.Dp = 110.dp,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -154,6 +175,13 @@ fun SettingsScreen(
     val wrappedYear = WrappedAvailability.activeYear()
     var isUsernameDialogOpen by remember { mutableStateOf(false) }
     var showHomeCustomization by remember { mutableStateOf(false) }
+    var showLegalNotice by remember { mutableStateOf(false) }
+    var showDeleteDownloadsConfirm by remember { mutableStateOf(false) }
+    val legalNoticeStore = remember { LegalNoticeStore(context) }
+    val scope = rememberCoroutineScope()
+    // The figure is scanned from disk, so it is refreshed every time this screen
+    // opens instead of being cached from a previous session.
+    LaunchedEffect(Unit) { onRefreshDownloadStats() }
 
     // Which theme colour the hex picker is editing: accent, background or card.
     var hexColorTarget by remember { mutableStateOf<String?>(null) }
@@ -192,14 +220,45 @@ fun SettingsScreen(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri != null) {
-            try {
-                val json = onExportBackup()
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(json.toByteArray(Charsets.UTF_8))
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val json = onExportBackup()
+                        if (json.isBlank()) error("no se pudo leer la base de datos")
+                        context.contentResolver.openOutputStream(uri)?.use { stream ->
+                            stream.write(json.toByteArray(Charsets.UTF_8))
+                        } ?: error("el archivo elegido no se pudo abrir")
+                    }
                 }
-                Toast.makeText(context, "Copia de seguridad exportada correctamente", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error al exportar: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    if (result.isSuccess) "Copia de seguridad exportada correctamente"
+                    else "Error al exportar: ${result.exceptionOrNull()?.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    val diagnosticsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val report = DiagnosticsLog.buildReport(context)
+                        context.contentResolver.openOutputStream(uri)?.use { stream ->
+                            stream.write(report.toByteArray(Charsets.UTF_8))
+                        }
+                        report
+                    }
+                }
+                Toast.makeText(
+                    context,
+                    if (result.isSuccess) "Log de errores exportado" else "No se pudo exportar el log: ${result.exceptionOrNull()?.message}",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -213,9 +272,10 @@ fun SettingsScreen(
                     stream.bufferedReader(Charsets.UTF_8).readText()
                 } ?: ""
                 val summary = onImportBackup(json)
+                val settingsNote = if (summary.settingsRestored) " y los ajustes" else ""
                 Toast.makeText(
                     context,
-                    "Restauradas ${summary.playlistsCount} playlists y ${summary.favoritesCount} favoritos",
+                    "Restauradas ${summary.playlistsCount} playlists, ${summary.favoritesCount} favoritos$settingsNote",
                     Toast.LENGTH_LONG
                 ).show()
             } catch (e: Exception) {
@@ -1040,6 +1100,44 @@ fun SettingsScreen(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+
+                HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Movimiento reducido",
+                            color = themeColors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = if (reducedMotion) {
+                                "Activo • shaders AGSL desactivados"
+                            } else {
+                                "Desactiva los shaders AGSL y el movimiento ambiental (sigue la preferencia del sistema)"
+                            },
+                            color = themeColors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = reducedMotion,
+                        onCheckedChange = { checked ->
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onToggleReducedMotion(checked)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = themeColors.accent
+                        )
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -1548,7 +1646,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Exporta o importa tus playlists y canciones favoritas en un archivo JSON local. El perfil, las estadísticas y los ajustes no se incluyen.",
+                    text = "Exporta o importa playlists, favoritos y ajustes (tema, letras, pantalla de inicio y movimiento) en un archivo JSON local. El perfil, las estadísticas y los archivos de audio no se incluyen.",
                     color = themeColors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -1608,6 +1706,187 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
+        // Section: Descargas
+        item {
+            SettingsSectionHeader(
+                title = "Descargas",
+                icon = Icons.Filled.CloudDownload,
+                tint = themeColors.accent
+            )
+
+            SettingsCard(themeColors = themeColors) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(themeColors.accent.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CloudDownload,
+                            contentDescription = null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Espacio ocupado",
+                            color = themeColors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = describeDownloadStats(downloadStats),
+                            color = themeColors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                if (downloadStats.activeDownloads > 0) {
+                    Text(
+                        text = if (downloadStats.activeDownloads == 1) {
+                            "1 descarga en curso: no se borrará"
+                        } else {
+                            "${downloadStats.activeDownloads} descargas en curso: no se borrarán"
+                        },
+                        color = themeColors.accent,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+
+                HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 14.dp))
+
+                Button(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        showDeleteDownloadsConfirm = true
+                    },
+                    enabled = !downloadStats.isEmpty,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = themeColors.background,
+                        disabledContainerColor = themeColors.background.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .border(1.dp, themeColors.separator, RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteForever,
+                        contentDescription = null,
+                        tint = if (downloadStats.isEmpty) themeColors.textSecondary else Color(0xFFFF453A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Borrar todas las descargas",
+                        color = if (downloadStats.isEmpty) themeColors.textSecondary else Color(0xFFFF453A),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Text(
+                    text = "Elimina los archivos descargados y libera su espacio. Las canciones siguen en tu biblioteca y se pueden volver a descargar.",
+                    color = themeColors.textSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Section: Diagnóstico y aviso legal
+        item {
+            SettingsSectionHeader(
+                title = "Diagnóstico y legal",
+                icon = Icons.Filled.BugReport,
+                tint = themeColors.accent
+            )
+
+            SettingsCard(themeColors = themeColors) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            val name = "cypher_errores_${System.currentTimeMillis()}.txt"
+                            diagnosticsLauncher.launch(name)
+                        }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Exportar log de errores",
+                            color = themeColors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Errores de reproducción y descargas de esta sesión, con los datos del dispositivo",
+                            color = themeColors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.FileDownload,
+                        contentDescription = "Exportar log de errores",
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            showLegalNotice = true
+                        }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Aviso legal",
+                            color = themeColors.textPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Uso de YouTube, descargas personales y datos",
+                            color = themeColors.textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.Gavel,
+                        contentDescription = "Aviso legal",
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
         // Section: Reset Defaults
         item {
             Button(
@@ -1638,6 +1917,59 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(60.dp))
         }
+    }
+
+    if (showDeleteDownloadsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDownloadsConfirm = false },
+            containerColor = Color(0xFF1C1C1E),
+            title = {
+                Text(
+                    text = "¿Borrar todas las descargas?",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                val files = if (downloadStats.fileCount == 1) {
+                    "1 archivo"
+                } else {
+                    "${downloadStats.fileCount} archivos"
+                }
+                Text(
+                    text = "$files ocupando ${formatDownloadSize(downloadStats.totalBytes)}. " +
+                        "Esta acción no se puede deshacer; las canciones seguirán en tu biblioteca.",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        showDeleteDownloadsConfirm = false
+                        onDeleteAllDownloads()
+                    }
+                ) {
+                    Text("Borrar", color = Color(0xFFFF453A), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDownloadsConfirm = false }) {
+                    Text("Cancelar", color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        )
+    }
+
+    if (showLegalNotice) {
+        LegalNoticeDialog(
+            onDismiss = {
+                legalNoticeStore.accept()
+                showLegalNotice = false
+            },
+            confirmLabel = "Cerrar"
+        )
     }
 
     if (isUsernameDialogOpen) {

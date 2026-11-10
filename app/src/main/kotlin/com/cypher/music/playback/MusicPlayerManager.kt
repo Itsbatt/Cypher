@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import com.cypher.music.utils.DiagnosticsLog
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -104,6 +105,14 @@ class MusicPlayerManager(private val context: Context) {
     private var listeningTrackerJob: Job? = null
     private var sleepTimerJob: Job? = null
     private var fadeInJob: Job? = null
+
+    // Master volume when the countdown timer started, so cancelling mid-fade puts
+    // back exactly what was there instead of a hard-coded value.
+    private var sleepFadeBaseline: Float = 1f
+
+    // Last value pushed by setMasterPlaybackVolume, whichever engine owns the audio.
+    @Volatile
+    private var lastAppliedVolume: Float = 1f
 
     // Load supervision: the token invalidates late timeouts from a previous track,
     // and the counters let a broken stream be retried once instead of freezing.
@@ -997,6 +1006,11 @@ class MusicPlayerManager(private val context: Context) {
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.e("MusicPlayerManager", "ExoPlayer onPlayerError: ${error.errorCodeName} (${error.errorCode})", error)
+                DiagnosticsLog.error(
+                    "Reproducción",
+                    "Error ${error.errorCodeName} (${error.errorCode}) en «${_state.value.currentTrack?.title ?: "?"}»",
+                    error
+                )
                 val track = _state.value.currentTrack
                 val is403 = error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
                         error.message?.contains("403") == true ||
@@ -1990,9 +2004,11 @@ class MusicPlayerManager(private val context: Context) {
         }
     }
 
-    // Master volume setter handling both Local ExoPlayer and YouTube WebView
+    // Master volume setter handling both Local ExoPlayer and YouTube WebView. The
+    // applied value is remembered because the IFrame player exposes no volume getter.
     fun setMasterPlaybackVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, 1f)
+        lastAppliedVolume = clamped
         // Local files, downloads and streams rendered by ExoPlayer share one volume
         // knob; only the IFrame fallback needs the WebView volume instead.
         if (exoOwnsAudio) {
@@ -2006,8 +2022,27 @@ class MusicPlayerManager(private val context: Context) {
         crossfadeSeconds = seconds
     }
 
+    /**
+     * Fraction the countdown sleep timer is currently applying, or null when no
+     * timer is inside its fade window. The crossfade ramp and the fade-in must not
+     * fight it: they would push the volume back up mid-fade.
+     */
+    private fun sleepTimerFadeFraction(): Float? {
+        val mode = _sleepTimerMode.value
+        if (mode == SleepTimerMode.OFF || mode == SleepTimerMode.END_OF_TRACK) return null
+        val remaining = _sleepTimerRemainingSeconds.value ?: return null
+        val fraction = SleepFade.volumeFraction(remaining)
+        return fraction.takeIf { it < 1f }
+    }
+
     private fun startFadeIn() {
         fadeInJob?.cancel()
+        // A track starting inside the sleep fade keeps the faded volume instead of
+        // jumping to full: the timer is still running.
+        sleepTimerFadeFraction()?.let { fraction ->
+            setMasterPlaybackVolume(sleepFadeBaseline * fraction)
+            return
+        }
         if (crossfadeSeconds <= 0) {
             setMasterPlaybackVolume(1f)
             return
@@ -2027,6 +2062,8 @@ class MusicPlayerManager(private val context: Context) {
 
     private fun checkVolumeTransitions(currentPosMs: Long, totalDurationMs: Long) {
         if (totalDurationMs <= 0) return
+        // The countdown timer owns the volume once its fade window starts.
+        if (sleepTimerFadeFraction() != null) return
         val remainingMs = totalDurationMs - currentPosMs
 
         // Check Sleep Timer "Al finalizar la canción" fade-out (last 10s)
@@ -2049,8 +2086,26 @@ class MusicPlayerManager(private val context: Context) {
     }
 
     fun setSleepTimer(mode: SleepTimerMode) {
+        val previousMode = _sleepTimerMode.value
+        val hadCountdown = previousMode != SleepTimerMode.OFF &&
+            previousMode != SleepTimerMode.END_OF_TRACK
         sleepTimerJob?.cancel()
-        setMasterPlaybackVolume(1f)
+
+        if (mode == SleepTimerMode.OFF) {
+            // Cancelling, possibly mid-fade: put the volume back where it started.
+            setMasterPlaybackVolume(sleepFadeBaseline)
+            if (previousMode != SleepTimerMode.OFF) {
+                Log.i(
+                    "AppleMusicPlayer",
+                    "Sleep timer cancelled: volumen restaurado a %.2f".format(sleepFadeBaseline)
+                )
+            }
+        } else {
+            // A second timer started while the first was fading would otherwise save
+            // a half-faded value as its baseline.
+            sleepFadeBaseline = if (hadCountdown) sleepFadeBaseline else currentMasterVolume()
+            setMasterPlaybackVolume(sleepFadeBaseline)
+        }
         _sleepTimerMode.value = mode
 
         when (mode) {
@@ -2062,28 +2117,41 @@ class MusicPlayerManager(private val context: Context) {
             }
             else -> {
                 val totalSeconds = mode.minutes * 60L
+                val baseline = sleepFadeBaseline
                 sleepTimerJob = scope.launch {
                     var remaining = totalSeconds
                     while (remaining > 0 && isActive) {
                         _sleepTimerRemainingSeconds.value = remaining
                         delay(1000)
                         remaining--
-                        // Smooth 10s fade-out before stopping
-                        if (remaining in 1..10) {
-                            val fadeFraction = remaining / 10f
-                            setMasterPlaybackVolume(fadeFraction)
+                        // Gradual 30 s ramp before pausing, on the same master volume
+                        // the fade-in uses, so it also covers downloads.
+                        val fraction = SleepFade.volumeFraction(remaining)
+                        if (fraction < 1f) {
+                            setMasterPlaybackVolume(baseline * fraction)
+                            Log.i(
+                                "AppleMusicPlayer",
+                                "Sleep fade: ${remaining}s restantes, volumen %.2f"
+                                    .format(baseline * fraction)
+                            )
                         }
                     }
-                    // Stop playback and restore baseline volume
+                    // Stop playback and restore the volume the timer found.
                     setMasterPlaybackVolume(0f)
                     pause()
-                    setMasterPlaybackVolume(1f)
+                    setMasterPlaybackVolume(baseline)
                     _sleepTimerMode.value = SleepTimerMode.OFF
                     _sleepTimerRemainingSeconds.value = null
                 }
             }
         }
     }
+
+    /**
+     * Master volume the player is applying right now (1.0 unless a fade is running).
+     * Used as the baseline the sleep fade returns to.
+     */
+    private fun currentMasterVolume(): Float = lastAppliedVolume
 
     private fun startLocalProgressTracker() {
         progressJob?.cancel()

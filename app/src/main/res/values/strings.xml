@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Cypher</string>
+    <string name="notification_channel_playback">Cypher Playback</string>
 </resources>

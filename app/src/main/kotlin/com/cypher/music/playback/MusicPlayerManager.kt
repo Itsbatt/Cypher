@@ -262,6 +262,11 @@ class MusicPlayerManager(private val context: Context) {
         )
         .setHandleAudioBecomingNoisy(true)
         .build()
+        .apply {
+            // Screen off or another app in front: hold the CPU and Wi-Fi locks while audio
+            // plays, otherwise the hand-off to the next stream is frozen by Doze.
+            setWakeMode(C.WAKE_MODE_NETWORK)
+        }
 
     // 2. YouTube IFrame Player instance
     private var youTubePlayer: YouTubePlayer? = null
@@ -892,9 +897,25 @@ class MusicPlayerManager(private val context: Context) {
                     .add(androidx.media3.session.SessionCommand(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_GET_ITEM))
                     .add(androidx.media3.session.SessionCommand(androidx.media3.session.SessionCommand.COMMAND_CODE_LIBRARY_SEARCH))
                     .build()
+                // The system media panel (Samsung One UI, Android Auto, Bluetooth) builds
+                // its buttons from the commands the session exposes. Without them the
+                // exported PlaybackState only carried COMMAND_SET_RATING, which is why the
+                // notification had no play/pause or skip buttons on Samsung.
+                val availablePlayerCommands = connectionResult.availablePlayerCommands.buildUpon()
+                    .addAll(
+                        Player.COMMAND_PLAY_PAUSE,
+                        Player.COMMAND_SEEK_TO_NEXT,
+                        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_TO_PREVIOUS,
+                        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                        Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
+                        Player.COMMAND_GET_TIMELINE
+                    )
+                    .build()
                 return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                     .setAvailableSessionCommands(availableSessionCommands)
-                    .setAvailablePlayerCommands(connectionResult.availablePlayerCommands)
+                    .setAvailablePlayerCommands(availablePlayerCommands)
                     .build()
             }
 
@@ -1488,14 +1509,6 @@ class MusicPlayerManager(private val context: Context) {
             }
         }
 
-        // Start background PlaybackService
-        try {
-            val serviceIntent = Intent(context, PlaybackService::class.java)
-            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
-        } catch (e: Exception) {
-            Log.w("AppleMusicPlayer", "Could not start PlaybackService", e)
-        }
-
         // Update Android MediaSession Metadata
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -1536,6 +1549,7 @@ class MusicPlayerManager(private val context: Context) {
                 exoPlayer.prepare()
                 exoPlayer.play()
                 Log.i("AppleMusicPlayer", "Playing '${track.title}' via ExoPlayer (offlineVault=$isPlayingOffline)")
+                ensurePlaybackService()
             } else {
                 stopLocalProgressTracker()
                 val videoId = extractVideoId(track.streamUrl.ifEmpty { track.id })
@@ -1553,6 +1567,22 @@ class MusicPlayerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e("AppleMusicPlayer", "Error in playTrack", e)
             _state.update { it.copy(isBuffering = false) }
+        }
+    }
+
+    /**
+     * Starts the foreground service once the engine already has a media item, so media3
+     * posts its notification (and calls startForeground) with real metadata instead of
+     * racing the five second foreground-service deadline while a stream URL resolves.
+     */
+    private fun ensurePlaybackService() {
+        try {
+            androidx.core.content.ContextCompat.startForegroundService(
+                context,
+                Intent(context, PlaybackService::class.java)
+            )
+        } catch (e: Exception) {
+            Log.w("AppleMusicPlayer", "Could not start PlaybackService", e)
         }
     }
 
@@ -1609,6 +1639,7 @@ class MusicPlayerManager(private val context: Context) {
             )
             exoPlayer.prepare()
             exoPlayer.play()
+            ensurePlaybackService()
             startLocalProgressTracker()
             Log.i(
                 "AppleMusicPlayer",
@@ -1640,6 +1671,7 @@ class MusicPlayerManager(private val context: Context) {
             exoPlayer.setMediaItem(activeItem)
             exoPlayer.prepare()
             exoPlayer.play()
+            ensurePlaybackService()
         } catch (e: Exception) {
             Log.w("AppleMusicPlayer", "Failed to start silent carrier in ExoPlayer", e)
         }

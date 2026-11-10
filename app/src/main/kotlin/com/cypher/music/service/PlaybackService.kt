@@ -3,28 +3,21 @@ package com.cypher.music.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
-import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.os.Build
+import android.os.PowerManager
 import androidx.annotation.OptIn
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.MediaSession
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
-import androidx.media3.session.MediaStyleNotificationHelper
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import com.cypher.music.MainActivity
+import androidx.media3.session.MediaNotification
+import androidx.media3.session.MediaSession
 import com.cypher.music.R
 import com.cypher.music.playback.MusicPlayerManager
 import kotlinx.coroutines.CoroutineScope
@@ -59,9 +52,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
-    private var lastArtworkUrl: String? = null
-    private var lastArtworkBitmap: Bitmap? = null
     private var isNoisyReceiverRegistered = false
+    private var wakeLockObserverJob: Job? = null
+    private var playbackWakeLock: PowerManager.WakeLock? = null
 
     /**
      * Pauses playback when headphones/Bluetooth are disconnected. ExoPlayer already
@@ -78,10 +71,27 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        setMediaNotificationProvider(buildNotificationProvider())
         createNotificationChannel()
         val session = MusicPlayerManager.getInstance(this).mediaLibrarySession
         if (session !in sessions) { try { addSession(session) } catch (e: Exception) {} }
         registerAudioBecomingNoisyReceiver()
+        observePlaybackForWakeLock()
+    }
+
+    /**
+     * media3 builds and updates the media notification itself, so the platform gets a
+     * real MediaStyle token and the transport buttons come from the session commands
+     * instead of a hand-written action list (which some OEM skins ignore).
+     */
+    private fun buildNotificationProvider(): MediaNotification.Provider {
+        val provider = DefaultMediaNotificationProvider.Builder(this)
+            .setChannelId(CHANNEL_ID)
+            .setChannelName(R.string.notification_channel_playback)
+            .setNotificationId(NOTIFICATION_ID)
+            .build()
+        provider.setSmallIcon(R.drawable.ic_apple_music_note)
+        return provider
     }
 
     private fun registerAudioBecomingNoisyReceiver() {
@@ -115,6 +125,49 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    /**
+     * Holds a partial wake lock while a track is playing or buffering. Without it the
+     * CPU can fall into Doze between two songs (the engine releases its own locks when
+     * the current item ends), so the next stream never resolves and the queue stops
+     * when the screen is off or the app is in the background.
+     */
+    private fun observePlaybackForWakeLock() {
+        val manager = MusicPlayerManager.getInstance(this)
+        wakeLockObserverJob?.cancel()
+        wakeLockObserverJob = serviceScope.launch {
+            manager.state.collect { snapshot ->
+                val wantsWakeLock = snapshot.currentTrack != null &&
+                    (snapshot.isPlaying || snapshot.isBuffering)
+                if (wantsWakeLock) acquirePlaybackWakeLock() else releasePlaybackWakeLock()
+            }
+        }
+    }
+
+    private fun acquirePlaybackWakeLock() {
+        if (playbackWakeLock?.isHeld == true) return
+        try {
+            val pm = getSystemService(PowerManager::class.java) ?: return
+            playbackWakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "cypher:playback"
+            ).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (e: Exception) {
+            playbackWakeLock = null
+        }
+    }
+
+    private fun releasePlaybackWakeLock() {
+        try {
+            playbackWakeLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            // Already released
+        }
+        playbackWakeLock = null
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TOGGLE -> MusicPlayerManager.activeInstance?.togglePlayPause()
@@ -143,117 +196,11 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        buildAndPostNotification()
+        super.onStartCommand(intent, flags, startId)
 
-        return super.onStartCommand(intent, flags, startId)
-    }
-
-    private fun buildAndPostNotification() {
-        val playerManager = MusicPlayerManager.activeInstance
-        val currentTrack = playerManager?.state?.value?.currentTrack
-        val isPlaying = playerManager?.state?.value?.isPlaying ?: false
-
-        val title = currentTrack?.title ?: "Apple Music"
-        val artist = currentTrack?.artist ?: "Reproduciendo música"
-        val album = currentTrack?.album ?: ""
-
-        val openAppIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            openAppIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        // PendingIntents for Media Actions
-        val prevPendingIntent = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, PlaybackService::class.java).setAction(ACTION_PREV),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val togglePendingIntent = PendingIntent.getService(
-            this,
-            2,
-            Intent(this, PlaybackService::class.java).setAction(ACTION_TOGGLE),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val nextPendingIntent = PendingIntent.getService(
-            this,
-            3,
-            Intent(this, PlaybackService::class.java).setAction(ACTION_NEXT),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        // media3 owns the notification style now: it reads the session directly and
-        // keeps the compact actions and the large icon in sync without the legacy
-        // androidx.media token bridge.
-        val mediaStyle = MusicPlayerManager.activeMediaSession?.let { session ->
-            MediaStyleNotificationHelper.MediaStyle(session)
-                .setShowActionsInCompactView(0, 1, 2)
-        }
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_apple_music_note)
-            .setContentTitle(title)
-            .setContentText(artist)
-            .setSubText(album.ifEmpty { null })
-            .setContentIntent(contentPendingIntent)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(isPlaying)
-            .addAction(R.drawable.ic_skip_previous, "Anterior", prevPendingIntent)
-            .addAction(
-                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow,
-                if (isPlaying) "Pausar" else "Reproducir",
-                togglePendingIntent
-            )
-            .addAction(R.drawable.ic_skip_next, "Siguiente", nextPendingIntent)
-
-        mediaStyle?.let { builder.setStyle(it) }
-
-        if (lastArtworkBitmap != null) {
-            builder.setLargeIcon(lastArtworkBitmap)
-        }
-
-        val notification = builder.build()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-
-        // Asynchronously load high-res album artwork if needed
-        val artUrl = currentTrack?.artworkUrl
-        if (artUrl.isNullOrEmpty()) {
-            // Never inherit the previous cover when the new track has no artwork.
-            lastArtworkUrl = null
-            lastArtworkBitmap = null
-        } else if (artUrl != lastArtworkUrl) {
-            lastArtworkUrl = artUrl
-            serviceScope.launch(Dispatchers.IO) {
-                try {
-                    val loader = ImageLoader(this@PlaybackService)
-                    val req = ImageRequest.Builder(this@PlaybackService)
-                        .data(artUrl)
-                        .allowHardware(false)
-                        .build()
-                    val result = (loader.execute(req) as? SuccessResult)?.drawable
-                    val bmp = (result as? BitmapDrawable)?.bitmap
-                    if (bmp != null) {
-                        lastArtworkBitmap = bmp
-                        val nm = getSystemService(NotificationManager::class.java)
-                        builder.setLargeIcon(bmp)
-                        nm?.notify(NOTIFICATION_ID, builder.build())
-                    }
-                } catch (e: Exception) {
-                    // Ignore art load failure
-                }
-            }
-        }
+        // Keep the service alive after the system reclaims it: media3 re-posts the
+        // notification from the restored session.
+        return START_STICKY
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -261,6 +208,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        wakeLockObserverJob?.cancel()
+        releasePlaybackWakeLock()
         if (isNoisyReceiverRegistered) {
             try {
                 unregisterReceiver(audioBecomingNoisyReceiver)

@@ -179,6 +179,15 @@ fun MainScreen(
         }
     }
 
+    // A launcher shortcut with nothing to play opens the app and says why.
+    val shortcutNotice by viewModel.shortcutNotice.collectAsState()
+    LaunchedEffect(shortcutNotice) {
+        shortcutNotice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearShortcutNotice()
+        }
+    }
+
     // Initialize Haptic Engine for micro-ticks & controls
     LaunchedEffect(Unit) {
         AppHaptics.init(context)

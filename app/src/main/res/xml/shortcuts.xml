@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher shortcuts. Both target MainActivity explicitly (targetPackage +
+  targetClass), so no exported receiver or new intent-filter is needed: the
+  system only starts the activity already declared as the launcher.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_favorites"
+        android:shortcutId="play_favorites"
+        android:shortcutLongLabel="@string/shortcut_favorites_long"
+        android:shortcutShortLabel="@string/shortcut_favorites_short">
+        <intent
+            android:action="com.cypher.music.action.PLAY_FAVORITES"
+            android:targetClass="com.cypher.music.MainActivity"
+            android:targetPackage="com.cypher.music" />
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_continue"
+        android:shortcutId="continue_session"
+        android:shortcutLongLabel="@string/shortcut_continue_long"
+        android:shortcutShortLabel="@string/shortcut_continue_short">
+        <intent
+            android:action="com.cypher.music.action.CONTINUE_SESSION"
+            android:targetClass="com.cypher.music.MainActivity"
+            android:targetPackage="com.cypher.music" />
+    </shortcut>
+
+</shortcuts>

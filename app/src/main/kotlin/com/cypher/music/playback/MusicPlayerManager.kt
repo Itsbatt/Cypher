@@ -1748,6 +1748,16 @@ class MusicPlayerManager(private val context: Context) {
         PlaybackService.updateService(context)
     }
 
+    /**
+     * Resumes what the player is already showing: a session restored from the last
+     * run (state without engine) or a track the user paused. Used by the
+     * "Continuar última sesión" launcher shortcut, so it reuses [togglePlayPause]
+     * instead of duplicating the restore-then-seek dance.
+     */
+    fun resumeLastSession() {
+        if (!_state.value.isPlaying) togglePlayPause()
+    }
+
     fun pause() {
         if (exoOwnsAudio) {
             exoPlayer.pause()

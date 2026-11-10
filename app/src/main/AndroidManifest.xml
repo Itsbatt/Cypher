@@ -26,7 +26,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -51,6 +50,13 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop">
+
+            <!-- Long-press shortcuts: "Reproducir favoritas" y "Continuar última sesión".
+                 Sus intents son explícitos a esta actividad, así que no añaden
+                 superficie exportada nueva. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
 
             <!-- Launcher -->
             <intent-filter>

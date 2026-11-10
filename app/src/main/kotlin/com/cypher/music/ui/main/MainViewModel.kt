@@ -64,6 +64,10 @@ import com.cypher.music.data.TrackSortKey
 import com.cypher.music.data.DownloadedPlaylist
 import com.cypher.music.data.DownloadDeletionResult
 import com.cypher.music.data.DownloadStats
+import com.cypher.music.data.ShortcutAction
+import com.cypher.music.data.ShortcutOutcome
+import com.cypher.music.data.resolveShortcut
+import com.cypher.music.data.shortcutOutcomeMessage
 import com.cypher.music.playback.MediaCacheManager
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -829,6 +833,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Deletes every finished download. Files that are still being written are left
      * alone and reported back so the UI can say so instead of failing silently.
      */
+    // Launcher shortcuts. The decision table is in ShortcutPlan so the "nothing to
+    // play" paths are unit tested.
+    private val _shortcutNotice = MutableStateFlow<String?>(null)
+    val shortcutNotice: StateFlow<String?> = _shortcutNotice.asStateFlow()
+
+    fun clearShortcutNotice() {
+        _shortcutNotice.value = null
+    }
+
+    fun handleShortcut(action: ShortcutAction) {
+        val favorites = favoritesManager.favoriteTracks.value
+        val hasSession = playerManager.state.value.currentTrack != null
+        when (resolveShortcut(action, favorites.isNotEmpty(), hasSession)) {
+            ShortcutOutcome.STARTED_FAVORITES -> {
+                // Same queue mechanism the library uses: first favourite plus the whole
+                // list, so the shortcut inherits shuffle, repeat and the mini player.
+                favorites.firstOrNull()?.let { first -> playTrack(first, favorites) }
+            }
+            ShortcutOutcome.STARTED_SESSION -> playerManager.resumeLastSession()
+            ShortcutOutcome.NO_FAVORITES ->
+                _shortcutNotice.value = shortcutOutcomeMessage(ShortcutOutcome.NO_FAVORITES)
+            ShortcutOutcome.NO_SESSION ->
+                _shortcutNotice.value = shortcutOutcomeMessage(ShortcutOutcome.NO_SESSION)
+        }
+    }
+
     fun deleteAllDownloads(onComplete: (DownloadDeletionResult) -> Unit = {}) {
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {

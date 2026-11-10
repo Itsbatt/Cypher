@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">Cypher</string>
     <string name="notification_channel_playback">Cypher Playback</string>
+    <string name="shortcut_favorites_short">Favoritas</string>
+    <string name="shortcut_favorites_long">Reproducir favoritas</string>
+    <string name="shortcut_continue_short">Continuar</string>
+    <string name="shortcut_continue_long">Continuar última sesión</string>
 </resources>

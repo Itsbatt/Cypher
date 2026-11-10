@@ -1,7 +1,6 @@
 package com.cypher.music
 
 import android.Manifest
-import android.app.AlarmManager
 import android.app.SearchManager
 import android.content.ContentResolver
 import android.content.Intent
@@ -10,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.cypher.music.data.ShortcutAction
 import com.cypher.music.ui.components.CypherTab
 import com.cypher.music.ui.main.MainViewModel
 import com.cypher.music.ui.theme.CypherTheme
@@ -54,7 +53,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         requestRequiredPermissions()
-        requestExactAlarmAccessIfNeeded()
         handleIncomingIntent(intent)
 
         setContent {
@@ -89,8 +87,23 @@ class MainActivity : ComponentActivity() {
             (intent.data?.scheme == WrappedScheduler.DEEP_LINK_SCHEME &&
                 intent.data?.host == WrappedScheduler.DEEP_LINK_HOST)
         if (isWrappedLink) {
-            val year = intent.getIntExtra(WrappedScheduler.EXTRA_YEAR, WrappedScheduler.YEAR)
+            // The year travels as an Intent extra that anyone can craft, so it is
+            // clamped to the range the recap can actually display.
+            val requestedYear = intent.getIntExtra(WrappedScheduler.EXTRA_YEAR, WrappedScheduler.YEAR)
+            val year = if (requestedYear in VALID_RECAP_YEARS) requestedYear else WrappedScheduler.YEAR
+            if (year != requestedYear) {
+                Log.w(TAG, "Ignoring out-of-range wrapped year: $requestedYear")
+            }
             viewModel.openWrapped(year)
+            return
+        }
+
+        // Long-press shortcuts on the app icon. They are explicit Intents to this
+        // activity; the action is consumed once so a rotation or a re-delivery does
+        // not start playback again.
+        ShortcutAction.fromIntentAction(intent.action)?.let { shortcut ->
+            intent.action = null
+            viewModel.handleShortcut(shortcut)
             return
         }
 
@@ -99,12 +112,17 @@ class MainActivity : ComponentActivity() {
         // Assistant, Bixby and the system search bar send the query here. The intent
         // was declared in the manifest but never handled, so voice search did nothing.
         if (action == Intent.ACTION_SEARCH || action == "android.media.action.MEDIA_PLAY_FROM_SEARCH") {
-            val query = intent.getStringExtra(SearchManager.QUERY)
-                ?: intent.getStringExtra("query")
-            if (!query.isNullOrBlank()) {
-                viewModel.selectTab(CypherTab.SEARCH)
-                viewModel.onSearchQueryChange(query)
+            val query = (intent.getStringExtra(SearchManager.QUERY)
+                ?: intent.getStringExtra("query"))
+                ?.trim()
+            if (query.isNullOrEmpty() || query.length > MAX_SEARCH_QUERY_LENGTH) {
+                if (!query.isNullOrEmpty()) {
+                    Log.w(TAG, "Ignoring oversized search query (${query.length} chars)")
+                }
+                return
             }
+            viewModel.selectTab(CypherTab.SEARCH)
+            viewModel.onSearchQueryChange(query)
             return
         }
 
@@ -130,6 +148,12 @@ class MainActivity : ComponentActivity() {
             ContentResolver.SCHEME_CONTENT,
             ContentResolver.SCHEME_FILE
         )
+
+        /** Recap years the app is willing to open from an external Intent. */
+        private val VALID_RECAP_YEARS = 2000..2100
+
+        /** External searches (assistant, Bixby) are capped like the in-app field. */
+        private const val MAX_SEARCH_QUERY_LENGTH = 200
     }
 
     private fun queryDisplayName(uri: Uri): String? {
@@ -143,31 +167,6 @@ class MainActivity : ComponentActivity() {
             } else {
                 uri.lastPathSegment
             }
-        }
-    }
-
-    /**
-     * SCHEDULE_EXACT_ALARM is a special access, not a runtime permission. Ask once
-     * through system settings so the 31 Dec 20:00 notification is exact.
-     */
-    private fun requestExactAlarmAccessIfNeeded() {
-        // SCHEDULE_EXACT_ALARM only exists from Android 12 (API 31); asking for it
-        // on Android 10/11 would throw and there is nothing to grant there.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        val alarmManager = getSystemService(AlarmManager::class.java) ?: return
-        if (alarmManager.canScheduleExactAlarms()) return
-
-        val prefs = getSharedPreferences("cypher_wrapped", MODE_PRIVATE)
-        if (prefs.getBoolean("exact_alarm_requested", false)) return
-        prefs.edit().putBoolean("exact_alarm_requested", true).apply()
-
-        runCatching {
-            startActivity(
-                Intent(
-                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:$packageName")
-                )
-            )
         }
     }
 

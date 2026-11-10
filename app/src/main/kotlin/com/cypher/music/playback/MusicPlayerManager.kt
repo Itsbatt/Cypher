@@ -1587,6 +1587,25 @@ class MusicPlayerManager(private val context: Context) {
     }
 
     /**
+     * Switching from a downloaded track to a stream leaves the local file loaded on
+     * ExoPlayer while the new URL is resolved, so the previous song keeps sounding
+     * under the loading state. This is what made a downloaded track keep playing after
+     * skipping to one that was not downloaded, especially when skipping quickly.
+     * Silence both engines up front; the new media item replaces the old one when ready.
+     */
+    private fun silencePreviousAudio() {
+        try {
+            youTubePlayer?.pause()
+            if (exoPlayer.isPlaying || exoPlayer.playWhenReady) {
+                exoPlayer.pause()
+                Log.d("AppleMusicPlayer", "Previous audio paused while the next track loads")
+            }
+        } catch (e: Exception) {
+            Log.w("AppleMusicPlayer", "Could not pause the previous audio", e)
+        }
+    }
+
+    /**
      * Plays a YouTube track with ExoPlayer from a direct stream URL, falling back to
      * the official IFrame engine only when no URL can be resolved.
      */
@@ -1598,6 +1617,9 @@ class MusicPlayerManager(private val context: Context) {
     ) {
         streamingViaExo = false
         pendingYouTubeVideoId = null
+        // Resolution can take seconds on a slow network, so stop the old engine before
+        // waiting: the previous track must not keep playing under the new one.
+        silencePreviousAudio()
         scope.launch {
             val cached = streamUrlPrecacheMap[videoId]
             val cachedUrl = cached

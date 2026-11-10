@@ -9,6 +9,9 @@
 - Vuelven los botones de la notificación en todos los móviles: la sesión no anunciaba las órdenes de play/pausa ni de salto, así que Samsung dibujaba el panel multimedia sin controles. Ahora la notificación la genera el propio reproductor y la sesión declara esas órdenes.
 - La música ya no se para al acabar una canción con la pantalla apagada o con otra app delante: mientras hay cola sonando se mantiene despierta la CPU y la conexión, así que al terminar un tema arranca el siguiente en vez de morir el proceso.
 
+## Playlists
+- **Portadas propias.** En «Editar playlist» puedes elegir una foto de la galería como portada y quitarla cuando quieras; mientras no haya ninguna se sigue usando el mosaico con las carátulas de sus canciones. La imagen se copia al almacenamiento de la app, así que se mantiene tras reiniciar y no depende del permiso temporal del selector de fotos.
+
 ## Proyecto
 - Workflow de GitHub Actions en `ci/android.yml`: tests JVM, compilación de los APK y publicación firmada al empujar un tag `v*`. Queda activado en cuanto un push con scope `workflow` lo mueva a `.github/workflows/`.
 

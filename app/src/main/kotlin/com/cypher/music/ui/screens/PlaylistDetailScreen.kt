@@ -102,6 +102,7 @@ fun PlaylistDetailScreen(
         onRemoveTrack: (playlistId: String, trackId: String) -> Unit,
         onReorderTracks: (playlistId: String, reorderedTracks: List<Track>) -> Unit,
         onUpdateDetails: (playlistId: String, name: String, description: String) -> Unit,
+        onChangeCover: (playlistId: String, uri: android.net.Uri?) -> Unit = { _, _ -> },
         onDeletePlaylist: (playlistId: String) -> Unit,
         onViewArtist: (String) -> Unit,
         onViewAlbum: (String) -> Unit,
@@ -112,6 +113,11 @@ fun PlaylistDetailScreen(
         modifier: Modifier = Modifier
 ) {
         val context = LocalContext.current
+        // The picker hands back temporary read access only, so the view model copies the
+        // image into app storage before saving it on the playlist.
+        val coverPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+        ) { picked -> picked?.let { onChangeCover(playlist.id, it) } }
         val playlistProgressMap by MediaCacheManager.playlistProgressMap.collectAsState()
         val downloadedTrackIds by MediaCacheManager.downloadedTrackIds.collectAsState()
         val isDownloadingPlaylist = playlistProgressMap.containsKey(playlist.id)
@@ -304,6 +310,55 @@ fun PlaylistDetailScreen(
             size = 180.dp,
             cornerRadius = 16.dp
                 )
+        }
+
+        if (isEditing) {
+                Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+            TextButton(
+              onClick = {
+                AppHaptics.actionClick()
+                coverPicker.launch(
+                    androidx.activity.result.PickVisualMediaRequest(
+                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+              },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = null,
+                tint = themeColors.accent,
+                modifier = Modifier.size(16.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = if (playlist.coverUri.isNullOrBlank()) "Añadir portada" else "Cambiar portada",
+                color = themeColors.accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+              )
+            }
+
+            if (!playlist.coverUri.isNullOrBlank()) {
+                TextButton(
+                  onClick = {
+                        AppHaptics.actionClick()
+                        onChangeCover(playlist.id, null)
+                  },
+                  contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                ) {
+                  Text(
+                        text = "Quitar portada",
+                        color = themeColors.textSecondary,
+                        fontSize = 13.sp
+                  )
+                }
+            }
+                }
         }
 
         Spacer(modifier = Modifier.height(18.dp))

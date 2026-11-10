@@ -25,6 +25,9 @@ fun PlaylistMosaicCover(
     cornerRadius: Dp = 12.dp
 ) {
     val shape = RoundedCornerShape(cornerRadius)
+    // A cover restored from a backup on another device points at a file that is not here;
+    // fall back to the mosaic instead of drawing an empty square.
+    val cover = customCoverUri?.takeIf { com.cypher.music.data.PlaylistCoverStore.isAvailable(it) }
 
     Box(
         modifier = modifier
@@ -35,9 +38,9 @@ fun PlaylistMosaicCover(
         // Base placeholder with fixed size and neutral gradient + music note icon
         ArtworkPlaceholder(modifier = Modifier.fillMaxSize(), iconSize = size * 0.45f)
 
-        if (!customCoverUri.isNullOrBlank()) {
+        if (!cover.isNullOrBlank()) {
             AsyncImage(
-                model = customCoverUri,
+                model = cover,
                 contentDescription = "Carátula de playlist",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

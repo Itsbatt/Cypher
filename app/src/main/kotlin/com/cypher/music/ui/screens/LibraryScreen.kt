@@ -128,6 +128,7 @@ fun LibraryScreen(
     onRemoveTrackFromPlaylist: (playlistId: String, trackId: String) -> Unit,
     onReorderPlaylistTracks: (playlistId: String, reorderedTracks: List<Track>) -> Unit,
     onUpdatePlaylistDetails: (playlistId: String, name: String, description: String) -> Unit,
+    onChangePlaylistCover: (playlistId: String, uri: android.net.Uri?) -> Unit = { _, _ -> },
     onDeletePlaylist: (playlistId: String) -> Unit,
     onRefreshStorage: () -> Unit,
     onOpenImportScanner: () -> Unit = {},
@@ -178,6 +179,7 @@ fun LibraryScreen(
                     onRemoveTrack = onRemoveTrackFromPlaylist,
                     onReorderTracks = onReorderPlaylistTracks,
                     onUpdateDetails = onUpdatePlaylistDetails,
+                    onChangeCover = onChangePlaylistCover,
                     onDeletePlaylist = onDeletePlaylist,
                     onViewArtist = { artistName ->
                         onPlaylistSelect(null)

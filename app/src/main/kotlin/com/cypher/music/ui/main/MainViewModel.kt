@@ -554,6 +554,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Stores a custom cover for a playlist. [picked] is what the photo picker returned, or
+     * null to fall back to the mosaic of the playlist tracks. The image is copied into app
+     * storage first, because the picker permission does not outlive the process.
+     */
+    fun setPlaylistCover(playlistId: String, picked: android.net.Uri?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = playlistRepository.getPlaylistById(playlistId) ?: return@launch
+            val stored = if (picked == null) {
+                null
+            } else {
+                com.cypher.music.data.PlaylistCoverStore.save(getApplication(), playlistId, picked)
+            }
+            // Nothing was stored (unreadable or empty image): keep the current cover.
+            if (picked != null && stored == null) return@launch
+            com.cypher.music.data.PlaylistCoverStore.deleteUnused(getApplication(), playlistId, stored)
+            playlistRepository.updatePlaylistDetails(playlistId, existing.name, existing.description, stored)
+            withContext(Dispatchers.Main) {
+                if (_selectedPlaylist.value?.id == playlistId) {
+                    _selectedPlaylist.value = playlistRepository.getPlaylistById(playlistId)
+                }
+            }
+        }
+    }
+
     fun deletePlaylist(playlistId: String) {
         viewModelScope.launch {
             playlistRepository.deletePlaylist(playlistId)

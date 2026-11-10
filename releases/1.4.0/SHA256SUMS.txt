@@ -1,2 +1,2 @@
-e63d9bea9949efcf21b97d4b84f7544a6d99658e6be74340d1f7ae647ca6aff2 *app-arm64-v8a-release.apk
-68f2555e89c9d51acba765cd16a772213e59db51bd6c42fa67eebbfb562d154d *app-universal-release.apk
+c9dfa8ed3623cc3b53d9bbc9670938059b460ba32067ad17edb24f830febfdf6 *app-arm64-v8a-release.apk
+43933701becae794b00c233602332e9e2238f04070fe19f082588a34ccfbd1ed *app-universal-release.apk

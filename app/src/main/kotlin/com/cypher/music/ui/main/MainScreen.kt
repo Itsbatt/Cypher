@@ -450,6 +450,7 @@ fun MainScreen(
                         onRemoveTrackFromPlaylist = { plId, trkId -> viewModel.removeTrackFromPlaylist(plId, trkId) },
                         onReorderPlaylistTracks = { plId, trks -> viewModel.reorderPlaylistTracks(plId, trks) },
                         onUpdatePlaylistDetails = { plId, name, desc -> viewModel.updatePlaylistDetails(plId, name, desc) },
+                        onChangePlaylistCover = { plId, uri -> viewModel.setPlaylistCover(plId, uri) },
                         onDeletePlaylist = { plId -> viewModel.deletePlaylist(plId) },
                         onRefreshStorage = { viewModel.refreshLocalStorage() },
                         onOpenImportScanner = { viewModel.openScanner() },

@@ -22,6 +22,9 @@ class CypherApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // Boots the in-app error journal before anything else can fail.
+        com.cypher.music.utils.DiagnosticsLog.attach(this)
+        com.cypher.music.utils.DiagnosticsLog.installCrashHandler()
         com.cypher.music.wrapped.WrappedScheduler.schedule(this)
         appScope.launch {
             try {
@@ -35,6 +38,7 @@ class CypherApplication : Application(), ImageLoaderFactory {
                 }
             } catch (e: Exception) {
                 Log.e("CypherApplication", "Failed to initialize YoutubeDL", e)
+                com.cypher.music.utils.DiagnosticsLog.error("Descargas", "No se pudo inicializar yt-dlp", e)
             }
 
             try {

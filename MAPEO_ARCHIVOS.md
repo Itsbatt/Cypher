@@ -57,7 +57,7 @@
 
 ## 5. Reproducción y Caché de Audio (Media3 / ExoPlayer / DSP)
 - `MusicPlayerManager.kt`: Orquestador central de audio (Singleton); gestiona ExoPlayer, IFrame YouTube Player, cola de reproducción, pre-caching gapless, normalización de volumen (-14 LUFS con LoudnessEnhancer) y MediaLibrarySession.
-- `MediaCacheManager.kt`: Gestor de caché LRU y Bóveda Offline en Scoped Storage (con soporte MicroSD y archivo `.nomedia`); ejecuta descargas nativas con yt-dlp.
+- `MediaCacheManager.kt`: Gestor de caché LRU y **descargas ocultas** en Scoped Storage (soporte MicroSD y archivo `.nomedia`, sin cifrado); ejecuta descargas nativas con yt-dlp.
 - `AudioVolumeManager.kt`: Gestor de volumen y atenuación de audio del sistema.
 - `EqualizerManager.kt`: Controlador de efectos de audio DSP en tiempo real (ecualizador gráfico de bandas y BassBoost).
 - `PlaybackService.kt`: `MediaLibraryService` en primer plano; mantiene la reproducción activa en background y enlaza notificaciones multimedia del sistema.

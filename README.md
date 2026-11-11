@@ -16,7 +16,7 @@
 - **Gestures:** swipe the artwork or the MiniPlayer left/right to change track, with a short slide transition while the incoming artwork follows the finger.
 - **Queue:** search inside the queue and reorder upcoming tracks with a long-press drag.
 - **Spotify migration without an account:** import a ZIP of playlists or a single CSV/JSON export, or paste a public playlist link. No OAuth, no Client ID, no Premium.
-- **Private offline vault:** downloads on internal or removable MicroSD storage with `.nomedia` shielding.
+- **Hidden downloads:** downloads live in the app's own storage (internal or removable MicroSD) behind a `.nomedia` marker, so the gallery and other media scanners skip them. The folder is app-private but **not encrypted**: it is *hidden downloads*, not a secure vault.
 - **AGSL Liquid Glass UI:** GPU-accelerated background shaders with palette-driven ambient colors.
 - **Live synced lyrics** from LRCLIB with a built-in **share-card studio**: pick up to six consecutive lines, choose Minimal/Artwork/Typography, export 1080 px story or square cards and send them through the Android share sheet.
 - **Annual Cypher Wrapped:** minutes, top songs, artists with listening share, albums (resolved from the public video description), genres and most-repeated track, all from real playback rollups (never invented), with its own shareable story/square card.

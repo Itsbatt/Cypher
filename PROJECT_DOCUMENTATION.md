@@ -19,7 +19,7 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 ### Pilars Arquitectònics
 1. **Streaming Híbrid Resilient:** Resolució directa d'àudio en streaming a través de yt-dlp i endpoints natius d'InnerTube TVHTML5, combinat amb telemetria passiva per detectar bloquejos HTTP 403 / protocols SABR de Google.
 2. **Base de Dades Room v3 Unificada:** Esquema relacional monousuari amb relacions `@Relation` / `@Junction` (`PlaylistWithTracks`), `TypeConverters` i gestió eficient d'analítiques d'escolta i cerques recents.
-3. **Bóveda Offline Segura (Scoped Storage):** Emmagatzematge aïllat de fitxers pesats (FLAC, WAV, ALAC, Opus) prioritzant targetes MicroSD externes muntades, amb generació automàtica del fitxer `.nomedia`.
+3. **Descàrregues ocultes (Scoped Storage):** Emmagatzematge de fitxers pesats (FLAC, WAV, ALAC, Opus) dins l'espai propi de l'app, prioritzant targetes MicroSD externes muntades, amb generació automàtica del fitxer `.nomedia`. No hi ha xifrat: és una carpeta oculta a la galeria, no una caixa forta.
 4. **Interfície Gràfica Líquida (AGSL Liquid Glass):** Shaders orgànics directament executats a la GPU amb aberració cromàtica i dispersió de color basada en la caràtula de l'àlbum (AndroidX Palette).
 5. **Lletres en Viu Sincronitzades:** Integració amb la xarxa de LRCLIB per a seguiment dinàmic del text línia a línia (`CypherLyricsSheet`).
 6. **Integració Automobilística:** Servei en primer pla amb suport natiu per a Android Auto mitjançant `MediaLibraryService`.
@@ -49,7 +49,7 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
   - `search_queries`
 - **Mapejadors Idiomàtics Kotlin:** Implementació de `RoomMappers.kt` per convertir de forma transparent entre les entitats de Room i els models de domini de l'aplicació.
 
-### Fase 4: Migració de la Bóveda a Scoped Storage (MicroSD)
+### Fase 4: Migració de les descàrregues ocultes a Scoped Storage (MicroSD)
 - Modificació de `MediaCacheManager.kt` per abandonar l'emmagatzematge intern de l'aplicació (`context.filesDir`) i utilitzar `ContextCompat.getExternalFilesDirs(context, null)`.
 - Detecció automàtica de targetes MicroSD externes extraïbles (`Environment.isExternalStorageRemovable`) per desar els formats pesats (FLAC/WAV).
 - Generació garantida de l'arxiu de privadesa `.nomedia` i migració automàtica de fitxers heretats.
@@ -159,7 +159,7 @@ El projecte neix amb la premissa d'unificar en una única experiència d'usuari 
 +--------------------------------------------------------------------------+
 |                       REPRODUCTOR I MOTOR MULTIMÈDIA                     |
 |  MusicPlayerManager (Singleton)                                          |
-|  - AndroidX Media3 (ExoPlayer) -> Àudio Local, FLAC/WAV i Offline Vault  |
+|  - AndroidX Media3 (ExoPlayer) -> Àudio Local, FLAC/WAV i descàrregues ocultes  |
 |  - YouTube Player Engine (IFrame + Fallback URL Directe)                 |
 |  - PlaybackService (MediaLibraryService / Android Auto)                  |
 |  - MediaCacheManager (Scoped Storage / MicroSD amb .nomedia)             |

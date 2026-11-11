@@ -22,3 +22,10 @@ keystore.properties
 .kotlin/
 
 .backups/
+
+# copia local del codigo desplegado (rollback)
+supabase/rollback/
+
+# artefactos locales de compilacion y estado de la CLI (no versionar)
+build-output/
+supabase/.temp/

@@ -10,18 +10,9 @@ import java.net.URL
 object ResilientDns : Dns {
     private const val TAG = "ResilientDns"
 
-    // Cloudflare Anycast IPs for dpaste.org (immune to DNS poisoning)
-    private val DPASTE_FALLBACK_IPS = listOf(
-        "172.66.152.175",
-        "104.20.36.119",
-        "188.114.97.0",
-        "188.114.96.0"
-    )
-
-    // Fallback IP for paste.c-net.org
-    private val CNET_FALLBACK_IPS = listOf(
-        "20.100.184.134"
-    )
+    // Both lists live in FallbackEndpoints so retired addresses are changed once.
+    private val DPASTE_FALLBACK_IPS = FallbackEndpoints.DPASTE_FALLBACK_IPS
+    private val CNET_FALLBACK_IPS = FallbackEndpoints.CNET_FALLBACK_IPS
 
     override fun lookup(hostname: String): List<InetAddress> {
         val lower = hostname.lowercase()
@@ -65,7 +56,7 @@ object ResilientDns : Dns {
     private fun resolveDoh(hostname: String): List<InetAddress> {
         // Try Google DoH
         try {
-            val url = URL("https://dns.google/resolve?name=$hostname&type=A")
+            val url = URL("${FallbackEndpoints.GOOGLE_DOH_URL}?name=$hostname&type=A")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 3000
             conn.readTimeout = 3000

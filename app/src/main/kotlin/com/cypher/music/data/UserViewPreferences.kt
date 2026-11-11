@@ -196,6 +196,36 @@ class UserViewPreferencesManager(context: Context) {
         }.getOrDefault(emptyMap())
     }
 
+    /** Library order, home layout and favourite playlists as one JSON object. */
+    fun exportJson(): String = JSONObject().apply {
+        prefs.getString(KEY_HOME, null)?.let { runCatching { put("home", JSONObject(it)) } }
+        prefs.getString(KEY_SORT, null)?.let { runCatching { put("sort", JSONObject(it)) } }
+        prefs.getStringSet(KEY_FAVORITE_PLAYLISTS, null)?.let { ids ->
+            put("favoritePlaylists", JSONArray(ids.sorted()))
+        }
+    }.toString()
+
+    fun importJson(json: String): Boolean {
+        val root = runCatching { JSONObject(json) }.getOrNull() ?: return false
+        val editor = prefs.edit()
+        root.optJSONObject("home")?.let { editor.putString(KEY_HOME, it.toString()) }
+        root.optJSONObject("sort")?.let { editor.putString(KEY_SORT, it.toString()) }
+        root.optJSONArray("favoritePlaylists")?.let { array ->
+            val ids = buildSet {
+                for (i in 0 until array.length()) {
+                    val id = array.optString(i, "")
+                    if (id.isNotBlank()) add(id)
+                }
+            }
+            editor.putStringSet(KEY_FAVORITE_PLAYLISTS, ids)
+        }
+        editor.apply()
+        _home.value = loadHome()
+        _sort.value = loadSort()
+        _favoritePlaylists.value = loadFavoritePlaylists()
+        return true
+    }
+
     companion object {
         private const val KEY_SORT = "library_sort"
         private const val KEY_HOME = "home_sections"

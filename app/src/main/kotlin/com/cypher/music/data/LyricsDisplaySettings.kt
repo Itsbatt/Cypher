@@ -6,6 +6,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.json.JSONObject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -54,6 +55,32 @@ class LyricsSettingsManager(context: Context) {
             inactiveBlurDp = blur,
             colorMode = runCatching { LyricColorMode.valueOf(colorName) }.getOrDefault(LyricColorMode.THEME_ACCENT)
         )
+    }
+
+    /** Current lyric preferences as JSON, embedded in the backup file. */
+    fun exportJson(): String {
+        val current = _settings.value
+        return JSONObject().apply {
+            put("font_size", current.fontSize.name)
+            put("alignment", current.alignment.name)
+            put("color_mode", current.colorMode.name)
+            put("inactive_opacity", current.inactiveOpacity.toDouble())
+            put("inactive_blur", current.inactiveBlurDp.toDouble())
+        }.toString()
+    }
+
+    fun importJson(json: String): Boolean {
+        val parsed = runCatching { JSONObject(json) }.getOrNull() ?: return false
+        if (parsed.length() == 0) return false
+        prefs.edit()
+            .putString("font_size", parsed.optString("font_size", LyricFontSize.MEDIUM.name))
+            .putString("alignment", parsed.optString("alignment", LyricAlignment.START.name))
+            .putString("color_mode", parsed.optString("color_mode", LyricColorMode.THEME_ACCENT.name))
+            .putFloat("inactive_opacity", parsed.optDouble("inactive_opacity", 0.45).toFloat())
+            .putFloat("inactive_blur", parsed.optDouble("inactive_blur", 0.0).toFloat())
+            .apply()
+        _settings.value = loadSettings()
+        return true
     }
 
     fun updateSettings(newSettings: LyricsDisplaySettings) {

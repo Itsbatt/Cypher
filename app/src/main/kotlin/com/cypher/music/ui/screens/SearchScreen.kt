@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -121,6 +122,9 @@ fun SearchScreen(
     val lavenderAccent = Color(0xFF9D7BB0)
 
     var showVoiceModal by remember { mutableStateOf(false) }
+    // Android asks for the microphone through this explanation first: the permission
+    // is only requested after the user taps the mic and reads why it is needed.
+    var showVoiceRationale by remember { mutableStateOf(false) }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -145,7 +149,7 @@ fun SearchScreen(
         if (hasPermission) {
             showVoiceModal = true
         } else {
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            showVoiceRationale = true
         }
     }
 
@@ -574,6 +578,35 @@ fun SearchScreen(
                 }
             }
         }
+    }
+
+    if (showVoiceRationale) {
+        AlertDialog(
+            onDismissRequest = { showVoiceRationale = false },
+            title = { Text(text = "Búsqueda por voz") },
+            text = {
+                Text(
+                    text = "Para buscar hablando, Cypher necesita usar el micrófono. " +
+                        "El audio se envía únicamente al servicio de reconocimiento de voz de tu " +
+                        "dispositivo mientras mantienes abierta la búsqueda por voz, y no se guarda " +
+                        "ni se envía a ningún servidor de Cypher.\n\n" +
+                        "Si lo deniegas, puedes seguir usando la búsqueda escribiendo la canción."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVoiceRationale = false
+                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }) {
+                    Text("Continuar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVoiceRationale = false }) {
+                    Text("Ahora no")
+                }
+            }
+        )
     }
 
     if (showVoiceModal) {

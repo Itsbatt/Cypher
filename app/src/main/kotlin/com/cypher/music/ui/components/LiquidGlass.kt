@@ -30,6 +30,7 @@ import com.cypher.music.data.LiquidGlassConfig
 import com.cypher.music.data.ShaderColorMode
 import com.cypher.music.ui.theme.AmbientArtworkColors
 import com.cypher.music.ui.theme.IosDarkBackground
+import com.cypher.music.ui.theme.LocalReducedMotion
 
 // High-performance solid surface modifier (Anti-Glassmorphism container)
 fun Modifier.liquidGlass(
@@ -164,6 +165,19 @@ fun LiquidGlassBackground(
         }
     }
 
+    // Reduced motion (adjustment in Settings or the system accessibility setting):
+    // no AGSL shader and no drifting animation, just the palette frozen in place.
+    if (LocalReducedMotion.current) {
+        StaticLiquidGlassRenderer(
+            col1 = col1,
+            col2 = col2,
+            col3 = col3,
+            opacity = config.overallOpacity,
+            modifier = modifier
+        )
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "LiquidGlassTransition")
     val animTime by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -200,6 +214,48 @@ fun LiquidGlassBackground(
             modifier = modifier
         )
     }
+}
+
+/**
+ * Reduced-motion variant: the same three palette pools, drawn once with no shader
+ * and no animation. Keeps the artwork-driven colour identity without motion.
+ */
+@Composable
+private fun StaticLiquidGlassRenderer(
+    col1: Color,
+    col2: Color,
+    col3: Color,
+    opacity: Float,
+    modifier: Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(IosDarkBackground)
+            .drawWithCache {
+                val radius = size.maxDimension * 0.95f
+                val top = Brush.radialGradient(
+                    colors = listOf(col1.copy(alpha = opacity * 0.55f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.18f, size.height * 0.10f),
+                    radius = radius
+                )
+                val side = Brush.radialGradient(
+                    colors = listOf(col2.copy(alpha = opacity * 0.45f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.55f),
+                    radius = radius
+                )
+                val bottom = Brush.radialGradient(
+                    colors = listOf(col3.copy(alpha = opacity * 0.35f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.32f, size.height * 0.96f),
+                    radius = radius
+                )
+                onDrawBehind {
+                    drawRect(brush = top)
+                    drawRect(brush = side)
+                    drawRect(brush = bottom)
+                }
+            }
+    )
 }
 
 /**

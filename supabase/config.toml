@@ -1,0 +1,10 @@
+# Cypher · configuración del backend de sincronización.
+#
+# La función `sync` valida por su cuenta los ID tokens de Google, así que la
+# verificación JWT de la plataforma tiene que estar desactivada: si se dejara
+# activa, Supabase rechazaría el token de Google antes de llegar al código.
+
+project_id = "mdwjcphgidagmasehtsg"
+
+[functions.sync]
+verify_jwt = false

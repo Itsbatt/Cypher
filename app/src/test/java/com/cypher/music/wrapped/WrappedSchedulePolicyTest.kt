@@ -27,37 +27,28 @@ class WrappedSchedulePolicyTest {
     }
 
     @Test
-    fun `exact alarm is planned when access is granted`() {
+    fun `alarm is planned at 20 00 on 31 december`() {
         val plan = WrappedScheduler.plan(
             now = ZonedDateTime.of(2026, 12, 1, 0, 0, 0, 0, zone),
-            recapYear = year,
-            canScheduleExact = true
+            recapYear = year
         )
         assertFalse(plan.alreadyPassed)
-        assertTrue(plan.exact)
         assertEquals(WrappedScheduler.eventTime(year, zone).toInstant().toEpochMilli(), plan.triggerAtMillis)
-    }
-
-    @Test
-    fun `inexact fallback is planned without exact access`() {
-        val plan = WrappedScheduler.plan(
-            now = ZonedDateTime.of(2026, 12, 30, 9, 0, 0, 0, zone),
-            recapYear = year,
-            canScheduleExact = false
-        )
-        assertFalse(plan.alreadyPassed)
-        assertFalse(plan.exact)
     }
 
     @Test
     fun `passed events are not scheduled`() {
         val plan = WrappedScheduler.plan(
             now = ZonedDateTime.of(2026, 12, 31, 20, 0, 0, 0, zone),
-            recapYear = year,
-            canScheduleExact = true
+            recapYear = year
         )
         assertTrue(plan.alreadyPassed)
         assertNull(plan.triggerAtMillis)
+    }
+
+    @Test
+    fun `debug flag is off on release-style defaults`() {
+        assertNull(WrappedAvailability.debugForcedYear())
     }
 
     @Test

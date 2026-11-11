@@ -136,6 +136,10 @@ fun SettingsScreen(
     onUpdatePrefs: ((ThemePreferences) -> ThemePreferences) -> Unit,
     onResetDefaults: () -> Unit,
     onUpdateUsername: (String) -> Unit = {},
+    accountState: com.cypher.music.sync.AccountUiState = com.cypher.music.sync.AccountUiState(),
+    onAccountConnect: () -> Unit = {},
+    onAccountDisconnect: () -> Unit = {},
+    onAccountSyncNow: () -> Unit = {},
     onOpenYouTubeLogin: () -> Unit = {},
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
@@ -392,6 +396,19 @@ fun SettingsScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Section: Cuenta y Nube (Google + sincronización)
+        item {
+            com.cypher.music.ui.account.CloudAccountSection(
+                state = accountState,
+                themeColors = themeColors,
+                hapticsEnabled = themePrefs.hapticsEnabled,
+                onConnect = onAccountConnect,
+                onDisconnect = onAccountDisconnect,
+                onSyncNow = onAccountSyncNow
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 

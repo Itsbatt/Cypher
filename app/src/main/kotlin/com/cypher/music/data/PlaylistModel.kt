@@ -88,7 +88,9 @@ data class BackupImportSummary(
     val favoritesCount: Int = 0,
     val analyticsCount: Int = 0,
     val success: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** True when the file also carried the user's appearance/playback settings. */
+    val settingsRestored: Boolean = false
 )
 
 /** A playlist with at least one downloaded song, shown as a single download group. */

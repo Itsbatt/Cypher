@@ -1,6 +1,8 @@
 package com.cypher.music.data.room;
 
 import androidx.room.Dao;
+import androidx.room.Insert;
+import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 
 import java.util.List;
@@ -65,6 +67,17 @@ public interface PlaybackDailyDao {
 
     @Query("DELETE FROM playback_daily")
     void clearAll();
+
+    /** Every rollup row, used to seed the cloud copy of an existing account. */
+    @Query("SELECT * FROM playback_daily")
+    List<PlaybackDailyEntity> getAllRows();
+
+    /**
+     * Replaces a whole row with an already merged value. Sync must not add deltas
+     * again, so this bypasses the accumulating [recordDailyPlayback] upsert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void upsertRow(PlaybackDailyEntity row);
 
     class TrackTuple {
         public String trackId;

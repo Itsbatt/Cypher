@@ -1,5 +1,6 @@
 package com.cypher.music.wrapped
 
+import com.cypher.music.BuildConfig
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Month
@@ -22,11 +23,22 @@ object WrappedAvailability {
      * Year of the recap that should be shown today, or `null` when the app is
      * outside the end-of-year window. January belongs to the previous year.
      */
-    fun activeYear(today: LocalDate = LocalDate.now()): Int? = when {
+    fun activeYear(today: LocalDate = LocalDate.now()): Int? =
+        debugForcedYear() ?: windowYear(today)
+
+    private fun windowYear(today: LocalDate): Int? = when {
         today.month == Month.DECEMBER && today.dayOfMonth >= START_DAY -> today.year
         today.month == Month.JANUARY && today.dayOfMonth <= END_DAY -> today.year - 1
         else -> null
     }
+
+    /**
+     * Debug-only escape hatch: a debug build compiled with the `cypherForceWrapped`
+     * Gradle property (or CYPHER_FORCE_WRAPPED=true) opens the recap any day of the
+     * year so it can be tested. Release builds ignore it completely.
+     */
+    fun debugForcedYear(): Int? =
+        if (BuildConfig.DEBUG && BuildConfig.DEBUG_FORCE_WRAPPED) LocalDate.now().year else null
 
     /** Human readable window, used by Settings so the dates are never stated twice. */
     fun windowLabel(): String = "Del $START_DAY de diciembre al $END_DAY de enero"

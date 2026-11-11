@@ -16,9 +16,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         RecentlyPlayedEntity.class,
         PlaybackAnalyticsEntity.class,
         PlaybackDailyEntity.class,
-        SearchQueryEntity.class
+        SearchQueryEntity.class,
+        SyncOutboxEntity.class,
+        SyncStateEntity.class
     },
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters({Converters.class})
@@ -92,12 +94,44 @@ public abstract class CypherDatabase extends RoomDatabase {
         }
     };
 
+    /**
+     * Adds the cloud-sync bookkeeping tables. Purely additive: existing playlists,
+     * tracks, favorites, analytics and search history keep their rows untouched, and
+     * a device that never signs in simply leaves both tables empty.
+     */
+    private static final Migration MIGRATION_7_8 = new Migration(7, 8) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS `sync_outbox` (" +
+                "`entityKey` TEXT NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`entityId` TEXT NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, " +
+                "`deleted` INTEGER NOT NULL, " +
+                "`attempts` INTEGER NOT NULL, " +
+                "`queuedAt` INTEGER NOT NULL, " +
+                "`lastAttemptAt` INTEGER NOT NULL, " +
+                "`lastError` TEXT, " +
+                "PRIMARY KEY(`entityKey`))");
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_outbox_entityKey` ON `sync_outbox` (`entityKey`)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS `index_sync_outbox_queuedAt` ON `sync_outbox` (`queuedAt`)");
+            database.execSQL("CREATE TABLE IF NOT EXISTS `sync_state` (" +
+                "`accountKey` TEXT NOT NULL, " +
+                "`cursor` TEXT, " +
+                "`lastSyncedAt` INTEGER NOT NULL, " +
+                "`lastAttemptAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`accountKey`))");
+        }
+    };
+
     public abstract PlaylistDao playlistDao();
     public abstract TrackDao trackDao();
     public abstract RecentlyPlayedDao recentlyPlayedDao();
     public abstract PlaybackAnalyticsDao playbackAnalyticsDao();
     public abstract PlaybackDailyDao playbackDailyDao();
     public abstract SearchQueryDao searchQueryDao();
+    public abstract SyncOutboxDao syncOutboxDao();
+    public abstract SyncStateDao syncStateDao();
 
     public static CypherDatabase getInstance(Context context) {
         if (INSTANCE == null) {
@@ -108,7 +142,7 @@ public abstract class CypherDatabase extends RoomDatabase {
                         CypherDatabase.class,
                         DATABASE_NAME
                     )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build();
                 }
             }

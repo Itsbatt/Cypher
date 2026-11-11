@@ -125,6 +125,18 @@ class ThemePreferencesManager(private val context: Context) {
         savePreferences(newPrefs)
     }
 
+    /** Raw JSON of the current theme, embedded in the backup file. */
+    fun exportJson(): String = prefs.getString("theme_config", null) ?: JSONObject().toString()
+
+    /** Restores a theme produced by [exportJson]; invalid input leaves the theme untouched. */
+    fun importJson(json: String): Boolean {
+        val parsed = runCatching { JSONObject(json) }.getOrNull() ?: return false
+        if (parsed.length() == 0) return false
+        prefs.edit().putString("theme_config", parsed.toString()).apply()
+        _preferences.value = loadPreferences()
+        return true
+    }
+
     fun resetToDefaults() {
         val defaultPrefs = ThemePreferences()
         _preferences.value = defaultPrefs

@@ -4,7 +4,6 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import java.time.LocalDate
 import java.time.ZoneId
@@ -14,10 +13,10 @@ import java.time.ZonedDateTime
  * Schedules the annual Cypher Wrapped notification on 31 December at 20:00 in
  * the device time zone.
  *
- * The decision (exact / inexact / already passed) is a pure function so it can
- * be unit tested with a fixed clock. Exact alarms are used only when the user
- * granted "Alarms & reminders"; otherwise an idle-safe inexact alarm is armed
- * and upgraded on a later launch once access is granted.
+ * The trigger time is a pure function so it can be unit tested with a fixed clock.
+ * The alarm is deliberately inexact (but idle-safe): a yearly notification does
+ * not need "Alarms & reminders" access, so Cypher never asks for that special
+ * permission just to announce the recap a few minutes late.
  */
 object WrappedScheduler {
     /** Recap year used by legacy deep links that do not carry an explicit year. */
@@ -33,10 +32,7 @@ object WrappedScheduler {
     private const val TAG = "WrappedScheduler"
 
     /** Outcome of planning the alarm; [triggerAtMillis] is null when the date already passed. */
-    data class AlarmPlan(
-        val triggerAtMillis: Long?,
-        val exact: Boolean
-    ) {
+    data class AlarmPlan(val triggerAtMillis: Long?) {
         val alreadyPassed: Boolean get() = triggerAtMillis == null
     }
 
@@ -44,10 +40,10 @@ object WrappedScheduler {
         ZonedDateTime.of(year, 12, 31, EVENT_HOUR, 0, 0, 0, zone)
 
     /** Pure planning function: no Android APIs, deterministic for tests. */
-    fun plan(now: ZonedDateTime, recapYear: Int, canScheduleExact: Boolean): AlarmPlan {
+    fun plan(now: ZonedDateTime, recapYear: Int): AlarmPlan {
         val trigger = eventTime(recapYear, now.zone).toInstant().toEpochMilli()
-        if (now.toInstant().toEpochMilli() >= trigger) return AlarmPlan(null, exact = false)
-        return AlarmPlan(trigger, exact = canScheduleExact)
+        if (now.toInstant().toEpochMilli() >= trigger) return AlarmPlan(null)
+        return AlarmPlan(trigger)
     }
 
     /** 31 December of the current year; January already points at the new year. */
@@ -57,26 +53,15 @@ object WrappedScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val now = ZonedDateTime.now()
         val year = nextEventYear(now.toLocalDate())
-        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        val plan = plan(now, year, canExact)
+        val plan = plan(now, year)
         if (plan.alreadyPassed) {
             Log.i(TAG, "Wrapped $year event already passed; nothing to schedule")
             return
         }
         val triggerAt = plan.triggerAtMillis ?: return
         val pendingIntent = alarmPendingIntent(context, year)
-        try {
-            if (plan.exact) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-                Log.i(TAG, "Wrapped $year scheduled exactly for ${eventTime(year)}")
-            } else {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-                Log.w(TAG, "Exact alarms not permitted; scheduled inexact fallback for ${eventTime(year)}")
-            }
-        } catch (e: SecurityException) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-            Log.w(TAG, "Exact alarm denied; scheduled inexact fallback", e)
-        }
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        Log.i(TAG, "Wrapped $year scheduled for ${eventTime(year)} (inexact, idle-safe)")
     }
 
     fun cancel(context: Context) {

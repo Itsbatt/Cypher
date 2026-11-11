@@ -13,6 +13,10 @@ val keystoreProperties = Properties().apply {
   }
 }
 val debugSignRelease = providers.gradleProperty("cypherDebugSigning").orNull == "true"
+// Debug-only switch: lets a debug build open Cypher Wrapped outside its end-of-year
+// window so the recap can be exercised any day of the year.
+val forceWrappedInDebug = providers.gradleProperty("cypherForceWrapped").orNull == "true" ||
+  providers.environmentVariable("CYPHER_FORCE_WRAPPED").orNull == "true"
 // The emulator runs x86_64; shipping APKs stay ARM-only unless this flag is passed.
 val emulatorAbi = providers.gradleProperty("cypherEmulatorAbi").orNull == "true"
 val supportedAbis = buildList {
@@ -28,8 +32,8 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 29
     targetSdk = 36
-    versionCode = 19
-    versionName = "1.4.0"
+    versionCode = 21
+    versionName = "1.5.0"
 
     // Identifies this exact compilation inside the APK. Two builds that only differ in
     // timestamp get a different id, so a rebuilt 1.0.6 can be told apart from the first one.
@@ -40,6 +44,25 @@ android {
       "BUILD_ID",
       "\"" + Integer.toHexString((versionName + buildStamp).hashCode()) + "\""
     )
+
+    // Only honoured by debug builds; release builds keep the real date window.
+    buildConfigField("boolean", "DEBUG_FORCE_WRAPPED", forceWrappedInDebug.toString())
+
+    // Cloud account + sync credentials. They are never hardcoded here: the value comes
+    // from a Gradle property, an environment variable or local.properties (ignored by
+    // git), and an empty key simply leaves the feature unconfigured in this build.
+    val localProperties = Properties().apply {
+      val file = rootProject.file("local.properties")
+      if (file.exists()) file.inputStream().use { load(it) }
+    }
+    fun syncConfig(key: String, env: String): String =
+      providers.gradleProperty(key).orNull
+        ?: providers.environmentVariable(env).orNull
+        ?: localProperties.getProperty(key)
+        ?: ""
+
+    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + syncConfig("cypher.googleClientId", "CYPHER_GOOGLE_CLIENT_ID") + "\"")
+    buildConfigField("String", "SYNC_BASE_URL", "\"" + syncConfig("cypher.syncBaseUrl", "CYPHER_SYNC_BASE_URL") + "\"")
 
     javaCompileOptions {
       annotationProcessorOptions {
@@ -178,6 +201,11 @@ dependencies {
 
   // Networking
   implementation(libs.okhttp)
+
+  // Google sign-in through Credential Manager (no passwords stored by the app)
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services)
+  implementation(libs.googleid)
 
   // Extended Icons
   implementation(libs.androidx.compose.material.icons.extended)

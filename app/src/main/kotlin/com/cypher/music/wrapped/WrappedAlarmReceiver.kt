@@ -20,7 +20,9 @@ class WrappedAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != WrappedScheduler.ACTION_WRAPPED_ALARM) return
-        val year = intent.getIntExtra(WrappedScheduler.EXTRA_YEAR, WrappedScheduler.YEAR)
+        // The receiver is not exported, but the extra is still validated before use.
+        val requestedYear = intent.getIntExtra(WrappedScheduler.EXTRA_YEAR, WrappedScheduler.YEAR)
+        val year = if (requestedYear in 2000..2100) requestedYear else WrappedScheduler.YEAR
         showNotification(context, year)
     }
 

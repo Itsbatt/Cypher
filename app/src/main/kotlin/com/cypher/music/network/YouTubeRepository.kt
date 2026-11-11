@@ -22,12 +22,7 @@ import java.util.concurrent.TimeUnit
 
 class YouTubeDns : Dns {
     private val fallbackIps by lazy {
-        listOf(
-            InetAddress.getByName("142.251.156.4"),
-            InetAddress.getByName("142.251.157.4"),
-            InetAddress.getByName("142.251.153.4"),
-            InetAddress.getByName("142.251.154.4")
-        )
+        FallbackEndpoints.YOUTUBE_FALLBACK_IPS.map { InetAddress.getByName(it) }
     }
 
     private val dohClient by lazy {
@@ -41,7 +36,7 @@ class YouTubeDns : Dns {
         if (hostname.contains("youtube.com") || hostname.contains("googlevideo.com")) {
             try {
                 val req = Request.Builder()
-                    .url("https://cloudflare-dns.com/dns-query?name=$hostname&type=A")
+                    .url("${FallbackEndpoints.CLOUDFLARE_DOH_URL}?name=$hostname&type=A")
                     .header("Accept", "application/dns-json")
                     .build()
                 val res = dohClient.newCall(req).execute()

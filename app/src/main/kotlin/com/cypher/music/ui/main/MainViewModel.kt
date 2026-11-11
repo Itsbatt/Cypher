@@ -69,6 +69,7 @@ import com.cypher.music.data.ShortcutOutcome
 import com.cypher.music.data.resolveShortcut
 import com.cypher.music.data.shortcutOutcomeMessage
 import com.cypher.music.playback.MediaCacheManager
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
@@ -107,6 +108,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val motionPreferences = MotionPreferences(application)
     val reducedMotion: StateFlow<Boolean> = motionPreferences.reducedMotion
     val youtubeAccountManager = YouTubeAccountManager(application)
+
+    // Cloud account + sync. The repository holds the Google session and the engine;
+    // this ViewModel only exposes its state and actions to Compose.
+    private val accountRepository = com.cypher.music.sync.AccountRepository(application)
+    val accountState: StateFlow<com.cypher.music.sync.AccountUiState> = accountRepository.state
+    private val _linkOfferVisible = MutableStateFlow(false)
+    val linkOfferVisible: StateFlow<Boolean> = _linkOfferVisible.asStateFlow()
 
     // Decoupled Domain-Specific ViewModels (SOLID architecture)
     val playerViewModel: PlayerViewModel by lazy { PlayerViewModel(application, playerManager, volumeManager) }
@@ -841,6 +849,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearShortcutNotice() {
         _shortcutNotice.value = null
     }
+
+    // ------------------------------------------------------------------ cloud account
+
+    init {
+        // Deliberately delayed: the linking popup must never appear before the Room-backed
+        // library is on screen, and it is skipped entirely when there is nothing to sync.
+        viewModelScope.launch {
+            // Poll until Room has actually produced the library (cold starts can take a
+            // couple of seconds), then wait a beat so the popup never lands on a
+            // half-drawn screen. Bounded so an empty library is evaluated too.
+            var waited = 0
+            while (waited < 40 && playlists.value.isEmpty() && favoriteTracks.value.isEmpty()) {
+                delay(250)
+                waited += 1
+            }
+            delay(600)
+            if (!_linkOfferVisible.value) {
+                _linkOfferVisible.value = accountRepository.shouldOfferLink()
+            }
+        }
+        // Remote data landed: reload the Room-backed flows so the UI shows it.
+        viewModelScope.launch {
+            accountRepository.remoteChanges.collect { changes ->
+                if (changes > 0) {
+                    playlistRepository.loadData()
+                    favoritesManager.loadFavorites()
+                }
+            }
+        }
+    }
+
+    fun signInWithGoogle(activityContext: android.content.Context, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = accountRepository.signIn(activityContext)
+            _linkOfferVisible.value = false
+            onDone(result is com.cypher.music.sync.AuthResult.Success)
+        }
+    }
+
+    fun signOutCloudAccount() {
+        viewModelScope.launch { accountRepository.signOut() }
+    }
+
+    fun syncCloudNow() {
+        viewModelScope.launch { accountRepository.syncNow(manual = true) }
+    }
+
+    fun dismissCloudLinkOffer() {
+        accountRepository.dismissLinkOffer()
+        _linkOfferVisible.value = false
+    }
+
+    fun clearAccountMessage() = accountRepository.clearMessage()
+
+    fun notifyAppResumed() = accountRepository.requestAutoSync("app en primer plano")
 
     fun handleShortcut(action: ShortcutAction) {
         val favorites = favoritesManager.favoriteTracks.value

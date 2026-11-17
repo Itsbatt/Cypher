@@ -470,6 +470,33 @@ object SelfTest {
         }
     }
 
+    /**
+     * `cypher --cef-check`: proves the embedded Chromium starts from wherever it was found
+     * (the folder shipped in the installer, or the downloaded one) without opening a
+     * window. It prints the resolution, so "YouTube no funciona" can be answered with
+     * facts instead of a guess.
+     */
+    fun runCefCheck(): Int {
+        val dataCef = File(Storage.dataDir.toFile(), "cef")
+        val existedBefore = dataCef.isDirectory
+        println("resources=${System.getProperty("compose.application.resources.dir") ?: "no definido"}")
+        println("jpackage=${System.getProperty("jpackage.app-path") ?: "no definido"}")
+        println("carpeta de datos=${dataCef.absolutePath} (existía: $existedBefore)")
+        println("chromium en uso=${com.cypher.desktop.player.YouTubeEmbed.resolvedInstallDir()?.absolutePath ?: "ninguno"}")
+
+        val started = com.cypher.desktop.player.YouTubeEmbed.prepare()
+        println("chromium arrancado=$started")
+        println("error=${com.cypher.desktop.player.YouTubeEmbed.error ?: "ninguno"}")
+        com.cypher.desktop.player.YouTubeEmbed.diagnostic?.let { issue ->
+            println("diagnóstico: ${issue.headline}")
+            println("detalle: ${issue.detail.replace("\n", " ")}")
+            println("pista: ${issue.hint}")
+        }
+        val createdNow = !existedBefore && dataCef.isDirectory
+        println("descarga/instalación en la carpeta de datos: ${if (createdNow) "sí" else "no"}")
+        return if (started) 0 else 1
+    }
+
     fun runInstall(): Int {
         println("destino: ${YouTubeMusic.install()}")
         val found = YouTubeMusic.binary()

@@ -181,6 +181,13 @@ object YouTubeEmbed {
     }
 
     /**
+     * Folder the boot used or would use: the packaged one, else the downloaded one. Exposed
+     * for `--cef-check`, so a support reply can state which of the two is in play.
+     */
+    fun resolvedInstallDir(): File? =
+        bundledRuntime() ?: installDir.takeIf { File(it, "libcef.dll").isFile }
+
+    /**
      * The Chromium folder packaged with the app, or null when it is not there (development
      * run, or a distribution built without the CEF resources).
      *

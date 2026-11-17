@@ -24,6 +24,9 @@ fun main(args: Array<String>) {
     if (args.contains("--self-test")) {
         exitProcess(SelfTest.run())
     }
+    if (args.contains("--cef-check")) {
+        exitProcess(SelfTest.runCefCheck())
+    }
     if (args.contains("--screenshots")) {
         ScreenshotTool.main(args)
     }

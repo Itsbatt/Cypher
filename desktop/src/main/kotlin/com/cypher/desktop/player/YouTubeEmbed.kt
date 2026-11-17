@@ -9,6 +9,18 @@ import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
 /**
+ * Why Chromium could not start, written for the person in front of the screen instead of
+ * for a log file. The first run has to download ~150 MB into the app's data folder, and a
+ * corporate proxy, an antivirus blocking the extraction or a plain offline machine all end
+ * up as the same opaque Java exception.
+ */
+data class YouTubeSetupIssue(
+    val headline: String,
+    val detail: String,
+    val hint: String
+)
+
+/**
  * YouTube playback through an embedded Chromium (JCEF), the desktop counterpart of the
  * phone's iframe: the song is streamed by YouTube itself instead of being downloaded to a
  * cache file first.
@@ -20,7 +32,8 @@ import java.util.concurrent.Executors
  * video.
  *
  * Everything here fails soft: if CEF is missing (no natives, no GPU, offline) [error] holds
- * the reason and the caller falls back to the normal cover.
+ * the reason, [diagnostic] holds the explanation shown to the user and the caller falls
+ * back to the normal cover.
  */
 object YouTubeEmbed {
 
@@ -31,6 +44,10 @@ object YouTubeEmbed {
     @Volatile var playing: Boolean = false
         private set
     @Volatile var error: String? = null
+        private set
+
+    /** Actionable version of [error] for the UI; null while no attempt has failed. */
+    @Volatile var diagnostic: YouTubeSetupIssue? = null
         private set
 
     /** Set by the player when YouTube refuses the song (private, age-locked, no embed). */
@@ -120,23 +137,72 @@ object YouTubeEmbed {
         }
     }
 
+    /** Where Chromium unpacks its binaries; shown in the diagnostic card. */
+    private val installDir: File get() = File(Storage.dataDir.toFile(), "cef")
+
+    /**
+     * Retries the bootstrap after the UI showed the diagnostic. Cheap when Chromium is
+     * already up, so it is safe to call from a button without extra guards.
+     */
+    fun retry(): Boolean = ensure()
+
     private fun ensure(): Boolean {
         if (browser != null) return true
         error = null
+        diagnostic = null
         return runCatching {
             startServer()
-            val builder = CefAppBuilder().apply {
-                setInstallDir(File(Storage.dataDir.toFile(), "cef").also { it.mkdirs() })
-                // Software compositing: with the GPU path Chromium draws a blank surface
-                // inside a Compose window.
-                addJcefArgs("--disable-gpu", "--disable-gpu-compositing", "--in-process-gpu")
+            // A previous attempt may have built the app and failed later (no window, no
+            // GPU); CefApp cannot be initialised twice in the same process.
+            if (app == null) {
+                val builder = CefAppBuilder().apply {
+                    setInstallDir(installDir.also { it.mkdirs() })
+                    // Software compositing: with the GPU path Chromium draws a blank
+                    // surface inside a Compose window.
+                    addJcefArgs("--disable-gpu", "--disable-gpu-compositing", "--in-process-gpu")
+                }
+                app = builder.build()
             }
-            val created = builder.build()
-            app = created
             true
         }.getOrElse { throwable ->
             error = throwable.message ?: throwable::class.java.simpleName
+            diagnostic = diagnose(throwable)
             false
+        }
+    }
+
+    /**
+     * Maps the bootstrap exception to something the user can act on. The order matters:
+     * TLS and timeouts are IOExceptions too, so they are matched before the generic disk
+     * case.
+     */
+    private fun diagnose(throwable: Throwable): YouTubeSetupIssue {
+        val raw = throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.simpleName
+        val folder = installDir.absolutePath
+        return when (throwable) {
+            is javax.net.ssl.SSLException -> YouTubeSetupIssue(
+                headline = "La red bloquea la descarga de Chromium",
+                detail = "Cypher descarga una sola vez los binarios de Chromium (unos 150 MB) en\n«$folder». La conexión se cerró durante el intercambio cifrado, algo habitual en redes de empresa que inspeccionan el tráfico.",
+                hint = "Prueba desde otra red o desactiva temporalmente la inspección TLS. Detalle: $raw"
+            )
+            is java.net.UnknownHostException,
+            is java.net.ConnectException,
+            is java.net.NoRouteToHostException,
+            is java.net.SocketTimeoutException -> YouTubeSetupIssue(
+                headline = "No hay conexión para descargar Chromium",
+                detail = "La reproducción de YouTube usa un Chromium embebido que Cypher descarga en\n«$folder» (unos 150 MB). Esta vez el equipo no pudo conectar con el servidor de descargas.",
+                hint = "Comprueba la conexión (o el proxy) y pulsa Reintentar. Las pistas locales siguen funcionando sin esto. Detalle: $raw"
+            )
+            is java.io.IOException, is SecurityException -> YouTubeSetupIssue(
+                headline = "No se pudo escribir la carpeta de Chromium",
+                detail = "Cypher necesita descomprimir Chromium en\n«$folder». La descarga llegó o no se pudo guardar; un antivirus o una carpeta protegida producen este fallo.",
+                hint = "Revisa el permiso de escritura de esa carpeta y las exclusiones del antivirus, y pulsa Reintentar. Detalle: $raw"
+            )
+            else -> YouTubeSetupIssue(
+                headline = "Chromium no pudo arrancar",
+                detail = "La reproducción de YouTube necesita el Chromium embebido y no se pudo iniciar en este equipo (carpeta: «$folder»).",
+                hint = "Pulsa Reintentar. Si se repite, cierra otras ventanas de Cypher y vuelve a abrir la app. Detalle: $raw"
+            )
         }
     }
 

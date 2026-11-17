@@ -66,6 +66,16 @@ fun YouTubeView(ui: UiState, accent: Color, state: AppState) {
         Hero(ui, accent, state)
         Spacer(Modifier.height(14.dp))
 
+        ui.ytSetupIssue?.let { issue ->
+            YouTubeIssueCard(
+                issue = issue,
+                canRetry = ui.ytPending != null,
+                onRetry = state::retryYouTube,
+                onDismiss = state::dismissYouTubeIssue
+            )
+            Spacer(Modifier.height(14.dp))
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = ui.onlineQuery,
@@ -240,6 +250,51 @@ private fun Hero(ui: UiState, accent: Color, state: AppState) {
                 Icon(Icons.Rounded.PlayArrow, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Reproducir todo", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/**
+ * Shown when the embedded Chromium could not start (offline, proxy, antivirus, permissions).
+ * It keeps the explanation on screen, unlike the old snackbar that vanished with the raw
+ * exception, and lets the user retry the same song without searching for it again.
+ */
+@Composable
+private fun YouTubeIssueCard(
+    issue: com.cypher.desktop.player.YouTubeSetupIssue,
+    canRetry: Boolean,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth()
+            .background(CypherColors.Card, RoundedCornerShape(16.dp))
+            .padding(18.dp)
+    ) {
+        Text(issue.headline, color = CypherColors.Danger, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Text(issue.detail, color = CypherColors.TextSecondary, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(issue.hint, color = CypherColors.TextTertiary, fontSize = 11.sp)
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onRetry,
+                enabled = canRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CypherColors.Danger,
+                    contentColor = Color(0xFF14101A),
+                    disabledContainerColor = CypherColors.Pill,
+                    disabledContentColor = CypherColors.TextTertiary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Reintentar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onDismiss) {
+                Text("Descartar", color = CypherColors.TextTertiary, fontSize = 12.sp)
             }
         }
     }

@@ -1,0 +1,84 @@
+name: Cypher Desktop
+
+# Builds the Windows deliverables. A branch push only leaves them as artifacts; pushing a
+# pc-v* tag publishes them as a GitHub release, exactly like the Android workflow.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["pc-v*"]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop.yml"
+
+# Artifacts for a branch push; a pc-v* tag is published as a GitHub release.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows portable + MSI
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install WiX 3 (needed by jpackage for the MSI)
+        run: choco install wixtoolset --version=3.14.1 --no-progress -y
+        shell: pwsh
+
+      - name: Rebuild SMTC helper from source
+        run: powershell -ExecutionPolicy Bypass -File native/build-smtc.ps1
+        shell: pwsh
+
+      - name: Unit tests
+        run: ./gradlew test --no-daemon --console=plain
+
+      - name: Build app image (portable)
+        run: ./gradlew createDistributable --no-daemon --console=plain
+
+      - name: Build MSI installer
+        run: ./gradlew packageMsi --no-daemon --console=plain
+
+      - name: Zip portable build
+        run: ./gradlew packagePortable --no-daemon --console=plain
+
+      - name: Upload portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cypher-Windows-portable
+          path: desktop/build/dist/Cypher-*-windows-portable.zip
+          if-no-files-found: error
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cypher-Windows-installer
+          path: desktop/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+
+      # The tag is what publishes, exactly like the Android workflow: a branch push
+      # only leaves the files as artifacts.
+      - name: Publish to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/pc-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="docs/releases/PC-${GITHUB_REF_NAME#pc-v}.md"
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "Cypher PC ${GITHUB_REF_NAME#pc-v}" --notes-file "$notes"
+          gh release upload "$GITHUB_REF_NAME" \
+            desktop/build/dist/Cypher-*-windows-portable.zip \
+            desktop/build/compose/binaries/main/msi/*.msi --clobber

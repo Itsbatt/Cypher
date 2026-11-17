@@ -1099,8 +1099,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 playlistRepository.syncPlaylist(
-                    name = entity.name,
-                    description = entity.description.ifBlank { "Sincronizado desde YouTube Music" },
+                    name = entity.name.orEmpty(),
+                    description = entity.description.orEmpty().ifBlank { "Sincronizado desde YouTube Music" },
                     coverUri = entity.coverUri,
                     tracks = result.items,
                     sourceId = sourceId,

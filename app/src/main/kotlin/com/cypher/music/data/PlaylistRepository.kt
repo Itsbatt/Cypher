@@ -122,7 +122,7 @@ class PlaylistRepository(
         val existing = sourceId?.let { roomDb.playlistDao().getPlaylistBySourceId(it) }
             ?: roomDb.playlistDao().getAllPlaylists().firstOrNull {
                 val sameName = if (matchByName) {
-                    PlaylistSync.namesMatch(it.name, cleanName)
+                    PlaylistSync.namesMatch(it.name.orEmpty(), cleanName)
                 } else {
                     it.name == cleanName
                 }

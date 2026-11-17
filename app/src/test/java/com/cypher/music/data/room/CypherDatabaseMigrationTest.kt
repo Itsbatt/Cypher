@@ -116,16 +116,8 @@ class CypherDatabaseMigrationTest {
         }
     }
 
-    private fun migrations(): Array<Migration> {
-        val names = listOf(
-            "MIGRATION_3_4", "MIGRATION_4_5", "MIGRATION_5_6",
-            "MIGRATION_6_7", "MIGRATION_7_9", "MIGRATION_8_9"
-        )
-        return names.map { name ->
-            CypherDatabase::class.java.getDeclaredField(name).apply { isAccessible = true }
-                .get(null) as Migration
-        }.toTypedArray()
-    }
+    /** The very list the app registers: no reflection, so a rename cannot silently pass. */
+    private fun migrations(): Array<Migration> = CypherDatabase.MIGRATIONS
 
     /** Opens with the app's own builder: Room picks the path, runs it and validates v9. */
     private fun openMigrated(name: String): CypherDatabase {

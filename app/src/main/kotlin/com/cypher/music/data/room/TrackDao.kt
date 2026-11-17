@@ -1,48 +1,46 @@
-package com.cypher.music.data.room;
+package com.cypher.music.data.room
 
-import androidx.room.Dao;
-import androidx.room.Insert;
-import androidx.room.OnConflictStrategy;
-import androidx.room.Query;
-import androidx.room.Update;
-
-import java.util.List;
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 
 @Dao
-public interface TrackDao {
+interface TrackDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    void insertTrack(TrackEntity track);
+    fun insertTrack(track: TrackEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    void insertTracks(List<TrackEntity> tracks);
+    fun insertTracks(tracks: List<TrackEntity>)
 
     @Update
-    void updateTrack(TrackEntity track);
+    fun updateTrack(track: TrackEntity)
 
     @Query("SELECT * FROM tracks WHERE id = :id LIMIT 1")
-    TrackEntity getTrackById(String id);
+    fun getTrackById(id: String): TrackEntity?
 
     @Query("SELECT * FROM tracks WHERE isLiked = 1 ORDER BY updatedAt DESC")
-    List<TrackEntity> getFavoriteTracks();
+    fun getFavoriteTracks(): List<TrackEntity>
 
     @Query("SELECT id FROM tracks WHERE isLiked = 1")
-    List<String> getFavoriteTrackIds();
+    fun getFavoriteTrackIds(): List<String>
 
     @Query("UPDATE tracks SET isLiked = :isLiked, updatedAt = :updatedAt WHERE id = :id")
-    void setFavorite(String id, boolean isLiked, long updatedAt);
+    fun setFavorite(id: String, isLiked: Boolean, updatedAt: Long)
 
     @Query("SELECT * FROM tracks WHERE isDownloaded = 1 ORDER BY updatedAt DESC")
-    List<TrackEntity> getDownloadedTracks();
+    fun getDownloadedTracks(): List<TrackEntity>
 
     @Query("UPDATE tracks SET isDownloaded = :isDownloaded, downloadedUri = :downloadedUri, updatedAt = :updatedAt WHERE id = :id")
-    void setDownloaded(String id, boolean isDownloaded, String downloadedUri, long updatedAt);
+    fun setDownloaded(id: String, isDownloaded: Boolean, downloadedUri: String?, updatedAt: Long)
 
     @Query("DELETE FROM tracks WHERE id = :id")
-    void deleteTrack(String id);
+    fun deleteTrack(id: String)
 
     @Query("DELETE FROM tracks WHERE id LIKE 'local_demo_%' OR title LIKE '%Claro de Luna%' OR artist LIKE '%Beethoven%' OR artist LIKE '%Satie%' OR artist LIKE '%Chopin%'")
-    void deleteDemoTracks();
+    fun deleteDemoTracks()
 
     @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%'")
-    List<TrackEntity> searchTracks(String query);
+    fun searchTracks(query: String): List<TrackEntity>
 }

@@ -1,6 +1,7 @@
 # Cypher — Documentación Técnica Integral y Arquitectura del Proyecto
 
 > **Nombre Oficial:** Cypher  
+> **Propietario / Autor:** itsbatt ([@Itsbatt](https://github.com/Itsbatt))  
 > **Identificador de Paquete (Package Name):** `com.cypher.music`  
 > **Versión Actual Android:** **1.5.0** (`versionCode 21`)  
 > **Versión Actual Cypher PC:** **1.1.0** (`Cypher-1.1.0.msi` / Portable)  

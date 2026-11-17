@@ -1,5 +1,7 @@
 # Cypher Desktop
 
+> **Propietario / Autor:** itsbatt ([@Itsbatt](https://github.com/Itsbatt))
+
 Versión de escritorio de Cypher: misma identidad visual, misma cuenta y misma biblioteca
 que la app de Android, con funcionamiento local-first.
 

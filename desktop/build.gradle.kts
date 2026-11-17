@@ -49,7 +49,7 @@ compose.desktop {
             packageName = "Cypher"
             packageVersion = "1.1.0"
             description = "Cypher Desktop"
-            vendor = "Cypher"
+            vendor = "itsbatt"
             windows {
                 // Same logo as the app window and the Android launcher.
                 iconFile.set(project.file("packaging/cypher.ico"))

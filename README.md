@@ -4,6 +4,7 @@
 > Construido con **Jetpack Compose**, **Material 3**, **AndroidX Media3**, shaders nativos **AGSL/SkSL acelerados por GPU**, **Room** en Android y **Compose for Desktop** en PC.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Owner: itsbatt](https://img.shields.io/badge/Owner-itsbatt-7952b3.svg)](https://github.com/Itsbatt)
 [![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20%7C%20Windows-green.svg)](https://github.com/Itsbatt/Cypher)
 [![Android Version](https://img.shields.io/badge/Android-v1.5.0-purple.svg)](https://github.com/Itsbatt/Cypher/releases/tag/v1.5.0)
 [![PC Version](https://img.shields.io/badge/PC-v1.1.0-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.0)
@@ -114,12 +115,19 @@ cd desktop
 
 ## 📖 Documentación del Proyecto
 
-- [`PROJECT_DOCUMENTATION.md`](PROJECT_DOCUMENTATION.md) — Documentación técnica exhaustiva, evolución histórica y arquitectura profunda del sistema.
+Toda la documentación técnica se encuentra organizada en la carpeta [`docs/`](docs/):
+
+- [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md) — Documentación técnica exhaustiva, evolución histórica y arquitectura profunda del sistema.
+- [`docs/PROYECTO_COMPLETO.md`](docs/PROYECTO_COMPLETO.md) — Ficha maestra de componentes, dependencias, persistencia y estado funcional.
+- [`docs/MAPEO_ARCHIVOS.md`](docs/MAPEO_ARCHIVOS.md) — Índice y mapa rápido de archivos fuente y módulos del proyecto.
+- [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md) — Informes de auditoría y pruebas de estabilidad en dispositivos reales.
+- [`docs/INFORME_REPARACION_REPRODUCCION.md`](docs/INFORME_REPARACION_REPRODUCCION.md) — Informe técnico sobre la resiliencia del motor de streaming.
 - [`docs/releases/`](docs/releases/) — Notas de versión detalladas de cada lanzamiento publicado (Android y PC).
 - [`docs/liquid-glass/`](docs/liquid-glass/) — Especificaciones técnicas de los shaders AGSL/SkSL.
 
 ---
 
-## 📄 Licencia
+## 📄 Licencia y Autoría
 
-Este proyecto está publicado bajo la licencia **GNU General Public License v3.0** — consulta el archivo [`LICENSE`](LICENSE) para más detalles.
+- **Propietario / Autor:** **itsbatt** ([@Itsbatt](https://github.com/Itsbatt))
+- **Licencia:** Distribuido bajo los términos de la licencia de software libre **GNU General Public License v3.0** — consulta el archivo [`LICENSE`](LICENSE) para más detalles.

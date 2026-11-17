@@ -12,6 +12,7 @@
 | Dato | Valor |
 | --- | --- |
 | Nombre | **Cypher** |
+| Propietario / Autor | **itsbatt** ([@Itsbatt](https://github.com/Itsbatt)) |
 | `applicationId` / paquete | `com.cypher.music` |
 | `versionName` / `versionCode` | **1.5.0** / **21** |
 | `minSdk` | **29** (Android 10) |

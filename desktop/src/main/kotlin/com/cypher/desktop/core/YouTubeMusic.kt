@@ -39,19 +39,24 @@ object YouTubeMusic {
 
     const val DOWNLOAD_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 
-    /** Prefers an explicit path, then env, then the app-data copy, then the working folder. */
+    /** Prefers an explicit path, then env, then app-data, bundled resources, or working folder. */
     fun binary(configured: String? = null): File? {
         val candidates = buildList {
             configured?.takeIf { it.isNotBlank() }?.let { add(it) }
             System.getenv("CYPHER_YTDLP")?.takeIf { it.isNotBlank() }?.let { add(it) }
             add(Storage.dataDir.resolve("yt-dlp.exe").toString())
+            add(Storage.appDir.resolve("yt-dlp.exe").toString())
+            add(Storage.appDir.resolve("tools/yt-dlp.exe").toString())
             add(File("tools", "yt-dlp.exe").absolutePath)
             add(File(System.getProperty("user.dir"), "tools/yt-dlp.exe").absolutePath)
         }
         candidates.forEach { path ->
             val file = File(path)
-            if (file.isFile) return file
+            if (file.isFile && file.length() > 0) return file
         }
+        val bundled = extractBundledBinary()
+        if (bundled != null && bundled.isFile) return bundled
+
         System.getenv("PATH").orEmpty().split(File.pathSeparator).forEach { dir ->
             listOf("yt-dlp.exe", "yt-dlp").forEach { name ->
                 val file = File(dir, name)
@@ -59,6 +64,20 @@ object YouTubeMusic {
             }
         }
         return null
+    }
+
+    private fun extractBundledBinary(): File? {
+        val stream = javaClass.getResourceAsStream("/native/yt-dlp.exe") ?: return null
+        val target = Storage.dataDir.resolve("yt-dlp.exe").toFile()
+        target.parentFile?.mkdirs()
+        return runCatching {
+            stream.use { input ->
+                target.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            if (target.isFile && target.length() > 1_000_000) target else null
+        }.getOrNull()
     }
 
     fun search(query: String, limit: Int = 12, configured: String? = null): List<MusicHit> {
@@ -172,7 +191,7 @@ object YouTubeMusic {
             bin,
             listOf(
                 "--no-warnings", "--no-playlist", "--no-progress",
-                "-f", "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio",
+                "-f", "140/bestaudio[ext=m4a]/bestaudio[ext=mp3]/139/18/22/best[ext=mp4]/bestaudio/best",
                 "-o", template,
                 watchUrl(videoId)
             ),
@@ -182,7 +201,7 @@ object YouTubeMusic {
             ?.filter { it.isFile && it.name.startsWith("$videoId.") && it.length() > 0 }
             ?.maxByOrNull { it.lastModified() }
             ?: throw YouTubeMusicException("YouTube no entregó audio para este vídeo.")
-        if (file.extension.lowercase() !in setOf("m4a", "mp3", "aac", "wav")) {
+        if (file.extension.lowercase() !in setOf("m4a", "mp3", "aac", "wav", "mp4")) {
             throw YouTubeMusicException(
                 "YouTube solo ofreció audio en formato ${file.extension.uppercase()}, que el reproductor no admite. " +
                     "Prueba con otra canción."
@@ -248,21 +267,24 @@ object YouTubeMusic {
             ?: throw YouTubeMusicException("La descarga no produjo ningún archivo.")
     }
 
-    /** Downloads yt-dlp.exe into the app-data folder. Only runs when the user asks. */
+    /** Downloads yt-dlp.exe into the app-data folder. Only runs when the user asks or as fallback. */
     fun install(target: File = Storage.dataDir.resolve("yt-dlp.exe").toFile()): File {
         target.parentFile?.mkdirs()
         val partial = File(target.parentFile, "${target.name}.part")
-        var connection: HttpURLConnection? = null
         try {
-            connection = (URI(DOWNLOAD_URL).toURL().openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = true
-                connectTimeout = 20_000
-                readTimeout = 60_000
-                setRequestProperty("User-Agent", "CypherDesktop")
-            }
-            val code = connection.responseCode
+            val client = java.net.http.HttpClient.newBuilder()
+                .followRedirects(java.net.http.HttpClient.Redirect.ALWAYS)
+                .connectTimeout(java.time.Duration.ofSeconds(20))
+                .build()
+            val request = java.net.http.HttpRequest.newBuilder()
+                .uri(URI.create(DOWNLOAD_URL))
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CypherDesktop")
+                .timeout(java.time.Duration.ofSeconds(120))
+                .GET()
+                .build()
+            val response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofFile(partial.toPath()))
+            val code = response.statusCode()
             if (code !in 200..299) throw YouTubeMusicException("La descarga falló (HTTP $code).")
-            connection.inputStream.use { input -> partial.outputStream().use { output -> input.copyTo(output) } }
             if (partial.length() < 1_000_000) throw YouTubeMusicException("El archivo descargado no parece válido.")
             if (!partial.renameTo(target)) {
                 partial.copyTo(target, overwrite = true)
@@ -270,7 +292,6 @@ object YouTubeMusic {
             }
             return target
         } finally {
-            connection?.disconnect()
             partial.delete()
         }
     }

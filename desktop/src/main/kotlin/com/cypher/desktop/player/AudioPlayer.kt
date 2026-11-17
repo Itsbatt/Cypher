@@ -182,12 +182,16 @@ class AudioPlayer {
 
     private fun applyVolume() {
         val base = _state.value.volume
-        // When normalization is enabled, adjust dynamic gain curve to prevent harsh spikes
         val effective = if (normalizeVolume) {
             (base * 0.90f).coerceIn(0f, 1f)
         } else {
             base
         }
-        player?.volume = effective.toDouble()
+        if (!available || player == null) return
+        runCatching {
+            javafx.application.Platform.runLater {
+                runCatching { player?.volume = effective.toDouble() }
+            }
+        }
     }
 }

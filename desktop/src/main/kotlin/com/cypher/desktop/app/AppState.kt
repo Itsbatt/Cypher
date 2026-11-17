@@ -934,8 +934,8 @@ class AppState {
                 onlineStatus = "Sonando: ${hit.title}"
             )
         }
-        // No download: the iframe streams it, as on the phone.
-        playEmbed(hit.videoId, hit.title, hit.artist, hit.durationMs, hit.thumbnail)
+        // Native direct stream with zero lag and no separate window
+        playNativeStream(hit.videoId, hit.title, hit.artist, hit.durationMs, hit.thumbnail)
     }
 
     private fun advanceOnline(auto: Boolean) {
@@ -1154,12 +1154,12 @@ class AppState {
         playQueue(if (shuffled) ids.shuffled() else ids)
     }
 
-    /** Last resort: the local file is gone, so look the same song up and stream it. */
+    /** Last resort: the local file is gone, so look the same song up and stream it natively. */
     private fun fallbackToYouTube(track: Track) {
         _state.update {
             it.copy(
                 onlineBusy = true,
-                notice = "El archivo de «${track.title}» no está en este equipo. Buscando la canción en YouTube Music…"
+                notice = "Buscando «${track.title}» en YouTube Music…"
             )
         }
         scope.launch {
@@ -1170,13 +1170,15 @@ class AppState {
                 _state.update {
                     it.copy(
                         onlineBusy = false,
-                        notice = "«${track.title}» no está en disco y YouTube Music no devolvió nada."
+                        notice = "«${track.title}» no está en disco ni en YouTube Music."
                     )
                 }
+                delay(1500)
+                playNext(auto = true)
                 return@launch
             }
-            _state.update { it.copy(onlineQueue = listOf(hit), onlineIndex = 0) }
-            startOnline(0)
+            _state.update { it.copy(onlineBusy = false) }
+            playNativeStream(hit.videoId, track.title, track.artist, track.durationMs, track.artwork ?: hit.thumbnail, customTrackId = track.id)
         }
     }
 
@@ -1314,83 +1316,90 @@ class AppState {
     }
 
     /**
-     * Plays a YouTube song in the embedded browser instead of downloading it, exactly like
-     * the phone does with its iframe. The app keeps the metadata, and the position arrives
-     * from the video so the lyrics stay in time.
+     * Plays YouTube Music streams directly and natively with JavaFX MediaPlayer.
+     * Caches high-quality AAC/M4A/MP4 audio locally for instant subsequent replays,
+     * eliminates CEF/Chromium popups, UI freezes and audio latency.
      */
-    private fun playEmbed(videoId: String, title: String, artist: String, durationMs: Long, artwork: String? = null) {
+    private fun playNativeStream(
+        videoId: String,
+        title: String,
+        artist: String,
+        durationMs: Long,
+        artwork: String? = null,
+        customTrackId: String? = null
+    ) {
         val resolvedArtwork = artwork?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-        val session = EmbedSession(videoId, title, artist, durationMs, resolvedArtwork)
-        player.stop()
-        _state.update { it.copy(embed = session, notice = "Abriendo «$title» en YouTube…") }
-        embedJob?.cancel()
-        embedJob = scope.launch {
-            // Warms Chromium up; the panel itself attaches the browser on the AWT thread.
-            val started = runCatching { withContext(Dispatchers.IO) { YouTubeEmbed.prepare() } }
-                .getOrDefault(false)
-            if (!started) {
-                _state.update {
-                    it.copy(
-                        embed = null,
-                        notice = null,
-                        // A raw exception in a snackbar told nobody anything, so the YouTube
-                        // screen keeps the explanation and offers a retry.
-                        ytSetupIssue = YouTubeEmbed.diagnostic
-                            ?: com.cypher.desktop.player.YouTubeSetupIssue(
-                                headline = "No se pudo abrir YouTube",
-                                detail = "Chromium no arrancó en este equipo: ${YouTubeEmbed.error ?: "sin detalles"}.",
-                                hint = "Pulsa Reintentar para volver a intentarlo."
-                            ),
-                        ytPending = session
-                    )
+        val trackId = customTrackId ?: "yt:$videoId"
+        val track = Track(
+            id = trackId,
+            title = title,
+            artist = artist,
+            album = "YouTube Music",
+            durationMs = durationMs,
+            path = "stream:$videoId",
+            artwork = resolvedArtwork
+        )
+        player.preview(track, 0, durationMs)
+        _state.update { it.copy(embed = null, notice = "Cargando audio de «$title»…", ytSetupIssue = null, ytPending = null) }
+
+        remoteJob?.cancel()
+        remoteJob = scope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    YouTubeMusic.cachedAudio(videoId, snapshot().preferences.ytDlpPath) { step ->
+                        _state.update { it.copy(notice = "$step «$title»") }
+                    }
                 }
+            }
+            val audio = result.getOrNull()
+            if (audio == null || !audio.isFile || audio.length() == 0L) {
+                val err = result.exceptionOrNull()?.message ?: "Error al obtener audio"
+                _state.update { it.copy(notice = "No se pudo cargar «$title»: $err") }
+                delay(2000)
+                playNext(auto = true)
                 return@launch
             }
-            val track = Track(
-                id = "yt:$videoId",
-                title = title,
-                artist = artist,
-                album = "YouTube Music",
-                durationMs = durationMs,
-                path = "embed:$videoId",
-                artwork = resolvedArtwork
-            )
-            player.preview(track, 0, durationMs)
-            // Chromium paints on its own surface, so the video gets its own window and the
-            // app keeps the metadata, the lyrics and the progress.
-            YouTubeWindow.open(videoId, title) {
-                _state.update { it.copy(embed = null) }
+
+            val playableTrack = track.copy(path = audio.absolutePath)
+            playStartedAt = System.currentTimeMillis()
+            playStartedTrack = playableTrack
+            player.play(playableTrack)
+            _state.update { it.copy(notice = null) }
+
+            mutate { data ->
+                data.copy(recent = (listOf(playableTrack.id) + data.recent.filterNot { it == playableTrack.id }).take(24))
             }
-            _state.update { it.copy(notice = null, ytSetupIssue = null, ytPending = null) }
-            // Mirror the video onto the app state until another song takes over.
-            while (_state.value.embed?.videoId == videoId) {
-                delay(350)
-                if (YouTubeEmbed.refused) {
-                    // Some songs cannot be embedded (private, age-locked, embeds disabled).
-                    YouTubeWindow.close()
-                    val hasYtDlp = YouTubeMusic.binary(_state.value.data.preferences.ytDlpPath) != null
-                    if (hasYtDlp) {
-                        _state.update {
-                            it.copy(embed = null, notice = "«$title» no se puede ver aquí: se reproduce desde el archivo.")
-                        }
-                        playDownloaded(videoId, title, artist, durationMs, resolvedArtwork)
-                    } else {
-                        _state.update {
-                            it.copy(embed = null, notice = "«$title» está protegida por YouTube y requiere descarga.")
-                        }
-                        delay(2000)
-                        playNext(auto = true)
+            registerPlay(playableTrack)
+
+            preBufferNext()
+        }
+    }
+
+    private fun preBufferNext() {
+        val current = _state.value
+        val nextId: String? = when {
+            current.queue.isNotEmpty() && current.queueIndex in 0 until current.queue.lastIndex -> current.queue[current.queueIndex + 1]
+            current.onlineQueue.isNotEmpty() && current.onlineIndex in 0 until current.onlineQueue.lastIndex -> current.onlineQueue[current.onlineIndex + 1].videoId
+            else -> null
+        }
+        if (nextId != null) {
+            val videoKey = when {
+                nextId.startsWith("yt:") -> nextId.removePrefix("yt:")
+                nextId.length == 11 -> nextId
+                else -> snapshot().remoteTrack(nextId)?.videoKey()
+            }
+            if (videoKey != null && videoKey.isNotBlank()) {
+                scope.launch(Dispatchers.IO) {
+                    runCatching {
+                        YouTubeMusic.cachedAudio(videoKey, snapshot().preferences.ytDlpPath)
                     }
-                    return@launch
                 }
-                val reported = YouTubeEmbed.durationMs
-                player.external(
-                    YouTubeEmbed.positionMs,
-                    if (reported > 0) reported else durationMs,
-                    YouTubeEmbed.playing
-                )
             }
         }
+    }
+
+    private fun playEmbed(videoId: String, title: String, artist: String, durationMs: Long, artwork: String? = null) {
+        playNativeStream(videoId, title, artist, durationMs, artwork)
     }
 
     /** Replays the song that failed to open, after the diagnostic card asked for it. */
@@ -1874,25 +1883,7 @@ class AppState {
             return
         }
         remoteJob?.cancel()
-        playEmbed(videoKey, remote.title, remote.artist, remote.durationMs, remote.artworkUrl)
-        // The history and the counters are still the app's: the video only provides sound.
-        val track = Track(
-            id = remote.id,
-            title = remote.title,
-            artist = remote.artist,
-            album = remote.album,
-            durationMs = remote.durationMs,
-            path = "embed:$videoKey",
-            artwork = remote.artworkUrl,
-            addedAt = 0,
-            updatedAt = remote.updatedAt
-        )
-        playStartedAt = System.currentTimeMillis()
-        playStartedTrack = track
-        mutate { data ->
-            data.copy(recent = (listOf(track.id) + data.recent.filterNot { it == track.id }).take(24))
-        }
-        registerPlay(track)
+        playNativeStream(videoKey, remote.title, remote.artist, remote.durationMs, remote.artworkUrl, customTrackId = remote.id)
     }
 
     // -------------------------------------------------------------- playlists

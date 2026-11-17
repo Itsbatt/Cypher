@@ -1,199 +1,192 @@
-# Cypher — Documentació Tècnica Integral i Historial Complet del Projecte
+# Cypher — Documentación Técnica Integral y Arquitectura del Proyecto
 
-> **Nom Oficial de l'Aplicació:** Cypher  
-> **Identificador del Paquet (Package Name):** `com.cypher.music`  
-> **Versió:** 1.0.9 (Build 12) — Codi Obert (GPL-3.0)
-> **Ruta Local del Projecte:** `C:\Users\bat\.gemini\antigravity\scratch\meloflow`
-> **Target SDK:** Android 16 (API 36) | **Min SDK:** Android 13 (API 33)
-> **Llenguatges i Runtimes:** Kotlin 2.2, Java 21, Jetpack Compose (Material 3), AndroidX Media3, AGSL Shaders, Room v3
-> **Dispositiu de Validació:** OnePlus Nord 3 5G (`CPH2579`, Android 16 / SDK 36, 720x1612)
-> **Data de Consolidació:** 07 de Novembre de 2026  
-
----
-
-## 1. Visió General i Filosofia de Disseny
-
-**Cypher** és un reproductor de música d'alta fidelitat i client de streaming híbrid per a Android 13+ (API 33 a 36).
-El projecte neix amb la premissa d'unificar en una única experiència d'usuari fluida, privada i estèticament moderna tant la música desada localment al dispositiu com el catàleg global de **YouTube Music / InnerTube**, aprofitant al 100% l'acceleració per maquinari de la GPU mitjançant **AGSL (Android Graphics Shading Language)** i el motor d'àudio professional **AndroidX Media3**.
-
-### Pilars Arquitectònics
-1. **Streaming Híbrid Resilient:** Resolució directa d'àudio en streaming a través de yt-dlp i endpoints natius d'InnerTube TVHTML5, combinat amb telemetria passiva per detectar bloquejos HTTP 403 / protocols SABR de Google.
-2. **Base de Dades Room v3 Unificada:** Esquema relacional monousuari amb relacions `@Relation` / `@Junction` (`PlaylistWithTracks`), `TypeConverters` i gestió eficient d'analítiques d'escolta i cerques recents.
-3. **Descàrregues ocultes (Scoped Storage):** Emmagatzematge de fitxers pesats (FLAC, WAV, ALAC, Opus) dins l'espai propi de l'app, prioritzant targetes MicroSD externes muntades, amb generació automàtica del fitxer `.nomedia`. No hi ha xifrat: és una carpeta oculta a la galeria, no una caixa forta.
-4. **Interfície Gràfica Líquida (AGSL Liquid Glass):** Shaders orgànics directament executats a la GPU amb aberració cromàtica i dispersió de color basada en la caràtula de l'àlbum (AndroidX Palette).
-5. **Lletres en Viu Sincronitzades:** Integració amb la xarxa de LRCLIB per a seguiment dinàmic del text línia a línia (`CypherLyricsSheet`).
-6. **Integració Automobilística:** Servei en primer pla amb suport natiu per a Android Auto mitjançant `MediaLibraryService`.
+> **Nombre Oficial:** Cypher  
+> **Identificador de Paquete (Package Name):** `com.cypher.music`  
+> **Versión Actual Android:** **1.5.0** (`versionCode 21`)  
+> **Versión Actual Cypher PC:** **1.1.0** (`Cypher-1.1.0.msi` / Portable)  
+> **Licencia:** Código Abierto (GNU General Public License v3.0 — GPL-3.0)  
+> **Compatibilidad Android:** Android 10+ (API 29 a API 36) | `minSdk = 29`, `targetSdk = 36`, `compileSdk = 36`  
+> **Compatibilidad PC:** Windows 10 / 11 (64-bit)  
+> **Runtimes y Lenguajes:** Kotlin 2.3.20 (Android) / Kotlin 2.0.21 (Desktop), Java 17 toolchain, Jetpack Compose, Material 3, AndroidX Media3, AGSL/SkSL Shaders, Room v9  
 
 ---
 
-## 2. Historial Evolutiu i Fases del Projecte
+## 1. Visión General y Filosofía de Diseño
 
-### Fase 1: Gènesi i Rèplica Visual (Apple Music iOS 18)
-- El projecte va començar com una recreació d'alta fidelitat de la interfície d'Apple Music per a Android (`com.example.applemusic` / `apple-music`), implementant tabs d'Inici, Explorar, Ràdio, Biblioteca i Cerca.
-- Utilitzava una base de dades SQLite nativa manual (`apple_music_playlists.db`) amb un `PlaylistDatabaseHelper.kt` i suport per a múltiples usuaris locals (`UserManager.kt`).
-- Compatibilitat retroactiva des d'Android 9 (API 28) utilitzant degradats radials estàndard com a alternativa per a dispositius sense suport de shaders AGSL.
+**Cypher** es un reproductor de música de alta fidelidad y cliente de streaming híbrido y resiliente para **Android** y **Windows**.
+El proyecto nace con el objetivo de unificar en una experiencia visualmente cuidada, fluida y orientada a la privacidad tanto la biblioteca de música local del usuario como el catálogo de **YouTube Music / InnerTube**.
 
-### Fase 2: Motor de Streaming i Integració de Serveis Externs
-- Incorporació de binaris natius de `yt-dlp` i `ffmpeg` a través de les llibreries `youtubedl-android` i `ffmpeg-android` per a descàrrega i extracció d'àudio.
-- Implementació de suport per a Last.fm (`ScrobbleManager`), resolució de lletres sincronitzades amb `LrcLibService`, generació i lectura de codis QR per compartir llistes de reproducció (`QrCodeGenerator`, Google Code Scanner).
-- Creació del servei d'àudio en segon pla `PlaybackService` (`MediaLibraryService`) per garantir la reproducció amb la pantalla apagada.
-
-### Fase 3: Refactorització Arquitectònica Profunda (Cypher Rebranding)
-- **Eliminació del Suport Multiusuari:** L'aplicació es reconverteix en una eina personal per a un sol usuari; s'elimina la pantalla de selecció de perfils (`AuthScreen.kt`) i les entitats d'usuari.
-- **Migració a Room v3:** Eliminació definitiva de l'arxiu SQLite heretat `apple_music_playlists.db`. Creació de `CypherDatabase` en Java (garantint compatibilitat amb AGP 9 i Kotlin 2.2) amb 6 taules relacionals:
-  - `playlists`
-  - `tracks`
-  - `playlist_tracks_crossref`
-  - `recently_played`
-  - `playback_analytics`
-  - `search_queries`
-- **Mapejadors Idiomàtics Kotlin:** Implementació de `RoomMappers.kt` per convertir de forma transparent entre les entitats de Room i els models de domini de l'aplicació.
-
-### Fase 4: Migració de les descàrregues ocultes a Scoped Storage (MicroSD)
-- Modificació de `MediaCacheManager.kt` per abandonar l'emmagatzematge intern de l'aplicació (`context.filesDir`) i utilitzar `ContextCompat.getExternalFilesDirs(context, null)`.
-- Detecció automàtica de targetes MicroSD externes extraïbles (`Environment.isExternalStorageRemovable`) per desar els formats pesats (FLAC/WAV).
-- Generació garantida de l'arxiu de privadesa `.nomedia` i migració automàtica de fitxers heretats.
-
-### Fase 5: Resiliència del Motor de Streaming i Telemetria
-- Creació de `StreamingTelemetry.kt`: supervisor reactiu de la salut de la connexió que detecta anomalies com ara errors HTTP 403 o talls del protocol SABR.
-- Estratègia de fallback en 4 nivells a `YouTubeRepository.kt` i `MusicPlayerManager.kt`:
-  - **Tier 1:** Clients mòbils yt-dlp (`android`, `ios`, `tv`).
-  - **Tier 2:** Clients alternatius yt-dlp (`tv_embedded`, `mweb`).
-  - **Tier 3:** Endpoint JSON directe d'InnerTube TVHTML5.
-  - **Tier 4:** Conmutació al reproductor WebView IFrame oficial en cas de bloqueig persistent.
-
-### Fase 6: Modernització de l'SDK (API 33+) i Shaders Natius
-- S'eleva `minSdkVersion` de 28 a **33 (Android 13)**, permetent eliminar tot el codi de suport per a versions antigues.
-- Eliminació de `FallbackGradientRenderer`; el shader `LiquidGlass.kt` s'executa exclusivament a través de `RuntimeShader` de la GPU amb aberració cromàtica nativa.
-- Introducció d'un limitador temporal de 45 ms (`fireThrottledHaptic`) al `CypherScrubber` per evitar la saturació del fil principal i dels motors de vibració hàptica.
-
-### Fase 7: Nova Identitat Visual Cypher (Lavanda Fosc)
-- Abandonament del disseny vermell d'Apple Music.
-- Establiment del color d'accent oficial **Lavanda Cypher (`#9D7BB0`)**, amb fons ultra-fosc optimitzat per a pantalles OLED (`#0D0B11`) i targetes en `#16141D`.
-- Creació de `CypherTheme` i actualització de recursos natius del sistema.
-
-### Fase 8: Resolució de Bugs de Progrés, Lletres i Cançons Clàssiques
-- **Correcció del Salt de la Barra de Progrés:** Es va detectar que, en reproduir vídeos de YouTube, el seguiment local `startLocalProgressTracker()` continuava llegint la posició de l'arxiu silent d'ExoPlayer (`silence.wav`, 0 a 5 s) mentre que el reproductor de YouTube emetia la posició real (ex. 40 s), provocant salts continus cada 300 ms i moviments erràtics a les lletres. S'ha encapsulat el seguiment perquè només s'executi en pistes locals, resolent el problema al 100%.
-- **Eliminació de Cançons Clàssiques:** S'ha retirat el mock de Beethoven, Satie i Chopin a `LocalMusicRepository.kt` i s'han afegit consultes de purga a Room perquè les instal·lacions existents quedin netes.
-
-### Fase 9: Trasllat del Projecte i Preparació Codi Obert
-- El directori local es va traslladar de `apple-music` a **`cypher`**.
-- Actualització de `settings.gradle.kts` amb `rootProject.name = "Cypher"`.
-- Validació de compilació i desplegament en dispositiu físic real (**Samsung Galaxy S22**, Android 16 / SDK 36).
-- Preparació del repositori obert a GitHub sota la llicència GPL-3.0.
-
-### Fase 10: Cypher Wrapped i Resum Anual Estil Stories (v1.0.2)
-- **Ventana de Disponibilitat Estacional:** Resum anual restringit del 1 de desembre al 7 de gener per a màxima rellevància i netedat d'interfície.
-- **Pop-up Automàtic i Alarma del 31 de Desembre:** Desplegament automàtic en obrir l'app en temporada (amb control anti-intrusiu a `SharedPreferences`) i recordatori d'alarma exacta mitjançant `AlarmManager`.
-- **Interfície d'Històries Interactiva:** Disseny inspirat en Spotify Stories amb fons cinemàtic OLED dinàmic, podi de Top 5 cançons escalonat, targeta de dia pico d'escolta i diapositiva final consolidada amb controls tàctils i vibració hàptica.
-
-### Fase 11: Suite DSP d'Àudio, Gapless Pre-caching, Estabilització de Room per AGP 9 i Resolució d'Auto-Pausa
-- **Normalització de Volum (-14 LUFS):** Calibració amb `LoudnessEnhancer` a 600 mB a la sessió d'àudio activa, amb switch configurable a Ajustos.
-- **Equalitzador Gràfic DSP:** 5 bandes interactives, 8 presets calibrats i reforç de greus (`BassBoost`).
-- **Pre-caching Gapless:** Resolució automàtica en background de la URL d'InnerTube de la pista següent en arribar als 25s finals de la cançó en curs per a salts instantanis.
-- **Resolució del Crash de Room en Dispositius Reals (Samsung):** Es va detectar que AGP 9.0.1 utilitza `builtInKotlin` per defecte, impedint que `annotationProcessor` generi `CypherDatabase_Impl` si la base de dades es defineix en Kotlin sense KSP. S'ha estabilitzat l'arquitectura de Room utilitzant Java amb processador d'anotacions natiu i wrappers idiomàtics en Kotlin (`CypherDatabase.kt`, `RoomMappers.kt`), assegurant la creació de `CypherDatabase_Impl` i eliminant el crash d'arrencada al 100%.
-- **Correcció del Bug d'Auto-Pausa:** Filtratge d'estats transitoris `PAUSED` emesos per l'iframe de YouTube durant la descàrrega/càrrega de vídeo (finestra de 3000 ms) i watchdog de buffer proactiu a 4s.
-
-### Fase 12: Estabilització de Descàrregues i Indicador Wave (v1.0.5)
-- **So de les descàrregues:** en reproduir streaming, ExoPlayer baixava el volum a 0 pel portador silenciós; el volum només es restablia per a pistes `LOCAL`, de manera que una descàrrega (tipus `YOUTUBE` reproduïda des del fitxer) quedava muda mentre la interfície avançava. S'ha centralitzat la decisió en `PlaybackOutputPolicy` (local o offline → ExoPlayer) i es restaura el volum en entrar en una pista offline.
-- **Indicador Wave:** una branca dibuixava les barres animades a qualsevol pista amb durada. Ara l'estat surt de `MusicPlayerManager` via `TrackRowPlayback`: només la pista que sona mostra animació; en pausa es manté el ressaltat i es mostra la durada.
-- **Descàrregues robustes:** validació de la signatura del contenidor (MP4/M4A, MP3, FLAC, OGG, WAV, WebM, AAC), rebuig de respostes HTTP que no siguin d'àudio i esborrat també per a FLAC/WAV.
-
+### Principios Fundamentales
+1. **Streaming Híbrido Resiliente:** Resolución directa de audio en streaming mediante yt-dlp y llamadas nativas a InnerTube TVHTML5, respaldado por telemetría reactiva ante bloqueos HTTP 403 o anomalías del protocolo SABR, con fallback automático al reproductor iframe oficial embebido.
+2. **Sin Cuentas Obligatorias ni Nube Externa:** Funcionalidad completa fuera de línea; sin registro forzado ni almacenamiento de datos privados en servidores de terceros.
+3. **Copia de Seguridad Portátil (ZIP con Letras):** Exportación completa de listas de reproducción, favoritos, configuración y letras descargadas en un único archivo ZIP en el almacenamiento local, compatible directamente con Cypher PC para migración inmediata entre plataformas.
+4. **Almacenamiento Local Protegido (Scoped Storage):** Descargas en memoria interna o tarjetas MicroSD extraíbles con protección mediante archivo `.nomedia`, manteniendo los archivos fuera del índice de la galería y reproductores estándar del sistema.
+5. **Aceleración por GPU (Liquid Glass AGSL / SkSL):** Shaders de cristal líquido dinámicos procesados en tiempo real por la GPU, calibrados según la paleta cromática de la carátula activa y respetuosos con las opciones de accesibilidad de reducción de movimiento (*Reduced Motion*).
+6. **Letras Sincronizadas y Estudio de Tarjetas:** Consulta dinámica con LRCLIB, almacenamiento en caché persistente (`LyricsStore`) y editor integrado para generar tarjetas estilizadas en 1080 px (Historia 1080×1920 o Cuadrado 1080×1080).
+7. **Integración con Sistemas de Automoción:** Soporte nativo para Android Auto a través de `MediaLibraryService` en AndroidX Media3.
+8. **Cypher PC Multiplataforma:** Aplicación de escritorio moderna construida sobre Jetpack Compose for Desktop, con reproducción de YouTube mediante Chromium embebido (JCEF), códecs nativos mediante JavaFX Media, shaders SkSL y personalización completa de superficies y colores.
 
 ---
 
-### Fase 13: Compartir lletres, Wrapped anual ampliat, portades maxres i recomanacions (v1.0.9)
+## 2. Historial Evolutivo y Fases del Proyecto
 
-- **Compartir fragments de lletres:** selecció de fins a 6 línies dins la fulla de
-  lletres, tres dissenys propis (Minimal, Portada, Tipografia) i dos formats
-  (Història 1080×1920, Quadrat 1080×1080). El render és un `Canvas` natiu a 1080 px
-  (`LyricsCardRenderer`), no una captura de Compose; la previsualització fa servir
-  el mateix renderer a 480 px, així que és WYSIWYG. Exportació a `cache/shared` i
-  `ACTION_SEND` amb FileProvider. El peu de la targeta limita el contingut a un
-  fragment i n'atribueix l'autoria.
-- **Wrapped anual:** el rollup `playback_daily` incorpora `album` i `genre`
-  (migració Room 6→7, sense pèrdua de dades). Sis diapositives: minuts, top 5
-  cançons, top 5 artistes amb percentatge i barres, top 5 àlbums, gèneres i
-  cançó més repetida, i resum. Els àlbums i gèneres surten de dades reals; si la
-  biblioteca no n'exposa, es mostra un estat honest en lloc d'inventar-los.
-- **Portades:** `YouTubeArtwork` demana `maxresdefault` (1280×720) i un
-  interceptor de Coil reintenta amb `hqdefault` quan el vídeo no té maxres. Un
-  únic `ImageLoader` a `CypherApplication` (memòria 20 %, disc 192 MB) i
-  `PaletteExtractor` amb caché acotada de 32 entrades; abans es creava un loader
-  per pista i el mapa creixia sense límit.
-- **Recomanacions:** motor existent sense serveis nous, amb deduplicació global,
-  exclusió del que s'acaba d'escoltar, gèneres reals de la biblioteca i estat
-  buit quan no hi ha historial. «Top Picks for You» passa a «Elegit per a tu».
-- **Galeria:** les targetes de lletres i de Wrapped es poden desar a
-  `Pictures/Cypher` amb MediaStore, a més de compartir-les; abans només vivien a
-  la memòria cau.
-- **Compartir Wrapped:** `WrappedCardRenderer` + `WrappedShareSheet` reutilitzen
-  el llenguatge visual de les targetes, amb formats Història i Quadrat, desat a
-  la galeria i enviament pel menú natiu.
-- **Metadades reals:** en pistes de YouTube, l'àlbum es llegeix de la descripció
-  pública del vídeo (`YouTubeMetadata`, amb memòria cau per id). El gènere només
-  s'omple quan la font el declara; si no, es manté l'estat honest.
-- **Selecció per arrossegament:** mantenir premuda una línia i arrossegar estén
-  el bloc, sempre contigu i amb el topall de 6 línies.
-- **Reparacions:** menú contextual del reproductor («Reproduir a continuació» i
-  «Afegir a la cua» tenien lambdas buides), etiqueta accessible del botó de cua
-  («Cua de reproducció»), any del Wrapped derivat de la data real en lloc d'un
-  valor fix, i avís «Condició sempre certa» a Ajustos.
+### Fase 1: Génesis e Interfaz Inicial
+- Creación del prototipo con exploración de pestañas (Inicio, Explorar, Biblioteca, Buscar).
+- Uso inicial de base de datos SQLite manual y compatibilidad retroactiva con gradientes estáticos en dispositivos sin soporte de shaders nativos.
 
-## 3. Arquitectura del Sistema i Tecnologies
+### Fase 2: Motor de Streaming y Servicios Externos
+- Integración de binarios nativos de `yt-dlp` y `ffmpeg` mediante `youtubedl-android`.
+- Incorporación de letras sincronizadas con LRCLIB (`LrcLibService`), generación/lectura de códigos QR para compartir listas de reproducción sin servidores y servicio de reproducción en segundo plano `PlaybackService`.
+
+### Fase 3: Reestructuración Arquitectónica y Rebranding (Cypher)
+- Reorientación completa a aplicación personal monousuario, simplificando la gestión de estado y persistencia.
+- Migración definitiva a **Room Database** con relaciones tipadas `@Relation` / `@Junction`, conversores de tipo y mapeadores idiomáticos entre entidades de Room y modelos de dominio.
+
+### Fase 4: Descargas Ocultas en Almacenamiento Aislado (Scoped Storage)
+- Implementación de `MediaCacheManager` utilizando `ContextCompat.getExternalFilesDirs`.
+- Detección automática y priorización de tarjetas MicroSD extraíbles para formatos de audio de alta resolución (FLAC/WAV).
+- Creación garantizada del archivo `.nomedia`.
+
+### Fase 5: Resiliencia de Streaming y Telemetría en Red
+- Implementación de `StreamingTelemetry` para supervisión en vivo del estado de la conexión ante errores HTTP 403 o cortes SABR.
+- Sistema de resolución en 4 niveles (Tier 1: clientes móviles yt-dlp; Tier 2: clientes alternativos; Tier 3: InnerTube TVHTML5 JSON directo; Tier 4: conmutación transparente al iframe oficial de YouTube).
+
+### Fase 6: Shaders Nativos AGSL y Optimización Háptica
+- Implementación de `LiquidGlass.kt` mediante `RuntimeShader` de GPU con aberración cromática, refracción cáustica y cálculo adaptativo de color.
+- Throttling háptico a 45 ms (`fireThrottledHaptic`) en el control de posición (*scrubber*) para evitar sobrecarga del hilo principal y de los actuadores de vibración.
+
+### Fase 7: Identidad Visual Oficial (Lavanda Cypher)
+- Definición de la paleta oficial: acento **Lavanda Cypher (`#9D7BB0`)**, fondo OLED puro (`#0D0B11`) y tarjetas (`#16141D`).
+- Soporte para personalización de paleta en Ajustes (acentos, fondos y estilos de superficie).
+
+### Fase 8: Sincronización de Progreso y Limpieza de Pistas
+- Corrección de desincronización entre el reproductor de YouTube y el rastreo de progreso local de ExoPlayer, evitando saltos de la barra de reproducción y desplazamientos erráticos de letras.
+- Limpieza de datos heredados y purga de pruebas en base de datos.
+
+### Fase 9: Consolidación Open Source
+- Publicación bajo licencia GPL-3.0 en GitHub (`https://github.com/Itsbatt/Cypher`).
+- Configuración de pipelines de integración continua en GitHub Actions.
+
+### Fase 10: Cypher Wrapped Anual Estilo Historias
+- Módulo de resumen anual disponible estacionalmente (diciembre-enero) y accesible bajo demanda.
+- Experiencia interactiva de diapositivas estilo historias: minutos totales, podio Top 5 canciones, artistas con porcentaje de tiempo, álbumes y géneros reales.
+- Exportación en tarjeta visual de alta resolución para compartir en redes o guardar en la galería.
+
+### Fase 11: Suite DSP, Normalización -14 LUFS y Gapless Pre-caching
+- Normalización de volumen mediante `LoudnessEnhancer` fijado a -14 LUFS.
+- Ecualizador gráfico de 5 bandas interactivas con presets calibrados y realce de graves (*Bass Boost*).
+- Pre-caching gapless: resolución anticipada de la URL de streaming en los últimos 25 segundos de la pista en curso.
+- Estabilización del compilador de Room en AGP 9 mediante clases base Java y adaptadores Kotlin.
+
+### Fase 12: Estabilización de Descargas e Indicador de Onda
+- Centralización de decisiones de salida en `PlaybackOutputPolicy`: restauración de volumen al alternar entre pistas en streaming y archivos descargados sin conexión.
+- Indicador animado de onda sonora restringido exclusivamente a la canción activa en reproducción.
+- Validación de firmas binarias de audio (MP4/M4A, MP3, FLAC, OGG, WAV, WebM, AAC) para garantizar descargas íntegras.
+
+### Fase 13: Compartición de Letras, Portadas Maxres y Recomendaciones
+- Estudio de tarjetas de letras: selección de hasta 6 versos, 3 plantillas tipográficas, renderizado en Canvas nativo a 1080 px y exportación directa a `Pictures/Cypher` o envío vía `ACTION_SEND`.
+- Portadas en alta resolución con `YouTubeArtwork` solicitando `maxresdefault` (1280×720) y fallback automático a `hqdefault`, con instancia compartida de `ImageLoader` de Coil y caché acotada de paletas.
+- Motor de recomendaciones local basado en historial real de reproducción sin servicios externos.
+
+### Fase 14: Cypher 1.5.0 — Respaldo ZIP con Letras, Atajos y Temporizador con Fade
+- **Respaldo Integral en ZIP:** Generación de un archivo comprimido en `Descargas/Cypher` conteniendo la base de datos de listas, canciones favoritas, configuraciones y la totalidad de letras sincronizadas descargadas (`LyricsStore`).
+- **Base de Datos Room v9:** Migración declarada y segura desde versiones anteriores, eliminando dependencias de contabilidad externas y asegurando el orden correcto de canciones en listas mediante tabla de cruce relacional.
+- **Temporizador de Sueño con Fundido:** Desvanecimiento progresivo del volumen durante los últimos 30 segundos del temporizador antes de la detención completa.
+- **Atajos de Lanzador:** Acceso rápido en el icono de la aplicación (Favoritas y Última sesión activa).
+- **Portadas Propias de Playlist:** Selector nativo de imágenes desde la galería del dispositivo para personalizar carátulas de listas de reproducción.
+- **Gestión de Almacenamiento en Ajustes:** Indicador del espacio ocupado por descargas locales y opción de borrado masivo.
+
+### Fase 15: Cypher PC 1.0.0 y PC 1.1.0 — Llega la Versión de Escritorio
+- **Arquitectura de Escritorio:** Aplicación nativa para Windows con Compose for Desktop, Java 17 y Kotlin 2.0.21.
+- **Fondo Líquido Animado (SkSL):** Traslado de la experiencia visual de cristal líquido a PC con shaders SkSL de tres campos ondulantes, reflejos cáusticos y tonos derivados de la carátula.
+- **Streaming de YouTube con Chromium Embebido (JCEF 122.1.10):** Las canciones de YouTube se transmiten de forma nativa mediante un reproductor iframe en una ventana sincronizada, conservando barra de tiempo, carátula y letras en vivo sin necesidad de descargar el archivo. Fallback transparente a descarga en caso de restricciones de inserción.
+- **Letras Personalizables:** Selección de color adaptable (acento del tema, dominante de portada o selector libre HSV/Hex) y efectos visuales animados (*Líquido* y *Neón*).
+- **Vista Ampliada con Controles Superpuestos:** Presentación de carátula de gran tamaño con barra de tiempo y botones de reproducción flotantes al pasar el puntero, además de pausa/reanudación mediante clic directo en la imagen.
+- **Personalización Integral de Paleta:** Edición en vivo de colores de fondo, paneles, tarjetas, bordes, píldoras y textos.
+- **Empaquetado Nativo:** Distribución mediante instalador por usuario MSI (`Cypher-1.1.0.msi`) y paquete portable sin requisitos previos (`Cypher-1.1.0-windows-portable.zip`).
+
+---
+
+## 3. Arquitectura del Sistema
 
 ```
-+--------------------------------------------------------------------------+
-|                             CAPA DE PRESENTACIÓ                          |
-|  Jetpack Compose + Material 3 + Shaders AGSL (GPU) + StateFlow Reactiu   |
-|  MainScreen | ListenNow | Browse | Library | Search | CypherNowPlayingModal|
-+--------------------------------------------------------------------------+
-                                     |
-                                     v
-+--------------------------------------------------------------------------+
-|                             CAPA DE VIEWMODELS                           |
-|  MainViewModel | PlayerViewModel | LibraryViewModel | YouTubeViewModel   |
-+--------------------------------------------------------------------------+
-                                     |
-                                     v
-+--------------------------------------------------------------------------+
-|                       REPRODUCTOR I MOTOR MULTIMÈDIA                     |
-|  MusicPlayerManager (Singleton)                                          |
-|  - AndroidX Media3 (ExoPlayer) -> Àudio Local, FLAC/WAV i descàrregues ocultes  |
-|  - YouTube Player Engine (IFrame + Fallback URL Directe)                 |
-|  - PlaybackService (MediaLibraryService / Android Auto)                  |
-|  - MediaCacheManager (Scoped Storage / MicroSD amb .nomedia)             |
-+--------------------------------------------------------------------------+
-                                     |
-                                     v
-+--------------------------------------------------------------------------+
-|                             CAPA DE DADES                                |
-|  - Room v3 (CypherDatabase): Playlists, Tracks, Recents, Analytics, Search |
-|  - MediaStore Resolver: Exploració de pistes d'àudio locals              |
-|  - YouTubeRepository: InnerTube TVHTML5, yt-dlp, DoH Cloudflare          |
-|  - LrcLibService: Lletres sincronitzades (.lrc)                          |
-+--------------------------------------------------------------------------+
+===================================================================================
+                               CYPHER ARQUITECTURA
+===================================================================================
+
+[ ANDROID ]                                              [ DESKTOP / PC ]
+--------------------------------------------------      ---------------------------
+Jetpack Compose + Material 3 + AGSL Shaders              Compose for Desktop (SkSL)
+Navigation 3 (Runtime & UI)                              Ventana con DWM Oscuro Nativo
+--------------------------------------------------      ---------------------------
+                       │                                              │
+                       ▼                                              ▼
+┌──────────────────────────────────────────────┐        ┌───────────────────────────┐
+│              CAPA DE VIEWMODELS              │        │       DESKTOP STATE       │
+│ MainViewModel · PlayerViewModel              │        │ PlayerState · ThemeState  │
+│ LibraryViewModel · YouTubeViewModel          │        │ LibraryState · LyricsState│
+└──────────────────────┬───────────────────────┘        └─────────────┬─────────────┘
+                       │                                              │
+                       ▼                                              ▼
+┌──────────────────────────────────────────────┐        ┌───────────────────────────┐
+│         MOTOR MULTIMEDIA Y REPRODUCCIÓN      │        │      MOTOR DE AUDIO PC    │
+│ MusicPlayerManager (Singleton)               │        │ DesktopPlayerManager      │
+│ - AndroidX Media3 (ExoPlayer) para Local     │        │ - JavaFX Media (Local)    │
+│ - IFrame Embebido + Streaming Resiliente     │        │ - JCEF Chromium (YouTube) │
+│ - PlaybackService (Android Auto / Notif.)    │        │ - Sincronizador de Letras │
+│ - Suite DSP: -14 LUFS, Ecualizador, Fade     │        │                           │
+└──────────────────────┬───────────────────────┘        └─────────────┬─────────────┘
+                       │                                              │
+                       ▼                                              ▼
+┌──────────────────────────────────────────────┐        ┌───────────────────────────┐
+│                CAPA DE DATOS                 │        │      DATOS DE PC          │
+│ - Room Database v9 (cypher_room.db)          │        │ - %APPDATA%\Cypher Desktop│
+│ - Scoped Storage (MicroSD / .nomedia)        │        │   library.json (Local)    │
+│ - LyricsStore (LRCLIB caché persistente)     │        │ - Importador ZIP Android  │
+│ - YouTubeRepository (InnerTube, yt-dlp, DoH) │        │ - Generador QR (ZXing)    │
+└──────────────────────────────────────────────┘        └───────────────────────────┘
 ```
 
 ---
 
-## 4. Requisits de Compilació i Instruccions d'Entorn
+## 4. Instrucciones de Compilación y Entorno
 
-- **Java Development Kit:** JDK 21 estricte.
-- **Android SDK:** Compile SDK 36, Target SDK 36, Min SDK 33.
-- **Gradle:** Gradle 9.1 amb Android Gradle Plugin (AGP) 9.x.
-- **Comanda de Compilació (Windows):**
-  ```powershell
-  .\gradlew.bat assembleDebug
-  ```
-- **Instal·lació per ADB:**
-  ```powershell
-  adb install -r -d app\build\outputs\apk\debug\app-debug.apk
-  ```
+### Requisitos del Sistema
+- **Java:** JDK 17 o superior (Adoptium Temurin 17 recomendado).
+- **Android SDK:** `compileSdk 36`, `targetSdk 36`, `minSdk 29`.
+- **Windows:** Windows 10/11 para compilar o ejecutar Cypher PC.
+
+### Compilar Android (APK)
+```powershell
+# Compilación de la variante release
+.\gradlew.bat :app:assembleRelease
+
+# Compilación de depuración
+.\gradlew.bat :app:assembleDebug
+
+# Despliegue en dispositivo por ADB
+adb install -r app\build\outputs\apk\release\app-arm64-v8a-release.apk
+```
+
+### Compilar Cypher PC (Desktop)
+```powershell
+cd desktop
+
+# Ejecutar localmente
+.\gradlew.bat run
+
+# Ejecutar tests unitarios
+.\gradlew.bat test
+
+# Generar instalador MSI
+.\gradlew.bat packageMsi
+
+# Generar versión portable (build\dist\Cypher-1.1.0-windows-portable.zip)
+.\gradlew.bat packagePortable
+```
 
 ---
 
-## 5. Llicència de Codi Obert
+## 5. Licencia
 
-Aquest projecte es distribueix sota els termes de la llicència **GNU General Public License v3.0 (GPL-3.0)**.
-Qualsevol pot inspeccionar, modificar i distribuir el codi sempre que mantingui la mateixa llibertat i llicència per als usuaris finals.
+Cypher es software libre publicado bajo la **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para los términos legales completos.

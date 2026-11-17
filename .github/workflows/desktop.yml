@@ -88,3 +88,6 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" \
             desktop/build/dist/Cypher-*-windows-portable.zip \
             desktop/build/compose/binaries/main/msi/*.msi --clobber
+        # The runner's default shell is PowerShell; this step is the same bash script
+        # the Android workflow already runs, so it needs bash explicitly.
+        shell: bash

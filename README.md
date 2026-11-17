@@ -7,7 +7,7 @@
 [![Owner: itsbatt](https://img.shields.io/badge/Owner-itsbatt-7952b3.svg)](https://github.com/Itsbatt)
 [![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20%7C%20Windows-green.svg)](https://github.com/Itsbatt/Cypher)
 [![Android Version](https://img.shields.io/badge/Android-v1.5.1-purple.svg)](https://github.com/Itsbatt/Cypher/releases/tag/v1.5.1)
-[![PC Version](https://img.shields.io/badge/PC-v1.1.1-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)
+[![PC Version](https://img.shields.io/badge/PC-v1.2.0-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.2.0)
 [![Language](https://img.shields.io/badge/Language-Kotlin%20%7C%20Java%2017-orange.svg)](https://kotlinlang.org)
 
 ---

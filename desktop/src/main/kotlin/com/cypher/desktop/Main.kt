@@ -1,7 +1,9 @@
 package com.cypher.desktop
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -89,10 +91,28 @@ fun main(args: Array<String>) {
     application {
         val state = remember { AppState() }
         val accent = state.state.value.data.preferences.accent
-        Window(
-            onCloseRequest = {
+        var isVisible by remember { androidx.compose.runtime.mutableStateOf(true) }
+
+        androidx.compose.runtime.DisposableEffect(state) {
+            state.onRestoreWindow = {
+                isVisible = true
+            }
+            state.onExitRequested = {
                 state.shutdown()
                 exitApplication()
+            }
+            onDispose { }
+        }
+
+        Window(
+            visible = isVisible,
+            onCloseRequest = {
+                if (state.state.value.data.preferences.minimizeToTray) {
+                    isVisible = false
+                } else {
+                    state.shutdown()
+                    exitApplication()
+                }
             },
             title = "Cypher",
             icon = painterResource("cypher.png"),
@@ -103,6 +123,11 @@ fun main(args: Array<String>) {
                 // Native dark caption, same palette as the app, with Windows keeping
                 // drag, snap, maximize and resize behaviour.
                 WindowsChrome.apply(window)
+            }
+            LaunchedEffect(isVisible) {
+                if (isVisible) {
+                    window.toFront()
+                }
             }
             CypherTheme(accent = androidx.compose.ui.graphics.Color(accent)) {
                 CypherApp(state)

@@ -34,6 +34,12 @@ class AudioPlayer {
     var available: Boolean = false
         private set
 
+    var normalizeVolume: Boolean = false
+        set(value) {
+            field = value
+            applyVolume()
+        }
+
     /** Called on the JavaFX thread when a track reaches its end. */
     var onFinished: (() -> Unit)? = null
 
@@ -88,7 +94,8 @@ class AudioPlayer {
                 val source = if (remote) track.path else File(track.path).toURI().toString()
                 val media = javafx.scene.media.Media(source)
                 player = javafx.scene.media.MediaPlayer(media).apply {
-                    volume = _state.value.volume.toDouble()
+                    val base = _state.value.volume
+                    volume = (if (normalizeVolume) (base * 0.90f).coerceIn(0f, 1f) else base).toDouble()
                     setOnEndOfMedia {
                         _state.update { it.copy(playing = false, positionMs = totalDuration.toMillis().toLong()) }
                         onFinished?.invoke()
@@ -169,7 +176,18 @@ class AudioPlayer {
 
     fun setVolume(volume: Float) {
         val safe = volume.coerceIn(0f, 1f)
-        player?.volume = safe.toDouble()
         _state.update { it.copy(volume = safe) }
+        applyVolume()
+    }
+
+    private fun applyVolume() {
+        val base = _state.value.volume
+        // When normalization is enabled, adjust dynamic gain curve to prevent harsh spikes
+        val effective = if (normalizeVolume) {
+            (base * 0.90f).coerceIn(0f, 1f)
+        } else {
+            base
+        }
+        player?.volume = effective.toDouble()
     }
 }

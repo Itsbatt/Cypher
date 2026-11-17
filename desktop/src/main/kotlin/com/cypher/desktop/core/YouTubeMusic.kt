@@ -311,10 +311,13 @@ object YouTubeMusic {
 
     fun watchUrl(videoId: String) = "https://music.youtube.com/watch?v=$videoId"
 
-    private fun requireBinary(configured: String?): File =
-        binary(configured) ?: throw YouTubeMusicException(
-            "Falta yt-dlp. Instálalo desde esta pantalla o define CYPHER_YTDLP con su ruta."
-        )
+    private fun requireBinary(configured: String?): File {
+        val found = binary(configured)
+        if (found != null) return found
+        // Automatically download yt-dlp if not installed so user experiences zero friction
+        return runCatching { install() }.getOrNull()
+            ?: throw YouTubeMusicException("No se encontró yt-dlp y falló la descarga automática. Revisa la conexión.")
+    }
 
     private fun run(bin: File, args: List<String>, timeoutSeconds: Long): String {
         val process = ProcessBuilder(listOf(bin.absolutePath) + args)

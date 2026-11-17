@@ -176,6 +176,11 @@ class AppState {
     val playback = player.state
     /** Real Windows media session; silently unavailable outside Windows. */
     private val smtc = com.cypher.desktop.player.SmtcBridge()
+    val trayBridge = com.cypher.desktop.ui.SystemTrayBridge()
+    private val globalHotkeys = com.cypher.desktop.player.GlobalHotkeys()
+    var onRestoreWindow: (() -> Unit)? = null
+    var onExitRequested: (() -> Unit)? = null
+
     private var remoteJob: Job? = null
     private var embedJob: Job? = null
     private var resolveJob: Job? = null
@@ -186,6 +191,35 @@ class AppState {
     private var playStartedTrack: Track? = null
 
     init {
+        val prefs = _state.value.data.preferences
+        player.normalizeVolume = prefs.normalizeVolume
+        com.cypher.desktop.player.DiscordRpc.enabled = prefs.discordRpc
+        com.cypher.desktop.player.DiscordRpc.customClientId = prefs.discordClientId
+
+        // System Tray integration
+        trayBridge.onPlayPause = { togglePlayback() }
+        trayBridge.onNext = { playNext() }
+        trayBridge.onPrevious = { playPrevious() }
+        trayBridge.onRestore = { onRestoreWindow?.invoke() }
+        trayBridge.onExit = { onExitRequested?.invoke() }
+        trayBridge.initialize()
+
+        // Global hotkeys (Ctrl+Alt+Space, Ctrl+Alt+Arrows)
+        globalHotkeys.onPlayPause = { togglePlayback() }
+        globalHotkeys.onNext = { playNext() }
+        globalHotkeys.onPrevious = { playPrevious() }
+        globalHotkeys.onVolumeUp = {
+            val v = (_state.value.data.preferences.volume + 0.05f).coerceIn(0f, 1f)
+            setVolume(v)
+        }
+        globalHotkeys.onVolumeDown = {
+            val v = (_state.value.data.preferences.volume - 0.05f).coerceIn(0f, 1f)
+            setVolume(v)
+        }
+        if (prefs.globalHotkeys) {
+            globalHotkeys.start()
+        }
+
         player.onFinished = { playNext(auto = true) }
         YouTubeEmbed.onEnded = {
             scope.launch { playNext(auto = true) }
@@ -209,6 +243,8 @@ class AppState {
         scope.launch {
             playback.collect { state ->
                 smtc.update(state.track, state.playing, state.stopped, state.error != null, state.positionMs, state.durationMs)
+                com.cypher.desktop.player.DiscordRpc.update(state.track, state.playing, state.positionMs, state.durationMs)
+                trayBridge.updateTooltip(state.track, state.playing)
             }
         }
         _state.update { it.copy(ytDlpAvailable = YouTubeMusic.binary(it.data.preferences.ytDlpPath) != null) }
@@ -219,6 +255,9 @@ class AppState {
 
     /** Called when the window closes so Windows drops the media session. */
     fun shutdown() {
+        globalHotkeys.close()
+        trayBridge.close()
+        com.cypher.desktop.player.DiscordRpc.close()
         YouTubeWindow.close()
         smtc.close()
         player.stop()
@@ -1412,6 +1451,29 @@ class AppState {
     fun setVolume(volume: Float) {
         player.setVolume(volume)
         mutate { it.copy(preferences = it.preferences.copy(volume = volume)) }
+    }
+
+    fun setDiscordRpc(enabled: Boolean) {
+        com.cypher.desktop.player.DiscordRpc.enabled = enabled
+        mutate { it.copy(preferences = it.preferences.copy(discordRpc = enabled)) }
+    }
+
+    fun setDiscordClientId(id: String?) {
+        com.cypher.desktop.player.DiscordRpc.customClientId = id?.takeIf { it.isNotBlank() }
+        mutate { it.copy(preferences = it.preferences.copy(discordClientId = id?.takeIf { it.isNotBlank() })) }
+    }
+
+    fun setMinimizeToTray(enabled: Boolean) =
+        mutate { it.copy(preferences = it.preferences.copy(minimizeToTray = enabled)) }
+
+    fun setGlobalHotkeys(enabled: Boolean) {
+        if (enabled) globalHotkeys.start() else globalHotkeys.close()
+        mutate { it.copy(preferences = it.preferences.copy(globalHotkeys = enabled)) }
+    }
+
+    fun setNormalizeVolume(enabled: Boolean) {
+        player.normalizeVolume = enabled
+        mutate { it.copy(preferences = it.preferences.copy(normalizeVolume = enabled)) }
     }
 
     fun toggleShuffle() {

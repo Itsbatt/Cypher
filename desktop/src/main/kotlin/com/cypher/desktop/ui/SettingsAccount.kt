@@ -511,6 +511,112 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
             }
         }
 
+        SectionHeader("INTEGRACIÓN Y ESCRITORIO", accent)
+        SettingsCard {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Discord Rich Presence", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Muestra en Discord qué canción y artista estás escuchando en tiempo real.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.discordRpc) accent else CypherColors.Pill)
+                        .clickable { state.setDiscordRpc(!ui.data.preferences.discordRpc) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.discordRpc) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.discordRpc) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Minimizar a la bandeja al cerrar", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Al pulsar la 'X', Cypher se oculta en la bandeja junto al reloj para seguir sonando.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.minimizeToTray) accent else CypherColors.Pill)
+                        .clickable { state.setMinimizeToTray(!ui.data.preferences.minimizeToTray) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.minimizeToTray) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.minimizeToTray) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Atajos de teclado globales", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Ctrl+Alt+Espacio (Play/Pausa), Ctrl+Alt+Flechas (Pistas y volumen) desde cualquier app o juego.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.globalHotkeys) accent else CypherColors.Pill)
+                        .clickable { state.setGlobalHotkeys(!ui.data.preferences.globalHotkeys) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.globalHotkeys) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.globalHotkeys) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Normalización de volumen", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Nivela automáticamente la ganancia entre canciones para evitar picos y sobresaltos.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.normalizeVolume) accent else CypherColors.Pill)
+                        .clickable { state.setNormalizeVolume(!ui.data.preferences.normalizeVolume) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.normalizeVolume) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.normalizeVolume) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
         if (ui.updateState.isMsi) {
             SectionHeader("ACTUALIZACIONES", accent)
             SettingsCard {

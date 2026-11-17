@@ -190,7 +190,18 @@ data class Preferences(
     /** NONE / AURORA / GRADIENT / GLOW — runtime shader painted on the letters. */
     val lyricsShader: String = "AURORA",
     /** COMPACT / NORMAL / WIDE — distance between lyric lines. */
-    val lyricsLineSpacing: String = "NORMAL"
+    val lyricsLineSpacing: String = "NORMAL",
+    // ------------------------------------------------------------- desktop v1.2.0
+    /** Rich Presence in Discord desktop client. */
+    val discordRpc: Boolean = true,
+    /** Custom Discord Application/Client ID, or null to use Cypher default. */
+    val discordClientId: String? = null,
+    /** Minimize to Windows System Tray on close instead of exiting. */
+    val minimizeToTray: Boolean = true,
+    /** System-wide hotkeys (Ctrl+Alt+Space/Arrows) via Win32. */
+    val globalHotkeys: Boolean = true,
+    /** Dynamic volume leveling to prevent volume jumps between tracks. */
+    val normalizeVolume: Boolean = true
 )
 
 /**

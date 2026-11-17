@@ -47,7 +47,7 @@ data class AvailableUpdate(
  */
 object DesktopUpdater {
 
-    const val CURRENT_VERSION = "1.1.1"
+    const val CURRENT_VERSION = "1.2.0"
     private const val GITHUB_RELEASES_API = "https://api.github.com/repos/Itsbatt/Cypher/releases"
     private const val CYPHER_MSI_UPGRADE_CODE = "25A9F1C7B1F695C4B9E0F2F5F2B7A601"
 

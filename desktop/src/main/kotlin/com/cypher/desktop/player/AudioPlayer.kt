@@ -37,6 +37,9 @@ class AudioPlayer {
     /** Called on the JavaFX thread when a track reaches its end. */
     var onFinished: (() -> Unit)? = null
 
+    /** Called when a real file starts, so the embedded YouTube session can stand down. */
+    var onLocalPlay: (() -> Unit)? = null
+
     fun initialize() {
         if (available) return
         runCatching {
@@ -65,6 +68,7 @@ class AudioPlayer {
     }
 
     fun play(track: Track) {
+        onLocalPlay?.invoke()
         if (!available) initialize()
         if (!available) {
             _state.update {
@@ -113,6 +117,21 @@ class AudioPlayer {
             }.onFailure { error ->
                 _state.update { it.copy(error = "No se pudo reproducir: ${error.message}") }
             }
+        }
+    }
+
+    /**
+     * Position reported by the embedded player. Nothing is decoded here: the YouTube
+     * iframe owns the audio, and this only keeps the app's progress and lyrics in step.
+     */
+    fun external(positionMs: Long, durationMs: Long, playing: Boolean) {
+        if (player != null) return
+        _state.update {
+            it.copy(
+                positionMs = positionMs.coerceAtLeast(0),
+                durationMs = durationMs.takeIf { duration -> duration > 0 } ?: it.durationMs,
+                playing = playing
+            )
         }
     }
 

@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.cypher"
-version = "1.0.0"
+version = "1.1.0"
 
 kotlin {
     jvmToolchain(17)
@@ -27,6 +27,9 @@ dependencies {
     // Native Windows calls (DWM dark caption) without shipping a custom runtime.
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
+    // Embedded Chromium (JCEF) for the YouTube player: the phone uses an iframe and the
+    // desktop has to do the same, because YouTube needs MSE/mp4-audio that JavaFX lacks.
+    implementation("me.friwi:jcefmaven:122.1.10")
     // Audio playback for the desktop: JavaFX media ships its own decoders.
     implementation("org.openjfx:javafx-base:21.0.5:win")
     implementation("org.openjfx:javafx-graphics:21.0.5:win")
@@ -44,7 +47,7 @@ compose.desktop {
             // leaves out unless the module is requested explicitly.
             modules("jdk.httpserver", "java.net.http")
             packageName = "Cypher"
-            packageVersion = "1.0.0"
+            packageVersion = "1.1.0"
             description = "Cypher Desktop"
             vendor = "Cypher"
             windows {

@@ -897,6 +897,9 @@ private fun RightInfoPanel(ui: UiState, playback: PlaybackState, accent: Color, 
     val storedLyrics = view?.let { ui.data.lyric(it.id) }
     val lyricsState = rememberSongLyrics(ui.data, view, track?.path)
     val lyrics = lyricsState.lines
+    // The panel paints with the record's own tones when the lyrics ask for them.
+    val coverBitmap = rememberArtwork(view?.artwork?.takeIf { it.isNotBlank() } ?: view?.artworkUrl)
+    val coverColors = rememberCoverPalette(coverBitmap, accent)
     Column(
         modifier
             .fillMaxHeight()
@@ -1041,6 +1044,7 @@ private fun RightInfoPanel(ui: UiState, playback: PlaybackState, accent: Color, 
                 positionMs = playback.positionMs,
                 prefs = ui.data.preferences,
                 accent = accent,
+                artworkColors = coverColors,
                 fullscreen = false,
                 playing = playback.playing,
                 modifier = Modifier.fillMaxWidth().weight(1f)

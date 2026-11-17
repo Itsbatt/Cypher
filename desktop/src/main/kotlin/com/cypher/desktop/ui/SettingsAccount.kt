@@ -33,6 +33,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -164,6 +165,17 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
         )
 
         SectionHeader("LETRAS", accent)
+        // The preview borrows the cover of whatever is playing, so ARTWORK and LIQUID look
+        // like they will look in the player instead of showing a made-up palette.
+        val playing by state.player.state.collectAsState()
+        val previewView = playing.track?.let { track ->
+            viewOf(ui.data, track.id)
+                ?: TrackView(track.id, track.title, track.artist, track.album, track.durationMs, track.artwork)
+        }
+        val previewArt = rememberArtwork(
+            previewView?.artwork?.takeIf { it.isNotBlank() } ?: previewView?.artworkUrl
+        )
+        val previewColors = rememberCoverPalette(previewArt, accent)
         SettingsCard {
             // Live preview: this is the exact painter used by the right panel and by the
             // full screen, so what is chosen here is what those two will show.
@@ -186,6 +198,7 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
                     positionMs = demoClock,
                     prefs = ui.data.preferences,
                     accent = accent,
+                    artworkColors = previewColors,
                     fullscreen = false,
                     // The preview is the only place where the letters have to move on
                     // their own, because there is no player here.
@@ -210,7 +223,9 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
                     "NONE" to "Ninguno",
                     "AURORA" to "Aurora",
                     "GRADIENT" to "Degradado",
-                    "GLOW" to "Brillo"
+                    "GLOW" to "Brillo",
+                    "LIQUID" to "Líquido",
+                    "NEON" to "Neón"
                 ).forEach { (key, label) ->
                     LyricSizeChip(label, ui.data.preferences.lyricsShader == key, accent) { state.setLyricsShader(key) }
                 }
@@ -226,8 +241,17 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
                 }
             }
             LyricSettingRow("Color") {
-                listOf("ACCENT" to "Acento", "ARTWORK" to "Blanco").forEach { (key, label) ->
+                listOf("ACCENT" to "Acento", "ARTWORK" to "Portada").forEach { (key, label) ->
                     LyricSizeChip(label, ui.data.preferences.lyricsColor == key, accent) { state.setLyricsColor(key) }
+                }
+                LyricSizeChip(
+                    "Personalizado",
+                    ui.data.preferences.lyricsColor == "CUSTOM",
+                    accent
+                ) { state.setLyricsColor("CUSTOM") }
+                Spacer(Modifier.width(4.dp))
+                LyricColorSwatch(ui.data.preferences.lyricsColorCustom, accent) {
+                    state.setLyricsColorCustom(it)
                 }
             }
             Spacer(Modifier.height(4.dp))

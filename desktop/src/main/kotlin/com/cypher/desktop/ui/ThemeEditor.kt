@@ -132,6 +132,30 @@ fun ThemeColorsCard(
     }
 }
 
+/**
+ * The current lyric colour in a disc; clicking it opens the same picker the theme uses,
+ * so any colour is reachable, not just the presets.
+ */
+@Composable
+fun LyricColorSwatch(value: Long, accent: Color, onPick: (Long) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(
+        Modifier.size(26.dp)
+            .background(Color(value), CircleShape)
+            .border(1.dp, CypherColors.Border, CircleShape)
+            .clickable { open = true }
+    )
+    if (open) {
+        ColorPickerDialog(
+            title = "Color de la letra",
+            initial = Color(value),
+            accent = accent,
+            onDismiss = { open = false },
+            onPick = { open = false; onPick(it.value.toLong()) }
+        )
+    }
+}
+
 /** Conic swatch that opens the same picker, so the accent is not limited to presets. */
 @Composable
 fun AccentPickerSwatch(accentValue: Long, accent: Color, onPick: (Long) -> Unit) {

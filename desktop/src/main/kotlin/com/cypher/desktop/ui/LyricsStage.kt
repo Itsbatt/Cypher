@@ -10,7 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -62,6 +62,8 @@ fun LyricsStage(
     positionMs: Long,
     prefs: Preferences,
     accent: Color,
+    /** Dominant cover tones; ARTWORK and the LIQUID shader paint with them. */
+    artworkColors: List<Color> = emptyList(),
     fullscreen: Boolean,
     playing: Boolean,
     modifier: Modifier = Modifier
@@ -82,9 +84,13 @@ fun LyricsStage(
     val animatedShader = prefs.lyricsShader != "NONE" && !reduceMotion && playing && lines.isNotEmpty()
     LaunchedEffect(animatedShader) {
         while (animatedShader) {
-            withFrameMillis { clock = it }
+            // A timer, not the frame clock: the window only delivers frames when it has a
+            // reason to redraw, and a shader alone was not enough of one.
+            delay(41)
+            clock = System.currentTimeMillis()
         }
     }
+    val seconds = clock / 1000f
 
     Canvas(modifier.clipToBounds()) {
         if (lines.isEmpty()) return@Canvas
@@ -98,11 +104,12 @@ fun LyricsStage(
                 positionMs = positionMs,
                 prefs = prefs,
                 accent = accent,
+                artworkColors = artworkColors,
                 fullscreen = fullscreen,
                 width = size.width,
                 height = size.height,
                 density = density,
-                seconds = clock / 1000f
+                seconds = seconds
             )
         }
     }
@@ -117,6 +124,7 @@ private fun paintLyrics(
     positionMs: Long,
     prefs: Preferences,
     accent: Color,
+    artworkColors: List<Color>,
     fullscreen: Boolean,
     width: Float,
     height: Float,
@@ -143,7 +151,13 @@ private fun paintLyrics(
     // The line starts at `inset` and must end before the canvas does: measuring against
     // that same box is what keeps it inside the panel without a magic factor.
     val maxWidth = (width - inset * 2f).coerceAtLeast(1f)
-    val activeBase = if (prefs.lyricsColor == "ARTWORK") Color.White else accent
+    // Acento, el color de la portada o uno elegido a mano en Ajustes.
+    val activeBase = when (prefs.lyricsColor) {
+        "ARTWORK" -> artworkColors.firstOrNull() ?: Color.White
+        "CUSTOM" -> Color(prefs.lyricsColorCustom)
+        else -> accent
+    }
+    val secondColor = artworkColors.getOrNull(1) ?: secondTone(activeBase)
     val inactiveAlpha = prefs.lyricsInactiveOpacity.coerceIn(0.15f, 0.9f)
 
     val visible = ((height / pitch) / 2f).roundToInt() + 2
@@ -213,10 +227,19 @@ private fun paintLyrics(
             if (reveal > 0f) {
                 if (prefs.lyricsShader != "NONE") {
                     glowPaint.color = withAlpha(activeBase, 0.5f)
-                    glowPaint.maskFilter = glowMaskFilter(13f * density)
+                    glowPaint.maskFilter = glowMaskFilter(
+                        (if (prefs.lyricsShader == "NEON") 24f else 13f) * density
+                    )
                     canvas.drawTextLine(textLine, x, rowY, glowPaint)
                 }
-                val shader = lyricsShader(prefs.lyricsShader, textLine.width, textLine.height, seconds, activeBase, accent)
+                val shader = lyricsShader(
+                    prefs.lyricsShader,
+                    textLine.width,
+                    textLine.height,
+                    seconds,
+                    activeBase,
+                    secondColor
+                )
                 if (shader != null) {
                     lightPaint.shader = shader
                 } else {
@@ -403,6 +426,53 @@ half4 main(float2 p) {
 }
 """
 
+/**
+ * Liquid: bands of the accent and the cover colour run across the glyphs with a moving
+ * specular line, the letters' version of the backdrop behind them.
+ */
+private const val LIQUID_SKSL = """
+uniform float2 uSize;
+uniform float uTime;
+uniform float4 uAccent;
+uniform float4 uAccent2;
+
+half4 main(float2 p) {
+    float2 uv = p / max(uSize, float2(1.0, 1.0));
+    float t = uTime;
+    float band = 0.5 + 0.5 * sin((uv.x * 1.30 - t * 0.45) * 6.28318);
+    float wash = 0.5 + 0.5 * sin((uv.x * 0.80 + uv.y * 0.70 + t * 0.30) * 6.28318);
+    float3 c = mix(uAccent.rgb, uAccent2.rgb, band);
+    c = mix(c, float3(1.0), wash * 0.30);
+    float spec = pow(max(0.0, sin((uv.x * 1.90 - t * 0.60) * 6.28318)), 14.0);
+    c += spec * 0.45;
+    return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
+}
+"""
+
+/** Neon: the colour on the outside, a white-hot core, breathing slowly. */
+private const val NEON_SKSL = """
+uniform float2 uSize;
+uniform float uTime;
+uniform float4 uAccent;
+uniform float4 uAccent2;
+
+half4 main(float2 p) {
+    float2 uv = p / max(uSize, float2(1.0, 1.0));
+    float core = 1.0 - abs(uv.y * 2.0 - 1.0);
+    float pulse = 0.5 + 0.5 * sin(uTime * 2.1);
+    float3 c = mix(uAccent.rgb, float3(1.0), smoothstep(0.25, 1.0, core) * (0.55 + 0.25 * pulse));
+    c = mix(c, uAccent2.rgb, 0.18);
+    return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
+}
+"""
+
+private val liquidLyricsEffect: RuntimeEffect? by lazy {
+    runCatching { RuntimeEffect.makeForShader(LIQUID_SKSL) }.getOrNull()
+}
+private val neonEffect: RuntimeEffect? by lazy {
+    runCatching { RuntimeEffect.makeForShader(NEON_SKSL) }.getOrNull()
+}
+
 private val auroraEffect: RuntimeEffect? by lazy {
     runCatching { RuntimeEffect.makeForShader(AURORA_SKSL) }.getOrNull()
 }
@@ -445,15 +515,15 @@ private fun lyricsShader(
     height: Float,
     seconds: Float,
     accent: Color,
-    accentRaw: Color
+    second: Color
 ): Shader? {
     if (effect == "NONE") return null
     // Rebuilding the Skia shader (and its uniform block) every frame was the most
     // expensive thing in this painter; 24 steps per second look identical.
     val tick = (seconds * 24f).toInt()
-    val key = "$effect|${width.roundToInt()}|${height.roundToInt()}|$tick|${accent.value}|${accentRaw.value}"
+    val key = "$effect|${width.roundToInt()}|${height.roundToInt()}|$tick|${accent.value}|${second.value}"
     if (shaderCache.containsKey(key)) return shaderCache[key]
-    val built = buildShader(effect, width, height, tick / 24f, accent, accentRaw)
+    val built = buildShader(effect, width, height, tick / 24f, accent, second)
     shaderCache[key] = built
     return built
 }
@@ -464,17 +534,19 @@ private fun buildShader(
     height: Float,
     seconds: Float,
     accent: Color,
-    accentRaw: Color
+    second: Color
 ): Shader? {
     val runtime = when (effect) {
         "AURORA" -> auroraEffect
         "GLOW" -> glowEffect
+        "LIQUID" -> liquidLyricsEffect
+        "NEON" -> neonEffect
         else -> null
     }
     if (runtime != null) {
         val shader = runCatching {
             runtime.makeShader(
-                uniformData(shaderUniforms(width, height, seconds, accent, secondTone(accentRaw))),
+                uniformData(shaderUniforms(width, height, seconds, accent, second)),
                 null,
                 null
             )
@@ -484,7 +556,7 @@ private fun buildShader(
     return runCatching {
         Shader.makeLinearGradient(
             0f, 0f, width.coerceAtLeast(1f), 0f,
-            intArrayOf(accent.toArgb(), Color.White.toArgb(), secondTone(accentRaw).toArgb()),
+            intArrayOf(accent.toArgb(), Color.White.toArgb(), second.toArgb()),
             floatArrayOf(0f, 0.55f, 1f)
         )
     }.getOrNull()

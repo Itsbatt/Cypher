@@ -1,0 +1,10 @@
+build/
+.gradle/
+.kotlin/
+*.log
+
+# yt-dlp local de desarrollo (se instala desde la app o en %APPDATA%)
+tools/
+
+# Chromium/JCEF runtime files written next to the build
+MediaDeviceSalts*

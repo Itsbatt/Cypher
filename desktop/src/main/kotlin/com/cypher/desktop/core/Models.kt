@@ -179,8 +179,10 @@ data class Preferences(
     val lyricsAlign: String = "START",
     /** 0.2..0.9 opacity for the lines that are not being sung. */
     val lyricsInactiveOpacity: Float = 0.45f,
-    /** ACCENT / ARTWORK */
+    /** ACCENT / ARTWORK / CUSTOM */
     val lyricsColor: String = "ACCENT",
+    /** Used when [lyricsColor] is CUSTOM. */
+    val lyricsColorCustom: Long = 0xFFD8BEE0,
     /** Automatic lookup through the registered providers. */
     val lyricsAutoFetch: Boolean = true,
     /** NONE / KARAOKE — how the line being sung is revealed. */

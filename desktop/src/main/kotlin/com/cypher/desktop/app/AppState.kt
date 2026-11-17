@@ -128,7 +128,11 @@ data class UiState(
     val youtubeConnecting: Boolean = false,
     val youtubeEmail: String? = null,
     /** Non-null while a YouTube song plays through the embedded player. */
-    val embed: EmbedSession? = null
+    val embed: EmbedSession? = null,
+    /** Set when Chromium could not start, so the YouTube screen can explain why. */
+    val ytSetupIssue: com.cypher.desktop.player.YouTubeSetupIssue? = null,
+    /** The song that could not open; Retry replays it once Chromium is available. */
+    val ytPending: EmbedSession? = null
 ) {
     val currentTrackId: String? get() = queue.getOrNull(queueIndex)
 }
@@ -1260,7 +1264,16 @@ class AppState {
                 _state.update {
                     it.copy(
                         embed = null,
-                        notice = "No se pudo abrir YouTube en este equipo: ${YouTubeEmbed.error ?: "sin Chromium"}"
+                        notice = null,
+                        // A raw exception in a snackbar told nobody anything, so the YouTube
+                        // screen keeps the explanation and offers a retry.
+                        ytSetupIssue = YouTubeEmbed.diagnostic
+                            ?: com.cypher.desktop.player.YouTubeSetupIssue(
+                                headline = "No se pudo abrir YouTube",
+                                detail = "Chromium no arrancó en este equipo: ${YouTubeEmbed.error ?: "sin detalles"}.",
+                                hint = "Pulsa Reintentar para volver a intentarlo."
+                            ),
+                        ytPending = session
                     )
                 }
                 return@launch
@@ -1279,7 +1292,7 @@ class AppState {
             YouTubeWindow.open(videoId, title) {
                 _state.update { it.copy(embed = null) }
             }
-            _state.update { it.copy(notice = null) }
+            _state.update { it.copy(notice = null, ytSetupIssue = null, ytPending = null) }
             // Mirror the video onto the app state until another song takes over.
             while (_state.value.embed?.videoId == videoId) {
                 delay(350)
@@ -1301,6 +1314,17 @@ class AppState {
                 )
             }
         }
+    }
+
+    /** Replays the song that failed to open, after the diagnostic card asked for it. */
+    fun retryYouTube() {
+        val pending = _state.value.ytPending ?: return
+        _state.update { it.copy(ytSetupIssue = null) }
+        playEmbed(pending.videoId, pending.title, pending.artist, pending.durationMs)
+    }
+
+    fun dismissYouTubeIssue() {
+        _state.update { it.copy(ytSetupIssue = null, ytPending = null) }
     }
 
     fun setVolume(volume: Float) {

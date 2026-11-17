@@ -32,7 +32,7 @@
 
 ### 💻 Experiencia en Escritorio (Cypher PC v1.1.0)
 - **Fondo líquido animado (SkSL Liquid Glass):** Efectos visuales de cristal líquido acelerados por GPU con tres campos fluidos, filos cáusticos y refracción reactiva a la portada activa.
-- **Streaming de YouTube con Chromium embebido (JCEF):** Reproducción directa mediante iframe embebido, conservando metadatos, barra de progreso y letras sincronizadas sin requerir descargas previas a disco.
+- **Streaming de YouTube con Chromium embebido (JCEF):** Reproducción directa mediante iframe embebido, conservando metadatos, barra de progreso y letras sincronizadas sin requerir descargas previas a disco. Chromium viaja dentro del instalador y del ZIP portable, así que el primer arranque funciona también sin conexión, detrás de un proxy o con GitHub bloqueado.
 - **Letras totalmente personalizables:** Selección de color adaptativa (tono de acento, dominante de portada o selector libre HSV/Hex) y efectos visuales animados (*Líquido*, *Neón*).
 - **Vista ampliada renovada:** Carátula a gran escala con controles flotantes y barra de scrubbing integrados directamente sobre la portada al posicionar el cursor, con pausa/reanudación táctil o por clic.
 - **Personalización total de paleta:** Control minucioso y en vivo de cada superficie y nivel tipográfico (fondos, paneles laterales, tarjetas, bordes, píldoras y textos primarios/secundarios).

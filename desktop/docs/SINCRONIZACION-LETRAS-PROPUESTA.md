@@ -6,7 +6,7 @@ estable de canción) y sigue leyendo el sidecar `.lrc`. El protocolo de sync act
 
 ## 1. Por qué no funcionan hoy
 
-`supabase/functions/sync/validation.ts` solo acepta estos tipos:
+`experimental/supabase/functions/sync/validation.ts` solo acepta estos tipos:
 
 ```ts
 export const SYNC_KINDS = ["PROFILE", "PLAYLIST", "FAVORITE", "PREFERENCE", "STATS"] as const;

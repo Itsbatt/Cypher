@@ -237,7 +237,7 @@ Comprobaciones hechas sobre el árbol de cada commit:
 | `androidx.credentials` / `googleid` | no | **no** | sí |
 | Tablas `sync_outbox` / `sync_state` | no | **no** | sí (migración 7→8) |
 | `desktop/` | no existe | **no existe** (está sin commit) | sí (untracked) |
-| `supabase/` | no | **no** | 23 archivos |
+| `experimental/supabase/` | no | **no** | 23 archivos |
 | Post-1.4.0 útiles | — | **+3 commits** (atajos, espacio de descargas, fade del temporizador) | igual |
 
 **`fcab005` es literalmente "Cypher 1.4.0 con tres arreglos", sin una línea de Google ni de nube.**

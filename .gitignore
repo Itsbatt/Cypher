@@ -23,12 +23,12 @@ keystore.properties
 
 .backups/
 
-# copia local del codigo desplegado (rollback)
-supabase/rollback/
+# copia local del codigo desplegado (rollback) del backend archivado
+experimental/supabase/rollback/
 
 # artefactos locales de compilacion y estado de la CLI (no versionar)
 build-output/
-supabase/.temp/
+experimental/supabase/.temp/
 
 # Scratch: captures, logs and drivers used while testing.
 .tmp/

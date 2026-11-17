@@ -4,6 +4,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.ksp)
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -48,12 +49,6 @@ android {
     // Only honoured by debug builds; release builds keep the real date window.
     buildConfigField("boolean", "DEBUG_FORCE_WRAPPED", forceWrappedInDebug.toString())
 
-
-    javaCompileOptions {
-      annotationProcessorOptions {
-        arguments += mapOf("room.schemaLocation" to "$projectDir/schemas")
-      }
-    }
 
     ndk {
       abiFilters.addAll(supportedAbis)
@@ -128,6 +123,13 @@ kotlin {
   jvmToolchain(17)
 }
 
+// Room generates its code through KSP, not javac's annotation processor, so the
+// schemas are exported by Kotlin compilation itself.
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
+  arg("room.incremental", "true")
+}
+
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -168,7 +170,7 @@ dependencies {
   androidTestImplementation(libs.androidx.test.ext.junit)
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
-  androidTestImplementation("androidx.room:room-testing:2.6.1")
+  androidTestImplementation(libs.androidx.room.testing)
 
   // Navigation
   implementation(libs.androidx.navigation3.ui)
@@ -203,10 +205,10 @@ dependencies {
   // Google Code Scanner (Play Services)
   implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
-  // Room Database
-  implementation("androidx.room:room-runtime:2.6.1")
-  implementation("androidx.room:room-ktx:2.6.1")
-  annotationProcessor("androidx.room:room-compiler:2.6.1")
+  // Room Database (code generation via KSP)
+  implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.room.ktx)
+  ksp(libs.androidx.room.compiler)
 
   // QR Code Generation (ZXing)
   implementation("com.google.zxing:core:3.5.3")

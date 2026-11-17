@@ -9,15 +9,15 @@ import com.cypher.music.model.AudioSourceType
 import com.cypher.music.model.Track
 
 fun TrackEntity.toDomain(): Track {
-    val src = runCatching { AudioSourceType.valueOf(sourceType) }.getOrDefault(AudioSourceType.LOCAL)
+    val src = runCatching { AudioSourceType.valueOf(sourceType.orEmpty()) }.getOrDefault(AudioSourceType.LOCAL)
     return Track(
         id = id,
-        title = title,
-        artist = artist,
-        album = album,
+        title = title.orEmpty(),
+        artist = artist.orEmpty(),
+        album = album ?: "Sencillo",
         durationMs = durationMs,
         artworkUrl = artworkUrl,
-        streamUrl = streamUrl,
+        streamUrl = streamUrl.orEmpty(),
         sourceType = src,
         path = path,
         isLiked = isLiked,
@@ -47,8 +47,8 @@ fun Track.toEntity(isDownloaded: Boolean = this.isDownloaded, downloadedUri: Str
 fun PlaylistEntity.toDomain(tracks: List<Track> = emptyList()): Playlist {
     return Playlist(
         id = id,
-        name = name,
-        description = description,
+        name = name ?: "Nueva Playlist",
+        description = description.orEmpty(),
         coverUri = coverUri,
         createdAt = createdAt,
         updatedAt = updatedAt,
@@ -83,15 +83,15 @@ fun PlaylistWithTracks.toDomain(): Playlist {
 }
 
 fun RecentlyPlayedEntity.toDomain(): RecentlyPlayedItem {
-    val t = runCatching { RecentlyPlayedType.valueOf(itemType) }.getOrDefault(RecentlyPlayedType.TRACK)
-    val src = runCatching { AudioSourceType.valueOf(sourceType) }.getOrDefault(AudioSourceType.LOCAL)
+    val t = runCatching { RecentlyPlayedType.valueOf(itemType.orEmpty()) }.getOrDefault(RecentlyPlayedType.TRACK)
+    val src = runCatching { AudioSourceType.valueOf(sourceType.orEmpty()) }.getOrDefault(AudioSourceType.LOCAL)
     return RecentlyPlayedItem(
         id = id,
         type = t,
-        title = title,
-        subtitle = subtitle,
+        title = title.orEmpty(),
+        subtitle = subtitle.orEmpty(),
         artworkUrl = artworkUrl,
-        streamUrl = streamUrl,
+        streamUrl = streamUrl.orEmpty(),
         sourceType = src,
         extraId = extraId,
         timestamp = timestamp

@@ -32,5 +32,5 @@ Cypher PC 1.2.0 es una gran actualización enfocada en integración de sistema, 
 
 ## Instalación
 
-- **`Cypher-1.2.0.msi`**: Instalador por usuario de Windows (sin permisos de administrador). Actualiza instalaciones previas manteniendo intacta tu biblioteca.
-- **`Cypher-1.2.0-windows-portable.zip`**: Versión portable completa con runtime incluido; descomprimir y ejecutar en cualquier PC o memoria USB.
+- **`CypherMusic-1.2.0.msi`**: Instalador por usuario de Windows (sin permisos de administrador). Ejecutable renombrado a `CypherMusic.exe` para evitar falsos positivos con el catálogo de juegos de Discord y asegurar una integración limpia.
+- **`CypherMusic-1.2.0-windows-portable.zip`**: Versión portable completa con runtime incluido; descomprimir y ejecutar en cualquier PC o memoria USB.

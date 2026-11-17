@@ -120,9 +120,9 @@ compose.desktop {
             // The OAuth loopback listener uses com.sun.net.httpserver, which jpackage
             // leaves out unless the module is requested explicitly.
             modules("jdk.httpserver", "java.net.http")
-            packageName = "Cypher"
+            packageName = "CypherMusic"
             packageVersion = "1.2.0"
-            description = "Cypher Desktop"
+            description = "Cypher Music Desktop"
             vendor = "itsbatt"
             windows {
                 // Same logo as the app window and the Android launcher.
@@ -130,7 +130,7 @@ compose.desktop {
                 // Per-user install: no administrator prompt, and uninstalling only removes
                 // the app and its shortcuts, never %APPDATA%\Cypher (the library).
                 perUserInstall = true
-                menuGroup = "Cypher"
+                menuGroup = "Cypher Music"
                 shortcut = true
                 dirChooser = true
                 // Stable identity so upgrades replace the previous version instead of
@@ -162,9 +162,9 @@ val portableZip by tasks.registering(Zip::class) {
     dependsOn("createDistributable", createPortableMarker)
     from(layout.buildDirectory.dir("compose/binaries/main/app"))
     from(layout.buildDirectory.dir("portable-marker")) {
-        into("Cypher")
+        into("CypherMusic")
     }
-    archiveFileName.set("Cypher-${project.version}-windows-portable.zip")
+    archiveFileName.set("CypherMusic-${project.version}-windows-portable.zip")
     destinationDirectory.set(layout.buildDirectory.dir("dist"))
 }
 

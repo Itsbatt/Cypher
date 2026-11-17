@@ -302,6 +302,12 @@ private fun LegacyLiquidGlassRenderer(
     )
 }
 
+/*
+ * RuntimeShader is API 33+. The caller already gates on TIRAMISU, but lint cannot see
+ * the check through the composable lambda, so the requirement is declared here instead
+ * of silencing the analysis for the whole file.
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun AgslLiquidGlassRenderer(
     col1: Color,

@@ -97,7 +97,22 @@ fun CypherLyricsSheet(
 
     LaunchedEffect(track.id) {
         isLoading = true
-        lyricsState = LrcLibService.getLyrics(track)
+        val fetched = LrcLibService.getLyrics(track)
+        lyricsState = fetched
+        // Keep what we downloaded: it travels in the ZIP backup and survives a reinstall.
+        if (fetched != null) {
+            val text = if (fetched.lines.isNotEmpty()) {
+                fetched.lines.joinToString(separator = "\n") { line ->
+                    val minutes = line.timeMs / 60000
+                    val seconds = (line.timeMs % 60000) / 1000
+                    val centis = (line.timeMs % 1000) / 10
+                    "[%02d:%02d.%02d]%s".format(minutes, seconds, centis, line.text)
+                }
+            } else {
+                fetched.plainLyrics.orEmpty()
+            }
+            com.cypher.music.data.LyricsStore.save(context, track.id, text)
+        }
         isLoading = false
     }
 

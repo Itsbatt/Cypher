@@ -31,6 +31,13 @@ public interface PlaylistDao {
            "WHERE c.playlistId = :playlistId ORDER BY c.position ASC")
     java.util.List<TrackEntity> getOrderedTracks(String playlistId);
 
+    /**
+     * The ids actually stored for a playlist, even when the track row is missing.
+     * getOrderedTracks() drops those because it joins against `tracks`.
+     */
+    @Query("SELECT trackId FROM playlist_tracks_crossref WHERE playlistId = :playlistId ORDER BY position ASC")
+    java.util.List<String> getOrderedTrackIds(String playlistId);
+
     @Query("SELECT * FROM playlists ORDER BY updatedAt DESC")
     List<PlaylistEntity> getAllPlaylists();
 

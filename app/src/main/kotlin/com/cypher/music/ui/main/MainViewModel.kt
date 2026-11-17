@@ -109,13 +109,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val reducedMotion: StateFlow<Boolean> = motionPreferences.reducedMotion
     val youtubeAccountManager = YouTubeAccountManager(application)
 
-    // Cloud account + sync. The repository holds the Google session and the engine;
-    // this ViewModel only exposes its state and actions to Compose.
-    private val accountRepository = com.cypher.music.sync.AccountRepository(application)
-    val accountState: StateFlow<com.cypher.music.sync.AccountUiState> = accountRepository.state
-    private val _linkOfferVisible = MutableStateFlow(false)
-    val linkOfferVisible: StateFlow<Boolean> = _linkOfferVisible.asStateFlow()
-
     // Decoupled Domain-Specific ViewModels (SOLID architecture)
     val playerViewModel: PlayerViewModel by lazy { PlayerViewModel(application, playerManager, volumeManager) }
     val libraryViewModel: LibraryViewModel by lazy { LibraryViewModel(application, playlistRepository, favoritesManager, musicRepository) }
@@ -851,59 +844,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ------------------------------------------------------------------ cloud account
-
-    init {
-        // Deliberately delayed: the linking popup must never appear before the Room-backed
-        // library is on screen, and it is skipped entirely when there is nothing to sync.
-        viewModelScope.launch {
-            // Poll until Room has actually produced the library (cold starts can take a
-            // couple of seconds), then wait a beat so the popup never lands on a
-            // half-drawn screen. Bounded so an empty library is evaluated too.
-            var waited = 0
-            while (waited < 40 && playlists.value.isEmpty() && favoriteTracks.value.isEmpty()) {
-                delay(250)
-                waited += 1
-            }
-            delay(600)
-            if (!_linkOfferVisible.value) {
-                _linkOfferVisible.value = accountRepository.shouldOfferLink()
-            }
-        }
-        // Remote data landed: reload the Room-backed flows so the UI shows it.
-        viewModelScope.launch {
-            accountRepository.remoteChanges.collect { changes ->
-                if (changes > 0) {
-                    playlistRepository.loadData()
-                    favoritesManager.loadFavorites()
-                }
-            }
-        }
-    }
-
-    fun signInWithGoogle(activityContext: android.content.Context, onDone: (Boolean) -> Unit = {}) {
-        viewModelScope.launch {
-            val result = accountRepository.signIn(activityContext)
-            _linkOfferVisible.value = false
-            onDone(result is com.cypher.music.sync.AuthResult.Success)
-        }
-    }
-
-    fun signOutCloudAccount() {
-        viewModelScope.launch { accountRepository.signOut() }
-    }
-
-    fun syncCloudNow() {
-        viewModelScope.launch { accountRepository.syncNow(manual = true) }
-    }
-
-    fun dismissCloudLinkOffer() {
-        accountRepository.dismissLinkOffer()
-        _linkOfferVisible.value = false
-    }
-
-    fun clearAccountMessage() = accountRepository.clearMessage()
-
-    fun notifyAppResumed() = accountRepository.requestAutoSync("app en primer plano")
 
     fun handleShortcut(action: ShortcutAction) {
         val favorites = favoritesManager.favoriteTracks.value
@@ -1829,6 +1769,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Log.e("MainViewModel", "No se pudo generar la copia de seguridad", e)
             com.cypher.music.utils.DiagnosticsLog.error("Copia de seguridad", "Falló la exportación", e)
             ""
+        }
+    }
+
+    // ZIP backup: the JSON above plus the lyrics, in one file the desktop imports directly.
+    // It lands in Descargas/Cypher so it can be pulled to a PC without a share sheet.
+    suspend fun exportBackupZip(): String? = withContext(Dispatchers.IO) {
+        try {
+            val library = exportDatabaseBackup()
+            if (library.isBlank()) return@withContext null
+            val lyrics = com.cypher.music.data.LyricsStore.exportJson(getApplication())
+
+            val buffer = java.io.ByteArrayOutputStream()
+            java.util.zip.ZipOutputStream(buffer).use { zip ->
+                zip.putNextEntry(java.util.zip.ZipEntry("cypher-library.json"))
+                zip.write(library.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                zip.putNextEntry(java.util.zip.ZipEntry("cypher-lyrics.json"))
+                zip.write(lyrics.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
+                .format(java.util.Date())
+            val name = "cypher-backup-$stamp.zip"
+            val resolver = getApplication<Application>().contentResolver
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
+                put(
+                    android.provider.MediaStore.Downloads.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS + "/Cypher"
+                )
+                put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: return@withContext null
+            resolver.openOutputStream(uri)?.use { it.write(buffer.toByteArray()) }
+            values.clear()
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            com.cypher.music.utils.DiagnosticsLog.info("Copia de seguridad", "ZIP exportado: $name")
+            "Descargas/Cypher/$name"
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "No se pudo exportar el ZIP", e)
+            com.cypher.music.utils.DiagnosticsLog.error("Copia de seguridad", "Falló el ZIP", e)
+            null
         }
     }
 

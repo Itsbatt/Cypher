@@ -48,21 +48,6 @@ android {
     // Only honoured by debug builds; release builds keep the real date window.
     buildConfigField("boolean", "DEBUG_FORCE_WRAPPED", forceWrappedInDebug.toString())
 
-    // Cloud account + sync credentials. They are never hardcoded here: the value comes
-    // from a Gradle property, an environment variable or local.properties (ignored by
-    // git), and an empty key simply leaves the feature unconfigured in this build.
-    val localProperties = Properties().apply {
-      val file = rootProject.file("local.properties")
-      if (file.exists()) file.inputStream().use { load(it) }
-    }
-    fun syncConfig(key: String, env: String): String =
-      providers.gradleProperty(key).orNull
-        ?: providers.environmentVariable(env).orNull
-        ?: localProperties.getProperty(key)
-        ?: ""
-
-    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + syncConfig("cypher.googleClientId", "CYPHER_GOOGLE_CLIENT_ID") + "\"")
-    buildConfigField("String", "SYNC_BASE_URL", "\"" + syncConfig("cypher.syncBaseUrl", "CYPHER_SYNC_BASE_URL") + "\"")
 
     javaCompileOptions {
       annotationProcessorOptions {
@@ -110,6 +95,10 @@ android {
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+  }
+  // Robolectric runs the Room migrations on the JVM with the real framework SQLite.
+  testOptions {
+    unitTests.isIncludeAndroidResources = true
   }
   buildFeatures {
     compose = true
@@ -170,6 +159,9 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   // Real org.json on the JVM so release parsing can be unit tested (Android only stubs it).
   testImplementation("org.json:json:20240303")
+  // Migration tests open real SQLite databases from the exported schemas.
+  testImplementation("org.robolectric:robolectric:4.14.1")
+  testImplementation(libs.androidx.test.core)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -201,11 +193,6 @@ dependencies {
 
   // Networking
   implementation(libs.okhttp)
-
-  // Google sign-in through Credential Manager (no passwords stored by the app)
-  implementation(libs.androidx.credentials)
-  implementation(libs.androidx.credentials.play.services)
-  implementation(libs.googleid)
 
   // Extended Icons
   implementation(libs.androidx.compose.material.icons.extended)

@@ -56,14 +56,6 @@ class FavoritesManager(
             } else {
                 roomDb.trackDao().setFavorite(track.id, !exists, now)
             }
-            // Queued for the cloud: un-liking becomes a tombstone so it also travels.
-            com.cypher.music.sync.SyncQueue.enqueue(
-                context,
-                com.cypher.music.sync.SyncEntityKind.FAVORITE,
-                track.id,
-                now,
-                deleted = exists
-            )
             loadFavorites()
         }
         return !exists

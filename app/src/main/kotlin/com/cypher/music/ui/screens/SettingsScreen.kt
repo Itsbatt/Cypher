@@ -136,10 +136,6 @@ fun SettingsScreen(
     onUpdatePrefs: ((ThemePreferences) -> ThemePreferences) -> Unit,
     onResetDefaults: () -> Unit,
     onUpdateUsername: (String) -> Unit = {},
-    accountState: com.cypher.music.sync.AccountUiState = com.cypher.music.sync.AccountUiState(),
-    onAccountConnect: () -> Unit = {},
-    onAccountDisconnect: () -> Unit = {},
-    onAccountSyncNow: () -> Unit = {},
     onOpenYouTubeLogin: () -> Unit = {},
     onSyncYouTube: () -> Unit = {},
     onUnlinkYouTube: () -> Unit = {},
@@ -161,6 +157,7 @@ fun SettingsScreen(
     sleepTimerMode: SleepTimerMode = SleepTimerMode.OFF,
     sleepTimerRemainingSeconds: Long? = null,
     onExportBackup: suspend () -> String = { "" },
+    onExportZip: suspend () -> String? = { null },
     onImportBackup: (String) -> BackupImportSummary = { BackupImportSummary(0, 0, 0) },
     downloadStats: DownloadStats = DownloadStats(),
     onRefreshDownloadStats: () -> Unit = {},
@@ -396,19 +393,6 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // Section: Cuenta y Nube (Google + sincronización)
-        item {
-            com.cypher.music.ui.account.CloudAccountSection(
-                state = accountState,
-                themeColors = themeColors,
-                hapticsEnabled = themePrefs.hapticsEnabled,
-                onConnect = onAccountConnect,
-                onDisconnect = onAccountDisconnect,
-                onSyncNow = onAccountSyncNow
-            )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -1663,7 +1647,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Exporta o importa playlists, favoritos y ajustes (tema, letras, pantalla de inicio y movimiento) en un archivo JSON local. El perfil, las estadísticas y los archivos de audio no se incluyen.",
+                    text = "Exporta o importa playlists, favoritos y ajustes (tema, letras, pantalla de inicio y movimiento). El botón ZIP guarda además las letras descargadas en Descargas/Cypher, listo para llevarlo al PC con Cypher Desktop. El perfil, las estadísticas y los archivos de audio no se incluyen.",
                     color = themeColors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -1694,6 +1678,34 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Exportar", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Button(
+                        onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            scope.launch {
+                                val path = withContext(Dispatchers.IO) { onExportZip() }
+                                Toast.makeText(
+                                    context,
+                                    if (path != null) "ZIP guardado en $path" else "No se pudo exportar el ZIP",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent.copy(alpha = 0.18f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.FileDownload,
+                            contentDescription = null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ZIP", color = themeColors.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     Button(

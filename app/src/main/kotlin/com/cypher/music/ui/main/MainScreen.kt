@@ -114,8 +114,6 @@ fun MainScreen(
     val currentTab by viewModel.currentTab.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
-    val accountState by viewModel.accountState.collectAsState()
-    val linkOfferVisible by viewModel.linkOfferVisible.collectAsState()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
     val reducedMotion by viewModel.reducedMotion.collectAsState()
     val themePrefs by viewModel.themePreferences.collectAsState()
@@ -629,10 +627,6 @@ fun MainScreen(
         ) {
             SettingsScreen(
                 user = currentUser,
-                accountState = accountState,
-                onAccountConnect = { viewModel.signInWithGoogle(context) },
-                onAccountDisconnect = { viewModel.signOutCloudAccount() },
-                onAccountSyncNow = { viewModel.syncCloudNow() },
                 listeningStats = userListeningStats,
                 ytSession = ytSession,
                 isSyncingYouTube = isSyncingYouTube,
@@ -664,6 +658,7 @@ fun MainScreen(
                 sleepTimerMode = sleepTimerMode,
                 sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
                 onExportBackup = { viewModel.exportDatabaseBackup() },
+                onExportZip = { viewModel.exportBackupZip() },
                 onImportBackup = { viewModel.importDatabaseBackup(it) },
                 reducedMotion = reducedMotion,
                 onToggleReducedMotion = { viewModel.setReducedMotion(it) },
@@ -865,18 +860,6 @@ fun MainScreen(
                 isOnboarding = true,
                 onConfirm = { viewModel.updateUsername(it) },
                 onDismiss = {}
-            )
-        }
-
-        // Cloud account linking popup: offered only after local data is loaded, and it
-        // never blocks the player. "Ahora no" is remembered for a month.
-        if (linkOfferVisible) {
-            com.cypher.music.ui.account.CloudLinkAccountDialog(
-                accent = themeColors.accent,
-                signingIn = accountState.signingIn,
-                onConnect = { viewModel.signInWithGoogle(context) },
-                onDismiss = { viewModel.dismissCloudLinkOffer() },
-                message = accountState.message
             )
         }
 

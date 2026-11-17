@@ -50,28 +50,9 @@ class PlaylistRepository(
                 val recents = roomDb.recentlyPlayedDao().getRecentlyPlayed(24).map { it.toDomain() }
 
                 _playlists.value = domainPlaylists
-                enqueueChangedPlaylists(domainPlaylists)
                 _recentlyPlayed.value = recents
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading playlists from Room: ${e.message}", e)
-            }
-        }
-    }
-
-    // Playlists already uploaded, so a reload only enqueues the ones that really changed.
-    private val lastSyncedUpdatedAt = mutableMapOf<String, Long>()
-
-    private fun enqueueChangedPlaylists(playlists: List<Playlist>) {
-        playlists.forEach { playlist ->
-            val previous = lastSyncedUpdatedAt[playlist.id]
-            if (previous == null || previous < playlist.updatedAt) {
-                lastSyncedUpdatedAt[playlist.id] = playlist.updatedAt
-                com.cypher.music.sync.SyncQueue.enqueue(
-                    context,
-                    com.cypher.music.sync.SyncEntityKind.PLAYLIST,
-                    playlist.id,
-                    playlist.updatedAt
-                )
             }
         }
     }
@@ -239,14 +220,6 @@ class PlaylistRepository(
         try {
             roomDb.playlistDao().deletePlaylist(playlistId)
             roomDb.playlistDao().clearPlaylistTracks(playlistId)
-            lastSyncedUpdatedAt.remove(playlistId)
-            com.cypher.music.sync.SyncQueue.enqueue(
-                context,
-                com.cypher.music.sync.SyncEntityKind.PLAYLIST,
-                playlistId,
-                System.currentTimeMillis(),
-                deleted = true
-            )
         } catch (e: Exception) {
             Log.e(TAG, "Room deletePlaylist error: ${e.message}", e)
         }

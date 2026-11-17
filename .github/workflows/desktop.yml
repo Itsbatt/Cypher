@@ -38,7 +38,7 @@ jobs:
       # older pin, so install it only when the toolset is really missing.
       - name: Ensure WiX 3 (needed by jpackage for the MSI)
         run: |
-          $root = "${env:ProgramFiles(x86)}\WiX Toolset v3.14in"
+          $root = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
           if (-not (Test-Path "$root\candle.exe")) {
             choco install wixtoolset --no-progress -y
           }

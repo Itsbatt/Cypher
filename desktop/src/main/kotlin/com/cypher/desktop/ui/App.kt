@@ -160,7 +160,9 @@ fun CypherApp(state: AppState) {
 
     // The lyrics panel (and every other glass surface) refracts the cover of what is
     // playing. Until a cover exists it falls back to the chosen background.
-    val playingView = playback.track?.let { viewOf(ui.data, it.id) }
+    val playingView = playback.track?.let { track ->
+        viewOf(ui.data, track.id) ?: TrackView(track.id, track.title, track.artist, track.album, track.durationMs, track.artwork)
+    }
     val coverSource = playingView?.artwork?.takeIf { it.isNotBlank() } ?: playingView?.artworkUrl
     val coverLoad = rememberArtworkState(coverSource)
     var coverFile by remember(coverSource) { mutableStateOf(com.cypher.desktop.core.ArtworkStore.cachedFile(coverSource)) }

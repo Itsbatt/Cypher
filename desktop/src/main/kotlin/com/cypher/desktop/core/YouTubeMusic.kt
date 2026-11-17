@@ -298,8 +298,10 @@ object YouTubeMusic {
                 .firstOrNull().orEmpty()
             val seconds = (entry["duration"] as? JsonPrimitive)?.longOrNull ?: 0L
             val thumbnails = entry["thumbnails"] as? JsonArray
-            val thumbnail = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.let { (it as? JsonPrimitive)?.contentOrNull }
+            val rawThumbnail = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.let { (it as? JsonPrimitive)?.contentOrNull }
                 ?: text(entry, "thumbnail")
+            val thumbnail = rawThumbnail?.takeIf { it.isNotBlank() }
+                ?: videoId?.takeIf { it.isNotBlank() }?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
             MusicHit(videoId.orEmpty(), title, artist, seconds.coerceAtLeast(0L) * 1000, thumbnail, available)
         }
     }

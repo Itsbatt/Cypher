@@ -145,10 +145,25 @@ tasks.test {
     useJUnitPlatform()
 }
 
+/** Marker task so the portable ZIP includes .portable and data/ out of the box. */
+val createPortableMarker by tasks.registering {
+    val markerDir = layout.buildDirectory.dir("portable-marker")
+    outputs.dir(markerDir)
+    doLast {
+        val root = markerDir.get().asFile
+        root.mkdirs()
+        File(root, ".portable").writeText("cypher-portable\n")
+        File(root, "data").mkdirs()
+    }
+}
+
 /** Portable build: the app image created by jpackage, zipped, no Java required. */
 val portableZip by tasks.registering(Zip::class) {
-    dependsOn("createDistributable")
+    dependsOn("createDistributable", createPortableMarker)
     from(layout.buildDirectory.dir("compose/binaries/main/app"))
+    from(layout.buildDirectory.dir("portable-marker")) {
+        into("Cypher")
+    }
     archiveFileName.set("Cypher-${project.version}-windows-portable.zip")
     destinationDirectory.set(layout.buildDirectory.dir("dist"))
 }

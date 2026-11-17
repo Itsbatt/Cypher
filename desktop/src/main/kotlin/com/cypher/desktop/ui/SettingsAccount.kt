@@ -458,18 +458,139 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
             SettingsLink("Importar", "Carpetas, ZIP y listas", accent) { state.select(Screen.IMPORT) }
         }
         SettingsCard {
-            Text("Almacenamiento local", color = CypherColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text(Storage.libraryFile.toString(), color = CypherColors.TextSecondary, fontSize = 11.sp)
+            Text("Almacenamiento y modo de ejecución", color = CypherColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Escritura atómica y copia previa a cada escaneo. Todo se queda en este equipo.",
-                color = CypherColors.TextTertiary,
-                fontSize = 11.sp
-            )
+            if (Storage.isPortable) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accent.copy(alpha = 0.22f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text("PORTABLE", color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text("Carpeta autónoma", color = CypherColors.TextSecondary, fontSize = 11.sp)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Todos los datos de usuario (biblioteca, carátulas, letras, descargas y Chromium) se guardan dentro de la carpeta «data/» de esta instalación.",
+                    color = CypherColors.TextTertiary, fontSize = 11.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(Storage.dataDir.toString(), color = CypherColors.TextSecondary, fontSize = 10.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "La actualización automática por MSI está desactivada en modo portable para preservar la autonomía de tu carpeta.",
+                    color = CypherColors.TextTertiary, fontSize = 10.sp
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (ui.updateState.isMsi) accent.copy(alpha = 0.22f) else CypherColors.Pill)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            if (ui.updateState.isMsi) "INSTALACIÓN MSI" else "SISTEMA",
+                            color = if (ui.updateState.isMsi) accent else CypherColors.TextSecondary,
+                            fontSize = 10.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(Storage.dataDir.toString(), color = CypherColors.TextSecondary, fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Escritura atómica y copia previa a cada escaneo. Todo se queda en este equipo.",
+                    color = CypherColors.TextTertiary,
+                    fontSize = 11.sp
+                )
+            }
         }
+
+        if (ui.updateState.isMsi) {
+            SectionHeader("ACTUALIZACIONES", accent)
+            SettingsCard {
+                Text("Cypher PC para Windows", color = CypherColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text("Versión instalada: ${com.cypher.desktop.core.DesktopUpdater.CURRENT_VERSION}", color = CypherColors.TextTertiary, fontSize = 11.sp)
+                Spacer(Modifier.height(8.dp))
+
+                val update = ui.updateState.available
+                if (ui.updateState.downloading) {
+                    Text("Descargando actualización… ${(ui.updateState.progress * 100).toInt()}%", color = accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(CypherColors.Pill)
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(ui.updateState.progress.coerceIn(0f, 1f))
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(accent)
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("Al finalizar la descarga, el instalador MSI se iniciará automáticamente.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                } else if (update != null) {
+                    Text("¡Nueva versión disponible: Cypher PC ${update.version}!", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accent)
+                                .clickable { state.installUpdate() }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text("Actualizar ahora", color = Color(0xFF14101A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (ui.updateState.checking) "Comprobando actualizaciones…" else "Cypher PC está al día.",
+                            color = CypherColors.TextSecondary,
+                            fontSize = 11.sp
+                        )
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accent.copy(alpha = 0.18f))
+                                .clickable(enabled = !ui.updateState.checking) { state.checkForUpdates() }
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                if (ui.updateState.checking) "Buscando…" else "Buscar ahora",
+                                color = accent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                if (ui.updateState.error != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(ui.updateState.error, color = Color(0xFFE06A6A), fontSize = 11.sp)
+                }
+            }
+        }
+
         Spacer(Modifier.height(12.dp))
-        Text("Cypher Desktop 1.0 · biblioteca local-first", color = CypherColors.TextTertiary, fontSize = 10.sp)
+        Text("Cypher Desktop ${com.cypher.desktop.core.DesktopUpdater.CURRENT_VERSION} · biblioteca local-first", color = CypherColors.TextTertiary, fontSize = 10.sp)
     }
 }
 

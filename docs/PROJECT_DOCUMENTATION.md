@@ -112,6 +112,10 @@ El proyecto nace con el objetivo de unificar en una experiencia visualmente cuid
 - **Fallback de Contingencia por Proxies:** Implementación de `ProxiedStreamResolver` (Piped e Invidious) como Tier 4 resiliente ante bloqueos de IP de YouTube, configurable desde Ajustes y persistido en copias de respaldo ZIP.
 - **Chromium/CEF Pre-Empaquetado en Escritorio:** Extracción en tiempo de compilación de binarios nativos de CEF en el MSI (`Cypher-1.1.1.msi`) y ZIP portable (`Cypher-1.1.1-windows-portable.zip`), garantizando inicio 100% offline y sin descargas en frío.
 - **Diagnóstico y Autochequeo:** Incorporación de tarjeta interactiva de fallos de Chromium (`YouTubeIssueCard`) y parámetro de línea de comandos `--cef-check`.
+- **Reproducción Limpia y Silenciosa:** Alojamiento de Chromium en un marco de utilidad en segundo plano, eliminando ventanas emergentes al reproducir canciones.
+- **Resolución Robusta de Carátulas:** Carga de imágenes con `HttpClient`, seguimiento de redirecciones entre protocolos y fallback de alta fidelidad para carátulas de YouTube.
+- **Modo Portable Autónomo:** Detección de portabilidad con guardado estricto de todos los datos en `data/` sin tocar `%APPDATA%`.
+- **Actualizaciones Automáticas para MSI:** Motor de comprobación y actualización nativo (`DesktopUpdater`) vía GitHub Releases, exclusivo para instalaciones MSI.
 - **Higiene del Repositorio:** Archivado formal de Supabase en `experimental/supabase/`, incorporación de `CONTRIBUTING.md`, `SECURITY.md` y plantillas de issues y Pull Requests.
 
 ---

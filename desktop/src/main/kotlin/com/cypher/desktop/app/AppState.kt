@@ -61,7 +61,18 @@ data class EmbedSession(
     val videoId: String,
     val title: String,
     val artist: String,
-    val durationMs: Long
+    val durationMs: Long,
+    val artworkUrl: String? = null
+)
+
+data class UpdateState(
+    val checking: Boolean = false,
+    val available: com.cypher.desktop.core.AvailableUpdate? = null,
+    val downloading: Boolean = false,
+    val progress: Float = 0f,
+    val error: String? = null,
+    val isMsi: Boolean = false,
+    val isPortable: Boolean = false
 )
 
 data class UiState(
@@ -132,7 +143,11 @@ data class UiState(
     /** Set when Chromium could not start, so the YouTube screen can explain why. */
     val ytSetupIssue: com.cypher.desktop.player.YouTubeSetupIssue? = null,
     /** The song that could not open; Retry replays it once Chromium is available. */
-    val ytPending: EmbedSession? = null
+    val ytPending: EmbedSession? = null,
+    val updateState: UpdateState = UpdateState(
+        isMsi = com.cypher.desktop.core.DesktopUpdater.isMsiInstalled(),
+        isPortable = com.cypher.desktop.core.Storage.isPortable
+    )
 ) {
     val currentTrackId: String? get() = queue.getOrNull(queueIndex)
 }
@@ -190,6 +205,9 @@ class AppState {
             }
         }
         _state.update { it.copy(ytDlpAvailable = YouTubeMusic.binary(it.data.preferences.ytDlpPath) != null) }
+        if (com.cypher.desktop.core.DesktopUpdater.isMsiInstalled()) {
+            checkForUpdates()
+        }
     }
 
     /** Called when the window closes so Windows drops the media session. */
@@ -828,7 +846,8 @@ class AppState {
      * Downloads the audio and plays it with the local engine. It is the fallback for the
      * songs YouTube will not embed, and it is exactly what the app did before the iframe.
      */
-    private fun playDownloaded(videoId: String, title: String, artist: String, durationMs: Long) {
+    private fun playDownloaded(videoId: String, title: String, artist: String, durationMs: Long, artwork: String? = null) {
+        val resolvedArtwork = artwork?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
         scope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
@@ -850,7 +869,8 @@ class AppState {
                 artist = artist,
                 album = "YouTube Music",
                 durationMs = durationMs,
-                path = audio.absolutePath
+                path = audio.absolutePath,
+                artwork = resolvedArtwork
             )
             player.play(track)
             _state.update { it.copy(notice = null) }
@@ -869,7 +889,7 @@ class AppState {
             )
         }
         // No download: the iframe streams it, as on the phone.
-        playEmbed(hit.videoId, hit.title, hit.artist, hit.durationMs)
+        playEmbed(hit.videoId, hit.title, hit.artist, hit.durationMs, hit.thumbnail)
     }
 
     private fun advanceOnline(auto: Boolean) {
@@ -1252,8 +1272,9 @@ class AppState {
      * the phone does with its iframe. The app keeps the metadata, and the position arrives
      * from the video so the lyrics stay in time.
      */
-    private fun playEmbed(videoId: String, title: String, artist: String, durationMs: Long) {
-        val session = EmbedSession(videoId, title, artist, durationMs)
+    private fun playEmbed(videoId: String, title: String, artist: String, durationMs: Long, artwork: String? = null) {
+        val resolvedArtwork = artwork?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        val session = EmbedSession(videoId, title, artist, durationMs, resolvedArtwork)
         player.stop()
         _state.update { it.copy(embed = session, playerExpanded = true, notice = "Abriendo «$title» en YouTube…") }
         scope.launch {
@@ -1284,7 +1305,8 @@ class AppState {
                 artist = artist,
                 album = "YouTube Music",
                 durationMs = durationMs,
-                path = "embed:$videoId"
+                path = "embed:$videoId",
+                artwork = resolvedArtwork
             )
             player.preview(track, 0, durationMs)
             // Chromium paints on its own surface, so the video gets its own window and the
@@ -1303,7 +1325,7 @@ class AppState {
                     _state.update {
                         it.copy(embed = null, notice = "«$title» no se puede ver aquí: se reproduce desde el archivo.")
                     }
-                    playDownloaded(videoId, title, artist, durationMs)
+                    playDownloaded(videoId, title, artist, durationMs, resolvedArtwork)
                     return@launch
                 }
                 val reported = YouTubeEmbed.durationMs
@@ -1320,11 +1342,55 @@ class AppState {
     fun retryYouTube() {
         val pending = _state.value.ytPending ?: return
         _state.update { it.copy(ytSetupIssue = null) }
-        playEmbed(pending.videoId, pending.title, pending.artist, pending.durationMs)
+        playEmbed(pending.videoId, pending.title, pending.artist, pending.durationMs, pending.artworkUrl)
     }
 
     fun dismissYouTubeIssue() {
         _state.update { it.copy(ytSetupIssue = null, ytPending = null) }
+    }
+
+    fun checkForUpdates() {
+        val current = _state.value.updateState
+        if (!current.isMsi || current.checking || current.downloading) return
+        _state.update { it.copy(updateState = it.updateState.copy(checking = true, error = null)) }
+        scope.launch {
+            val available = com.cypher.desktop.core.DesktopUpdater.checkForUpdates()
+            _state.update {
+                it.copy(
+                    updateState = it.updateState.copy(
+                        checking = false,
+                        available = available,
+                        error = null
+                    )
+                )
+            }
+            if (available != null) {
+                _state.update {
+                    it.copy(notice = "Nueva versión disponible: Cypher PC ${available.version}. Entra en Ajustes para actualizar.")
+                }
+            }
+        }
+    }
+
+    fun installUpdate() {
+        val update = _state.value.updateState.available ?: return
+        if (_state.value.updateState.downloading) return
+        _state.update { it.copy(updateState = it.updateState.copy(downloading = true, progress = 0f, error = null)) }
+        scope.launch {
+            val result = com.cypher.desktop.core.DesktopUpdater.downloadAndInstallMsi(update) { progress ->
+                _state.update { it.copy(updateState = it.updateState.copy(progress = progress)) }
+            }
+            result.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        updateState = it.updateState.copy(
+                            downloading = false,
+                            error = error.message ?: "Fallo al descargar la actualización"
+                        )
+                    )
+                }
+            }
+        }
     }
 
     fun setVolume(volume: Float) {
@@ -1730,7 +1796,7 @@ class AppState {
             return
         }
         remoteJob?.cancel()
-        playEmbed(videoKey, remote.title, remote.artist, remote.durationMs)
+        playEmbed(videoKey, remote.title, remote.artist, remote.durationMs, remote.artworkUrl)
         // The history and the counters are still the app's: the video only provides sound.
         val track = Track(
             id = remote.id,

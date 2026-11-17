@@ -33,6 +33,40 @@ object Storage {
     @Volatile
     var rootOverride: Path? = null
 
+    /**
+     * Directory containing the running application executable.
+     */
+    val appDir: Path by lazy {
+        val jpackagePath = System.getProperty("jpackage.app-path")?.takeIf { it.isNotBlank() }
+        if (jpackagePath != null) {
+            Path.of(jpackagePath).parent ?: Path.of("").toAbsolutePath()
+        } else {
+            val cmd = ProcessHandle.current().info().command().orElse(null)
+            if (!cmd.isNullOrBlank()) {
+                Path.of(cmd).parent ?: Path.of("").toAbsolutePath()
+            } else {
+                Path.of("").toAbsolutePath()
+            }
+        }
+    }
+
+    /**
+     * True when running in portable mode:
+     * - A `.portable` or `portable.lock` marker file exists in the application root, OR
+     * - A `data` directory already exists alongside the executable, OR
+     * - An explicit environment variable or system property is provided.
+     */
+    val isPortable: Boolean
+        get() {
+            if (System.getProperty("cypher.portable") == "true" || System.getenv("CYPHER_PORTABLE") == "true") {
+                return true
+            }
+            val marker = appDir.resolve(".portable")
+            val lock = appDir.resolve("portable.lock")
+            val localData = appDir.resolve("data")
+            return Files.exists(marker) || Files.exists(lock) || (Files.exists(localData) && Files.isDirectory(localData))
+        }
+
     val dataDir: Path
         get() {
             val override = rootOverride
@@ -41,6 +75,10 @@ object Storage {
             // real library (used by the UI audit and by packaging smoke tests).
             System.getenv("CYPHER_DATA_DIR")?.takeIf { it.isNotBlank() }?.let { dir ->
                 return Path.of(dir).also { Files.createDirectories(it) }
+            }
+            if (isPortable) {
+                val portableDir = appDir.resolve("data")
+                return portableDir.also { Files.createDirectories(it) }
             }
             val base = System.getenv("APPDATA")?.takeIf { it.isNotBlank() }
                 ?: System.getProperty("user.home")

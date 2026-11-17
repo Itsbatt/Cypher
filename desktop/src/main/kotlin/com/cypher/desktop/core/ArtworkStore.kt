@@ -153,30 +153,27 @@ object ArtworkStore {
         }.getOrElse { Load(null, Status.CORRUPT, source) }
     }
 
+    private val httpClient by lazy {
+        java.net.http.HttpClient.newBuilder()
+            .followRedirects(java.net.http.HttpClient.Redirect.ALWAYS)
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build()
+    }
+
     private fun download(source: String): ByteArray {
-        val connection = URI(source).toURL().openConnection() as HttpURLConnection
-        connection.connectTimeout = 8_000
-        connection.readTimeout = 12_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("User-Agent", "CypherDesktop")
-        connection.setRequestProperty("Accept", "image/*")
-        try {
-            if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
-            // 12 MB is far beyond any cover; this stops a wrong URL from eating memory.
-            connection.inputStream.use { stream ->
-                val buffer = ByteArray(64 * 1024)
-                val out = java.io.ByteArrayOutputStream()
-                while (true) {
-                    val read = stream.read(buffer)
-                    if (read <= 0) break
-                    out.write(buffer, 0, read)
-                    if (out.size() > 12 * 1024 * 1024) error("imagen demasiado grande")
-                }
-                return out.toByteArray()
-            }
-        } finally {
-            connection.disconnect()
-        }
+        val request = java.net.http.HttpRequest.newBuilder()
+            .uri(URI.create(source))
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+            .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+            .timeout(java.time.Duration.ofSeconds(15))
+            .GET()
+            .build()
+
+        val response = httpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+        if (response.statusCode() !in 200..299) error("HTTP ${response.statusCode()}")
+        val bytes = response.body()
+        if (bytes.size > 12 * 1024 * 1024) error("imagen demasiado grande")
+        return bytes
     }
 
     /** Atomic write, so an interrupted download is never mistaken for a valid cover. */

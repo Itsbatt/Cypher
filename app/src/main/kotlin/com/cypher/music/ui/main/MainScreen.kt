@@ -170,6 +170,8 @@ fun MainScreen(
     val updateState by updateViewModel.state.collectAsState()
     val playbackNotice by viewModel.playbackNotice.collectAsState()
     val downloadStats by viewModel.downloadStats.collectAsState()
+    val proxyStreamingEnabled by viewModel.proxyStreamingEnabled.collectAsState()
+    val proxyInstanceUrl by viewModel.proxyInstanceUrl.collectAsState()
 
     // A track that cannot start is reported once instead of being skipped in silence.
     LaunchedEffect(playbackNotice) {
@@ -662,6 +664,10 @@ fun MainScreen(
                 onImportBackup = { viewModel.importDatabaseBackup(it) },
                 reducedMotion = reducedMotion,
                 onToggleReducedMotion = { viewModel.setReducedMotion(it) },
+                proxyStreamingEnabled = proxyStreamingEnabled,
+                proxyInstanceUrl = proxyInstanceUrl,
+                onToggleProxyStreaming = { viewModel.setProxyStreamingEnabled(it) },
+                onUpdateProxyInstanceUrl = { viewModel.setProxyInstanceUrl(it) },
                 downloadStats = downloadStats,
                 onRefreshDownloadStats = { viewModel.refreshDownloadStats() },
                 onDeleteAllDownloads = {

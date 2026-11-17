@@ -14,6 +14,7 @@ import com.cypher.music.data.RecentlyPlayedItem
 import com.cypher.music.data.RecentlyPlayedType
 import com.cypher.music.data.RecommendationSection
 import com.cypher.music.data.ThemePreferences
+import com.cypher.music.data.StreamingPreferences
 import com.cypher.music.data.ThemePreferencesManager
 import com.cypher.music.data.UnifiedSearchResults
 import com.cypher.music.data.User
@@ -107,6 +108,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val themePreferencesManager = ThemePreferencesManager(application)
     private val motionPreferences = MotionPreferences(application)
     val reducedMotion: StateFlow<Boolean> = motionPreferences.reducedMotion
+    private val streamingPreferences = StreamingPreferences(application)
+    val proxyStreamingEnabled: StateFlow<Boolean> = streamingPreferences.proxyEnabled
+    val proxyInstanceUrl: StateFlow<String> = streamingPreferences.instanceUrl
+
+    fun setProxyStreamingEnabled(enabled: Boolean) {
+        streamingPreferences.setProxyEnabled(enabled)
+    }
+
+    fun setProxyInstanceUrl(url: String) {
+        streamingPreferences.setInstanceUrl(url)
+    }
+
     val youtubeAccountManager = YouTubeAccountManager(application)
 
     // Decoupled Domain-Specific ViewModels (SOLID architecture)
@@ -1762,6 +1775,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 put("lyrics", lyricsSettingsManager.exportJson())
                 put("home", viewPreferences.exportJson())
                 put("motion", motionPreferences.exportJson())
+                put("streaming", streamingPreferences.exportJson())
             })
 
             root.toString(2)
@@ -1899,6 +1913,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ?.let { restored = viewPreferences.importJson(it) || restored }
         settings.optString("motion", "").takeIf { it.isNotBlank() }
             ?.let { motionPreferences.importJson(it); restored = true }
+        settings.optString("streaming", "").takeIf { it.isNotBlank() }
+            ?.let { streamingPreferences.importJson(it); restored = true }
         return restored
     }
 

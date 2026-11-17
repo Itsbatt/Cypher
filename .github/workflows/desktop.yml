@@ -34,8 +34,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install WiX 3 (needed by jpackage for the MSI)
-        run: choco install wixtoolset --version=3.14.1 --no-progress -y
+      # The image already ships a newer WiX 3.14, and choco fails when asked for an
+      # older pin, so install it only when the toolset is really missing.
+      - name: Ensure WiX 3 (needed by jpackage for the MSI)
+        run: |
+          $root = "${env:ProgramFiles(x86)}\WiX Toolset v3.14in"
+          if (-not (Test-Path "$root\candle.exe")) {
+            choco install wixtoolset --no-progress -y
+          }
         shell: pwsh
 
       - name: Rebuild SMTC helper from source

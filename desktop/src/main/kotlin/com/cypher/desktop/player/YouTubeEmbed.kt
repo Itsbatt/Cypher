@@ -137,7 +137,7 @@ object YouTubeEmbed {
         }
     }
 
-    /** Where Chromium unpacks its binaries; shown in the diagnostic card. */
+    /** Where Chromium unpacks its binaries when the app does not ship them. */
     private val installDir: File get() = File(Storage.dataDir.toFile(), "cef")
 
     /**
@@ -155,8 +155,17 @@ object YouTubeEmbed {
             // A previous attempt may have built the app and failed later (no window, no
             // GPU); CefApp cannot be initialised twice in the same process.
             if (app == null) {
+                val bundled = bundledRuntime()
                 val builder = CefAppBuilder().apply {
-                    setInstallDir(installDir.also { it.mkdirs() })
+                    // The MSI and the portable ZIP carry Chromium, so there is nothing to
+                    // download or unpack on the first launch. Only a source run (or an
+                    // install without the bundled folder) installs into the data dir.
+                    if (bundled != null) {
+                        setInstallDir(bundled)
+                        setSkipInstallation(true)
+                    } else {
+                        setInstallDir(installDir.also { it.mkdirs() })
+                    }
                     // Software compositing: with the GPU path Chromium draws a blank
                     // surface inside a Compose window.
                     addJcefArgs("--disable-gpu", "--disable-gpu-compositing", "--in-process-gpu")
@@ -172,13 +181,32 @@ object YouTubeEmbed {
     }
 
     /**
+     * The Chromium folder packaged with the app, or null when it is not there (development
+     * run, or a distribution built without the CEF resources).
+     *
+     * Compose exposes its resource folder through a system property; `jpackage.app-path`
+     * is the fallback for launchers that do not set it.
+     */
+    private fun bundledRuntime(): File? {
+        val roots = buildList {
+            System.getProperty("compose.application.resources.dir")?.let { add(File(it)) }
+            System.getProperty("jpackage.app-path")?.let { exe ->
+                add(File(File(exe).parentFile, "app/resources"))
+            }
+        }
+        return roots.asSequence()
+            .map { File(it, "cef") }
+            .firstOrNull { File(it, "libcef.dll").isFile && File(it, "jcef.dll").isFile }
+    }
+
+    /**
      * Maps the bootstrap exception to something the user can act on. The order matters:
      * TLS and timeouts are IOExceptions too, so they are matched before the generic disk
      * case.
      */
     private fun diagnose(throwable: Throwable): YouTubeSetupIssue {
         val raw = throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.simpleName
-        val folder = installDir.absolutePath
+        val folder = (bundledRuntime() ?: installDir).absolutePath
         return when (throwable) {
             is javax.net.ssl.SSLException -> YouTubeSetupIssue(
                 headline = "La red bloquea la descarga de Chromium",
@@ -190,8 +218,8 @@ object YouTubeEmbed {
             is java.net.NoRouteToHostException,
             is java.net.SocketTimeoutException -> YouTubeSetupIssue(
                 headline = "No hay conexión para descargar Chromium",
-                detail = "La reproducción de YouTube usa un Chromium embebido que Cypher descarga en\n«$folder» (unos 150 MB). Esta vez el equipo no pudo conectar con el servidor de descargas.",
-                hint = "Comprueba la conexión (o el proxy) y pulsa Reintentar. Las pistas locales siguen funcionando sin esto. Detalle: $raw"
+                detail = "La reproducción de YouTube usa un Chromium embebido. Esta copia de Cypher no lo trae incluido, así que hay que descargarlo una vez (unos 150 MB) en\n«$folder», y el equipo no pudo conectar con el servidor.",
+                hint = "Comprueba la conexión (o el proxy) y pulsa Reintentar. Instalar Cypher desde el MSI o el ZIP portable evita esta descarga. Las pistas locales siguen funcionando. Detalle: $raw"
             )
             is java.io.IOException, is SecurityException -> YouTubeSetupIssue(
                 headline = "No se pudo escribir la carpeta de Chromium",

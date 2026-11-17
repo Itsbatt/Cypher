@@ -24,7 +24,7 @@ object YouTubeWindow {
             val existing = frame
             if (existing != null && existing.isDisplayable) {
                 YouTubeEmbed.openBrowser(videoId)
-                existing.title = title
+                existing.title = "YouTube · $title"
                 return@invokeLater
             }
             val browser = YouTubeEmbed.openBrowser(videoId)
@@ -39,7 +39,8 @@ object YouTubeWindow {
             created.add(browser.uiComponent, BorderLayout.CENTER)
             // Real 16:9 dimensions satisfy YouTube's iframe player, positioned off-screen to avoid visual disturbance
             created.setSize(640, 360)
-            created.setLocation(-32000, -32000)
+            created.setLocation(-10000, -10000)
+            created.isAutoRequestFocus = false
             created.focusableWindowState = false
             created.addWindowListener(object : java.awt.event.WindowAdapter() {
                 override fun windowClosing(event: java.awt.event.WindowEvent?) {
@@ -54,6 +55,7 @@ object YouTubeWindow {
 
     fun close() {
         SwingUtilities.invokeLater {
+            YouTubeEmbed.closeBrowser()
             frame?.dispose()
             frame = null
         }

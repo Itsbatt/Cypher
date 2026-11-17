@@ -177,6 +177,7 @@ class AppState {
     /** Real Windows media session; silently unavailable outside Windows. */
     private val smtc = com.cypher.desktop.player.SmtcBridge()
     private var remoteJob: Job? = null
+    private var embedJob: Job? = null
     private var resolveJob: Job? = null
     /** Consent for the importer only: memory-only, never written to disk or logged. */
     private var youtubeTokens: YouTubeOAuth.Tokens? = null
@@ -186,9 +187,15 @@ class AppState {
 
     init {
         player.onFinished = { playNext(auto = true) }
+        YouTubeEmbed.onEnded = {
+            scope.launch { playNext(auto = true) }
+        }
         // A real file taking over means the embed is no longer the source of sound.
         player.onLocalPlay = {
-            if (_state.value.embed != null) _state.update { it.copy(embed = null) }
+            if (_state.value.embed != null) {
+                YouTubeEmbed.command("pause")
+                _state.update { it.copy(embed = null) }
+            }
         }
         // Windows media keys and the system flyout drive the same queue as the app.
         smtc.onPlay = { player.resume() }
@@ -212,6 +219,7 @@ class AppState {
 
     /** Called when the window closes so Windows drops the media session. */
     fun shutdown() {
+        YouTubeWindow.close()
         smtc.close()
         player.stop()
     }
@@ -297,7 +305,6 @@ class AppState {
     fun expandPlayer() = _state.update { it.copy(playerExpanded = true) }
 
     fun collapsePlayer() {
-        if (_state.value.embed != null) YouTubeEmbed.command("pause")
         _state.update { it.copy(playerExpanded = false) }
     }
 
@@ -1277,7 +1284,8 @@ class AppState {
         val session = EmbedSession(videoId, title, artist, durationMs, resolvedArtwork)
         player.stop()
         _state.update { it.copy(embed = session, notice = "Abriendo «$title» en YouTube…") }
-        scope.launch {
+        embedJob?.cancel()
+        embedJob = scope.launch {
             // Warms Chromium up; the panel itself attaches the browser on the AWT thread.
             val started = runCatching { withContext(Dispatchers.IO) { YouTubeEmbed.prepare() } }
                 .getOrDefault(false)
@@ -1320,12 +1328,20 @@ class AppState {
                 delay(350)
                 if (YouTubeEmbed.refused) {
                     // Some songs cannot be embedded (private, age-locked, embeds disabled).
-                    // The window closes and the old download path takes over.
                     YouTubeWindow.close()
-                    _state.update {
-                        it.copy(embed = null, notice = "«$title» no se puede ver aquí: se reproduce desde el archivo.")
+                    val hasYtDlp = YouTubeMusic.binary(_state.value.data.preferences.ytDlpPath) != null
+                    if (hasYtDlp) {
+                        _state.update {
+                            it.copy(embed = null, notice = "«$title» no se puede ver aquí: se reproduce desde el archivo.")
+                        }
+                        playDownloaded(videoId, title, artist, durationMs, resolvedArtwork)
+                    } else {
+                        _state.update {
+                            it.copy(embed = null, notice = "«$title» está protegida por YouTube y requiere descarga.")
+                        }
+                        delay(2000)
+                        playNext(auto = true)
                     }
-                    playDownloaded(videoId, title, artist, durationMs, resolvedArtwork)
                     return@launch
                 }
                 val reported = YouTubeEmbed.durationMs

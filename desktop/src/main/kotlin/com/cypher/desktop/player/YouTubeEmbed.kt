@@ -54,6 +54,8 @@ object YouTubeEmbed {
     @Volatile var refused: Boolean = false
         private set
 
+    @Volatile var onEnded: (() -> Unit)? = null
+
     var browser: CefBrowser? = null
         private set
 
@@ -65,6 +67,7 @@ object YouTubeEmbed {
     private val page = """
         <!doctype html>
         <html><head><meta charset="utf-8">
+        <meta name="referrer" content="never">
         <script>
         try {
           Object.defineProperty(document, 'hidden', { value: false, writable: false });
@@ -79,14 +82,32 @@ object YouTubeEmbed {
         <script src="https://www.youtube.com/iframe_api"></script>
         <script>
         var player = null;
+        var endedSent = false;
         var videoId = new URLSearchParams(location.search).get('v') || '';
         function onYouTubeIframeAPIReady() {
           player = new YT.Player('p', {
+            host: 'https://www.youtube.com',
             videoId: videoId,
-            playerVars: {autoplay: 1, controls: 1, rel: 0, playsinline: 1, modestbranding: 1},
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              rel: 0,
+              playsinline: 1,
+              modestbranding: 1,
+              enablejsapi: 1,
+              origin: 'https://www.youtube.com'
+            },
             events: {
               onReady: function (e) { e.target.playVideo(); },
-              onError: function (e) { fetch('/err?c=' + e.data); }
+              onError: function (e) { fetch('/err?c=' + e.data); },
+              onStateChange: function (e) {
+                if (e.data === 0 && !endedSent) {
+                  endedSent = true;
+                  fetch('/ended');
+                } else if (e.data === 1) {
+                  endedSent = false;
+                }
+              }
             }
           });
           setInterval(report, 400);
@@ -101,12 +122,22 @@ object YouTubeEmbed {
         function poll() {
           fetch('/cmd').then(function (r) { return r.text(); }).then(function (c) {
             if (!c || !player) return;
-            if (c === 'play') player.playVideo();
-            else if (c === 'pause') player.pauseVideo();
-            else if (c === 'toggle') {
-              player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo();
+            if (c === 'play') {
+              if (player.playVideo) player.playVideo();
+            } else if (c === 'pause') {
+              if (player.pauseVideo) player.pauseVideo();
+            } else if (c === 'toggle') {
+              if (player.getPlayerState && player.getPlayerState() === 1) {
+                player.pauseVideo();
+              } else if (player.playVideo) {
+                player.playVideo();
+              }
             } else if (c.indexOf('seek:') === 0) {
-              player.seekTo(parseInt(c.slice(5), 10) / 1000, true);
+              if (player.seekTo) player.seekTo(parseInt(c.slice(5), 10) / 1000, true);
+            } else if (c.indexOf('load:') === 0) {
+              endedSent = false;
+              var nextId = c.slice(5);
+              if (player.loadVideoById) player.loadVideoById(nextId);
             }
           });
         }
@@ -128,7 +159,10 @@ object YouTubeEmbed {
             durationMs = 0
             playing = true
             refused = false
-            current.loadURL(url(videoId))
+            synchronized(commands) {
+                commands.clear()
+                commands.addLast("load:$videoId")
+            }
             return current
         }
         if (!ensure()) return null
@@ -139,6 +173,12 @@ object YouTubeEmbed {
         refused = false
         browser = created
         return created
+    }
+
+    fun closeBrowser() {
+        val b = browser ?: return
+        browser = null
+        runCatching { b.close(true) }
     }
 
     private fun url(videoId: String) = "http://127.0.0.1:$port/?v=$videoId"
@@ -183,11 +223,13 @@ object YouTubeEmbed {
                     addJcefArgs(
                         "--disable-gpu",
                         "--disable-gpu-compositing",
-                        "--in-process-gpu",
+                        "--disable-gpu-rasterization",
+                        "--disable-software-rasterizer",
                         "--autoplay-policy=no-user-gesture-required",
                         "--disable-background-timer-throttling",
                         "--disable-backgrounding-occluded-windows",
-                        "--disable-renderer-backgrounding"
+                        "--disable-renderer-backgrounding",
+                        "--mute-audio=false"
                     )
                 }
                 app = builder.build()
@@ -281,6 +323,10 @@ object YouTubeEmbed {
                     if (code == "100" || code == "101" || code == "150") {
                         refused = true
                     }
+                    exchange.sendResponseHeaders(204, -1)
+                }
+                "/ended" -> {
+                    onEnded?.invoke()
                     exchange.sendResponseHeaders(204, -1)
                 }
                 "/cmd" -> {

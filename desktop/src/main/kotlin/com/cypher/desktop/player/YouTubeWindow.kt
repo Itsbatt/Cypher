@@ -37,8 +37,8 @@ object YouTubeWindow {
             created.type = Window.Type.UTILITY
             created.layout = BorderLayout()
             created.add(browser.uiComponent, BorderLayout.CENTER)
-            // Positioned offscreen with 1x1 size so no popup window interrupts the user
-            created.setSize(1, 1)
+            // Real 16:9 dimensions satisfy YouTube's iframe player, positioned off-screen to avoid visual disturbance
+            created.setSize(640, 360)
             created.setLocation(-32000, -32000)
             created.focusableWindowState = false
             created.addWindowListener(object : java.awt.event.WindowAdapter() {

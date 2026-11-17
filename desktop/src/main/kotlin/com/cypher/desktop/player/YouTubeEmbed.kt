@@ -64,7 +64,15 @@ object YouTubeEmbed {
 
     private val page = """
         <!doctype html>
-        <html><head><meta charset="utf-8"><style>
+        <html><head><meta charset="utf-8">
+        <script>
+        try {
+          Object.defineProperty(document, 'hidden', { value: false, writable: false });
+          Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: false });
+          document.addEventListener('visibilitychange', function(e) { e.stopImmediatePropagation(); }, true);
+        } catch (e) {}
+        </script>
+        <style>
         html,body{margin:0;height:100%;background:#000;overflow:hidden}
         #p{width:100%;height:100%}
         </style></head><body><div id="p"></div>
@@ -116,6 +124,10 @@ object YouTubeEmbed {
     fun openBrowser(videoId: String): CefBrowser? {
         val current = browser
         if (current != null) {
+            positionMs = 0
+            durationMs = 0
+            playing = true
+            refused = false
             current.loadURL(url(videoId))
             return current
         }
@@ -167,8 +179,16 @@ object YouTubeEmbed {
                         setInstallDir(installDir.also { it.mkdirs() })
                     }
                     // Software compositing: with the GPU path Chromium draws a blank
-                    // surface inside a Compose window.
-                    addJcefArgs("--disable-gpu", "--disable-gpu-compositing", "--in-process-gpu")
+                    // surface inside a Compose window. Autoplay and timer flags allow smooth background audio.
+                    addJcefArgs(
+                        "--disable-gpu",
+                        "--disable-gpu-compositing",
+                        "--in-process-gpu",
+                        "--autoplay-policy=no-user-gesture-required",
+                        "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-renderer-backgrounding"
+                    )
                 }
                 app = builder.build()
             }
@@ -256,7 +276,11 @@ object YouTubeEmbed {
                     exchange.sendResponseHeaders(204, -1)
                 }
                 "/err" -> {
-                    refused = true
+                    val code = query["c"]
+                    // Only unplayable errors (100: not found, 101/150: embedding disabled) trigger download fallback.
+                    if (code == "100" || code == "101" || code == "150") {
+                        refused = true
+                    }
                     exchange.sendResponseHeaders(204, -1)
                 }
                 "/cmd" -> {

@@ -1276,7 +1276,7 @@ class AppState {
         val resolvedArtwork = artwork?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
         val session = EmbedSession(videoId, title, artist, durationMs, resolvedArtwork)
         player.stop()
-        _state.update { it.copy(embed = session, playerExpanded = true, notice = "Abriendo «$title» en YouTube…") }
+        _state.update { it.copy(embed = session, notice = "Abriendo «$title» en YouTube…") }
         scope.launch {
             // Warms Chromium up; the panel itself attaches the browser on the AWT thread.
             val started = runCatching { withContext(Dispatchers.IO) { YouTubeEmbed.prepare() } }

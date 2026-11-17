@@ -8,6 +8,8 @@ import com.cypher.music.network.innertube.InnerTubePageParser
 import com.cypher.music.network.innertube.InnerTubePager
 import com.cypher.music.network.innertube.PagedResult
 import com.cypher.music.network.innertube.RemotePlaylist
+import com.cypher.music.network.streaming.StreamResolvers
+import com.cypher.music.network.streaming.YouTubeHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Dns
@@ -79,16 +81,12 @@ class YouTubeDns : Dns {
 
 class YouTubeRepository {
     companion object {
-        const val ANDROID_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
-        const val CONSENT_COOKIE = "SOCS=CAESEwgDEgk2OTg1MjY2NzMaAmVzIAEaBgiA_LuuBg; CONSENT=YES+"
+        const val ANDROID_USER_AGENT = YouTubeHttp.ANDROID_USER_AGENT
+        const val CONSENT_COOKIE = YouTubeHttp.CONSENT_COOKIE
     }
 
-    private val client = OkHttpClient.Builder()
-        .dns(YouTubeDns())
-        .followRedirects(false)
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    // Shared with the streaming layer: one DNS, one timeout and one redirect policy.
+    private val client = YouTubeHttp.client
 
     suspend fun searchTracks(query: String): List<Track> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
@@ -221,135 +219,11 @@ class YouTubeRepository {
     }
 
     /**
-     * Resolves a direct audio stream URL for a YouTube videoId with multi-tier resilience:
-     * - Tier 1: yt-dlp android,ios,tv player clients (bypasses default SABR limits)
-     * - Tier 2: yt-dlp tv_embedded,mweb fallback
-     * - Tier 3: InnerTube TVHTML5/Android direct API endpoint
-     * Integrates passive telemetry to record and adapt to structural breakages.
+     * Resolves a playable audio URL through [StreamResolvers], which owns the provider
+     * list and the yt-dlp/InnerTube tiers. Kept for callers that already hold a
+     * repository; new code can use the resolver facade directly.
      */
-    suspend fun getStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
-        val cleanVid = videoId.removePrefix("yt_").trim()
-        if (cleanVid.isEmpty()) return@withContext null
-        val targetUrl = "https://www.youtube.com/watch?v=$cleanVid"
-
-        // TIER 1: yt-dlp with android,ios,tv extractor args
-        try {
-            val request = com.yausername.youtubedl_android.YoutubeDLRequest(targetUrl).apply {
-                addOption("-f", "140/bestaudio[ext=m4a]/bestaudio/best")
-                addOption("-g")
-                addOption("--extractor-args", "youtube:player_client=android,ios,tv")
-                addOption("--no-playlist")
-                addOption("--no-warnings")
-                addOption("--no-update")
-            }
-            val res = com.yausername.youtubedl_android.YoutubeDL.getInstance().execute(request)
-            val directUrl = res.out.trim().lines().firstOrNull { it.startsWith("http") }
-            if (!directUrl.isNullOrBlank()) {
-                StreamingTelemetry.recordSuccess(tier = 1)
-                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 1)
-                return@withContext directUrl
-            }
-        } catch (e: Exception) {
-            StreamingTelemetry.recordError(errorCode = 403, message = e.message, endpoint = "yt-dlp:tier1")
-            Log.w("YouTubeRepository", "yt-dlp tier 1 failed: ${e.message}, falling back to tier 2...")
-        }
-
-        // TIER 2: yt-dlp with tv_embedded and relaxed format
-        try {
-            val requestTier2 = com.yausername.youtubedl_android.YoutubeDLRequest(targetUrl).apply {
-                addOption("-f", "bestaudio/best")
-                addOption("-g")
-                addOption("--extractor-args", "youtube:player_client=tv_embedded,web_creator,mweb")
-                addOption("--no-playlist")
-                addOption("--no-warnings")
-                addOption("--no-update")
-            }
-            val res2 = com.yausername.youtubedl_android.YoutubeDL.getInstance().execute(requestTier2)
-            val directUrl2 = res2.out.trim().lines().firstOrNull { it.startsWith("http") }
-            if (!directUrl2.isNullOrBlank()) {
-                StreamingTelemetry.recordSuccess(tier = 2)
-                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 2)
-                return@withContext directUrl2
-            }
-        } catch (e2: Exception) {
-            StreamingTelemetry.recordError(errorCode = 403, message = e2.message, endpoint = "yt-dlp:tier2")
-            Log.w("YouTubeRepository", "yt-dlp tier 2 failed: ${e2.message}, attempting Tier 3 InnerTube...")
-        }
-
-        // TIER 3: Direct InnerTube API call (fallback for unauthenticated streaming)
-        try {
-            val directInnerTubeUrl = resolveInnerTubeStreamUrl(cleanVid)
-            if (!directInnerTubeUrl.isNullOrBlank()) {
-                StreamingTelemetry.recordSuccess(tier = 3)
-                StreamingTelemetry.recordTrackResolution(cleanVid, tier = 3)
-                return@withContext directInnerTubeUrl
-            }
-        } catch (e3: Exception) {
-            StreamingTelemetry.recordError(errorCode = 500, message = e3.message, endpoint = "innertube:tier3")
-            Log.e("YouTubeRepository", "Tier 3 InnerTube fallback failed: ${e3.message}")
-        }
-
-        null
-    }
-
-    private fun resolveInnerTubeStreamUrl(videoId: String): String? {
-        val payload = JSONObject().apply {
-            put("context", JSONObject().apply {
-                put("client", JSONObject().apply {
-                    put("clientName", "TVHTML5")
-                    put("clientVersion", "7.20230405.08.01")
-                    put("hl", "es")
-                    put("gl", "ES")
-                })
-            })
-            put("videoId", videoId)
-        }
-
-        val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-
-        val request = Request.Builder()
-            .url("https://www.youtube.com/youtubei/v1/player")
-            .header("User-Agent", ANDROID_USER_AGENT)
-            .post(requestBody)
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) return null
-
-        val responseBody = response.body?.string() ?: return null
-        val json = JSONObject(responseBody)
-        val streamingData = json.optJSONObject("streamingData") ?: return null
-
-        // Try adaptiveFormats first for best audio
-        val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
-        if (adaptiveFormats != null) {
-            for (i in 0 until adaptiveFormats.length()) {
-                val format = adaptiveFormats.getJSONObject(i)
-                val mimeType = format.optString("mimeType", "")
-                if (mimeType.startsWith("audio/")) {
-                    val url = format.optString("url")
-                    if (url.startsWith("http")) {
-                        return url
-                    }
-                }
-            }
-        }
-
-        // Fallback to legacy formats
-        val formats = streamingData.optJSONArray("formats")
-        if (formats != null) {
-            for (i in 0 until formats.length()) {
-                val format = formats.getJSONObject(i)
-                val url = format.optString("url")
-                if (url.startsWith("http")) {
-                    return url
-                }
-            }
-        }
-
-        return null
-    }
-
+    suspend fun getStreamUrl(videoId: String): String? = StreamResolvers.resolve(videoId)?.url
 
     private fun parseDuration(text: String): Long {
         val parts = text.split(":")

@@ -1023,7 +1023,7 @@ class MusicPlayerManager(private val context: Context) {
                         while (StreamUrlPolicy.shouldRetry(attempt)) {
                             Log.w("MusicPlayerManager", "Refreshing expired 403 stream URL for $videoId (attempt ${attempt + 1})")
                             val freshUrl = try {
-                                com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                                com.cypher.music.network.streaming.StreamResolvers.resolve(videoId)?.url
                             } catch (e: Exception) {
                                 Log.e("MusicPlayerManager", "Failed to refresh 403 stream URL", e)
                                 null
@@ -1375,7 +1375,7 @@ class MusicPlayerManager(private val context: Context) {
                 precacheJob = scope.launch(Dispatchers.IO) {
                     try {
                         Log.d("AppleMusicPlayer", "Gapless Pre-cache: Resolving next track stream: '${nextTrack.title}' ($videoId)")
-                        val url = com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                        val url = com.cypher.music.network.streaming.StreamResolvers.resolve(videoId)?.url
                         if (!url.isNullOrEmpty()) {
                             streamUrlPrecacheMap[videoId] = CachedStreamUrl(url, System.currentTimeMillis())
                             Log.i("AppleMusicPlayer", "Gapless Pre-cache: Stream ready for $videoId (tier=${com.cypher.music.network.StreamingTelemetry.lastTierFor(videoId)})")
@@ -1641,7 +1641,7 @@ class MusicPlayerManager(private val context: Context) {
                 ?.url
             val directUrl = cachedUrl ?: try {
                 withContext(Dispatchers.IO) {
-                    com.cypher.music.network.YouTubeRepository().getStreamUrl(videoId)
+                    com.cypher.music.network.streaming.StreamResolvers.resolve(videoId)?.url
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

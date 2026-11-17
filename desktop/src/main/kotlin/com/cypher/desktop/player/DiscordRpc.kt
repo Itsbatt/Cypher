@@ -24,7 +24,7 @@ import java.util.UUID
  */
 object DiscordRpc : AutoCloseable {
 
-    private const val DEFAULT_CLIENT_ID = "1124359185023385750"
+    private const val DEFAULT_CLIENT_ID = "974333933670006834"
     private const val OP_HANDSHAKE = 0
     private const val OP_FRAME = 1
     private const val OP_CLOSE = 2

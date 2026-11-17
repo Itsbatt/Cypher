@@ -24,7 +24,7 @@ import java.util.UUID
  */
 object DiscordRpc : AutoCloseable {
 
-    private const val DEFAULT_CLIENT_ID = "1176718791388975124"
+    private const val DEFAULT_CLIENT_ID = "1124359185023385750"
     private const val OP_HANDSHAKE = 0
     private const val OP_FRAME = 1
     private const val OP_CLOSE = 2
@@ -137,6 +137,10 @@ object DiscordRpc : AutoCloseable {
             ?: videoId?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
             ?: "https://raw.githubusercontent.com/Itsbatt/Cypher/main/desktop/packaging/cypher.ico"
 
+        val displayAlbum = track.album
+            .takeIf { it.isNotBlank() && !it.equals("YouTube Music", ignoreCase = true) }
+            ?: "Cypher"
+
         val activity = buildJsonObject {
             put("type", 2) // 2 = Listening to
             put("details", track.title.take(128))
@@ -149,14 +153,14 @@ object DiscordRpc : AutoCloseable {
             }
             putJsonObject("assets") {
                 put("large_image", artwork)
-                put("large_text", (track.album.takeIf { it.isNotBlank() } ?: "Cypher Desktop").take(128))
+                put("large_text", displayAlbum.take(128))
                 put("small_image", if (currentPlaying) "play" else "pause")
                 put("small_text", if (currentPlaying) "Reproduciendo" else "En pausa")
             }
             if (!videoId.isNullOrBlank()) {
                 put("buttons", buildJsonArray {
                     add(buildJsonObject {
-                        put("label", "Escuchar en YouTube")
+                        put("label", "Escuchar en Cypher")
                         put("url", "https://music.youtube.com/watch?v=$videoId")
                     })
                 })

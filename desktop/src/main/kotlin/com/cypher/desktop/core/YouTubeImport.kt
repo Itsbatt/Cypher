@@ -56,7 +56,7 @@ object YouTubeImport {
                 videoId = hit.videoId,
                 title = hit.title,
                 artist = hit.artist,
-                album = "YouTube Music",
+                album = "Cypher",
                 durationMs = hit.durationMs,
                 artworkUrl = hit.thumbnail,
                 source = "YOUTUBE",

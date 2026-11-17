@@ -45,6 +45,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.ui.text.style.TextOverflow
+import com.cypher.music.ui.components.ProxyInstanceDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -164,6 +167,10 @@ fun SettingsScreen(
     onDeleteAllDownloads: () -> Unit = {},
     reducedMotion: Boolean = false,
     onToggleReducedMotion: (Boolean) -> Unit = {},
+    proxyStreamingEnabled: Boolean = false,
+    proxyInstanceUrl: String = "",
+    onToggleProxyStreaming: (Boolean) -> Unit = {},
+    onUpdateProxyInstanceUrl: (String) -> Unit = {},
     bottomPadding: androidx.compose.ui.unit.Dp = 110.dp,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -178,6 +185,7 @@ fun SettingsScreen(
     var showHomeCustomization by remember { mutableStateOf(false) }
     var showLegalNotice by remember { mutableStateOf(false) }
     var showDeleteDownloadsConfirm by remember { mutableStateOf(false) }
+    var showProxyDialog by remember { mutableStateOf(false) }
     val legalNoticeStore = remember { LegalNoticeStore(context) }
     val scope = rememberCoroutineScope()
     // The figure is scanned from disk, so it is refreshed every time this screen
@@ -1445,6 +1453,113 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                HorizontalDivider(color = themeColors.separator, modifier = Modifier.padding(vertical = 12.dp))
+
+                // Streaming Proxy de Contingencia (Piped / Invidious)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(themeColors.accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Dns,
+                                contentDescription = null,
+                                tint = themeColors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Proxy de Contingencia (Piped/Invidious)",
+                                color = themeColors.textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            val instanceDesc = if (proxyInstanceUrl.isNotBlank()) {
+                                proxyInstanceUrl
+                            } else {
+                                "https://pipedapi.kavin.rocks"
+                            }
+                            Text(
+                                text = if (proxyStreamingEnabled) "Activo: $instanceDesc" else "Desactivado (usa yt-dlp e InnerTube directos)",
+                                color = themeColors.textSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = proxyStreamingEnabled,
+                        onCheckedChange = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            if (it && proxyInstanceUrl.isBlank()) {
+                                onUpdateProxyInstanceUrl("https://pipedapi.kavin.rocks")
+                            }
+                            onToggleProxyStreaming(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = themeColors.accent
+                        )
+                    )
+                }
+
+                if (proxyStreamingEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(themeColors.background)
+                            .border(1.dp, themeColors.separator, RoundedCornerShape(10.dp))
+                            .clickable {
+                                AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                                showProxyDialog = true
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Instancia configurada:",
+                                color = themeColors.textSecondary,
+                                fontSize = 11.sp
+                            )
+                            Text(
+                                text = proxyInstanceUrl.ifBlank { "https://pipedapi.kavin.rocks" },
+                                color = themeColors.accent,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Editar instancia",
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -2011,6 +2126,18 @@ fun SettingsScreen(
                 isUsernameDialogOpen = false
             },
             onDismiss = { isUsernameDialogOpen = false }
+        )
+    }
+
+    if (showProxyDialog) {
+        ProxyInstanceDialog(
+            currentUrl = proxyInstanceUrl,
+            themeColors = themeColors,
+            onConfirm = { url ->
+                onUpdateProxyInstanceUrl(url)
+                showProxyDialog = false
+            },
+            onDismiss = { showProxyDialog = false }
         )
     }
 }

@@ -14,8 +14,11 @@ object StreamResolvers {
     /** Built-in engine: yt-dlp tiers plus the InnerTube player call. */
     private val youTube: StreamResolver by lazy { YouTubeStreamResolver() }
 
+    /** Proxy fallback: Piped or Invidious self-hosted/public instance. */
+    private val proxied: StreamResolver by lazy { ProxiedStreamResolver() }
+
     /** Providers in priority order. A null result simply moves to the next one. */
-    private fun providers(): List<StreamResolver> = listOf(youTube)
+    internal fun providers(): List<StreamResolver> = listOf(youTube, proxied)
 
     /**
      * @return the first URL a provider could produce, with its origin; null when every

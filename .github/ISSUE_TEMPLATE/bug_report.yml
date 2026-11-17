@@ -1,0 +1,104 @@
+name: Informe de fallo
+description: Algo no funciona (audio, reproducción, cierres, interfaz, importación…).
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tomarte el tiempo de reportar. Cuanto más concreto sea el informe, antes se
+        puede reproducir y arreglar. Para fallos de seguridad usa **Security → Report a
+        vulnerability**, no este formulario.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Plataforma
+      options:
+        - Android
+        - Cypher PC (Windows)
+        - Ambas
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión de Cypher
+      description: Aparece en Ajustes. En Android incluye el versionCode si lo conoces.
+      placeholder: "Android 1.5.0 (versionCode 21) / PC 1.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Dispositivo y sistema
+      placeholder: "Pixel 7, Android 15 / Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      options:
+        - Reproducción local (FLAC, ALAC, WAV, MP3, AAC, Ogg)
+        - Streaming de YouTube Music
+        - Descargas y almacenamiento
+        - Ecualizador, normalización o temporizador
+        - Playlists, favoritos, historial o Wrapped
+        - Importación (ZIP, CSV/JSON, enlace, Spotify)
+        - Letras o tarjetas para compartir
+        - Interfaz, tema o animaciones
+        - Instalación o actualización
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Abrir …
+        2. Pulsar …
+        3. Esperar …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento real
+      description: Si hubo un cierre, indica si se repite y con qué canción o formato.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Registros o capturas
+      description: |
+        Android: Ajustes → Diagnóstico. PC: `%APPDATA%\Cypher Desktop\`. Pega el texto relevante
+        o arrastra una captura. Revisa antes que no haya rutas personales ni tokens.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: He buscado un informe parecido y no lo he encontrado.
+          required: true
+        - label: El informe no contiene datos personales, credenciales ni contenido privado.
+          required: true
+        - label: Entiendo que los bloqueos de YouTube/Google que solo rompen la reproducción son incidencias funcionales, no de seguridad.
+          required: true

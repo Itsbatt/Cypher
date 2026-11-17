@@ -30,7 +30,7 @@ Nada de este documento se ha ejecutado: es preparación.
 | `GOOGLE_WEB_CLIENT_ID` sin cambios | **verificado por digest** | SHA-256 del valor documentado = `1bfcbd7e324507e6f2ceb44ae93e5f28d36953ae595d5047b2474875724f057d`, idéntico al digest que muestra `secrets list` |
 | `GOOGLE_ALLOWED_AUDIENCES` | sin conflicto, pero **aditivo** | la implementación **une** lista + web + desktop; nunca puede *quitar* una audiencia |
 | Android usa la audiencia web | OK | `GoogleAuthGateway` lee `BuildConfig.GOOGLE_WEB_CLIENT_ID` ← `cypher.googleClientId` (cliente web) |
-| Rollback v3 utilizable | OK | `supabase/rollback/v3/` tiene los 5 módulos, es autocontenido (no importa `audiences.ts`) y usa `audience: string` |
+| Rollback v3 utilizable | OK | `experimental/supabase/rollback/v3/` tiene los 5 módulos, es autocontenido (no importa `audiences.ts`) y usa `audience: string` |
 
 **Único matiz a tener en cuenta:** `GOOGLE_ALLOWED_AUDIENCES` no sustituye a las otras
 dos variables a efectos de código: se suman. Si algún día hay que **reducir** la lista,
@@ -41,7 +41,7 @@ hay que vaciar el secreto que sobre, no basta con omitirlo en la lista.
 ## 1. Integridad previa (solo lectura)
 
 Abre **SQL Editor** en el Dashboard y ejecuta el **BLOQUE A** de
-`supabase/dashboard/phase4_integrity_readonly.sql`:
+`experimental/supabase/dashboard/phase4_integrity_readonly.sql`:
 
 ```sql
 select
@@ -86,7 +86,7 @@ expuesto.
 5. Cuando la auditoría pase, **borra el secreto antiguo** en la consola.
 
 Nunca pegues el secreto en el chat, en un commit, en `local.properties` ni en
-`supabase/`. Rotar el secreto **no invalida** los ID tokens ya emitidos: solo afecta al
+`experimental/supabase/`. Rotar el secreto **no invalida** los ID tokens ya emitidos: solo afecta al
 canje del `authorization_code`.
 
 ---
@@ -139,7 +139,7 @@ npx --yes supabase@latest functions deploy sync \
   --project-ref mdwjcphgidagmasehtsg
 ```
 
-`supabase/config.toml` aporta `verify_jwt = false`, imprescindible: la función valida
+`experimental/supabase/config.toml` aporta `verify_jwt = false`, imprescindible: la función valida
 los tokens de Google por su cuenta.
 
 El despliegue sube `index.ts`, `handler.ts`, `verify.ts`, `validation.ts`, `rpc.ts` y el
@@ -285,7 +285,7 @@ Solo después, y con autorización aparte, se puede probar un push real (idempot
 generó, o al menos en otro momento):
 
 ```bash
-sha256sum supabase/rollback/v3/*.ts
+sha256sum experimental/supabase/rollback/v3/*.ts
 ```
 
 Esperado, exactamente:
@@ -301,31 +301,31 @@ cf164c4405758cac218240cecdc0218a00b54281b983926c0f17f3923f22467c  verify.ts
 Y que la copia sea realmente la versión sin multi-audiencia:
 
 ```bash
-grep -c "audiences" supabase/rollback/v3/index.ts   # esperado: 0
-grep -n "audience: string" supabase/rollback/v3/verify.ts  # esperado: 1 línea
+grep -c "audiences" experimental/supabase/rollback/v3/index.ts   # esperado: 0
+grep -n "audience: string" experimental/supabase/rollback/v3/verify.ts  # esperado: 1 línea
 ```
 
 Estos cinco ficheros se descargaron de la función desplegada (v3) y se compararon byte
 a byte con el código activo: son idénticos. Guarda además una copia de
-`supabase/rollback/v3/` **fuera del repositorio** (por ejemplo en tu unidad de
+`experimental/supabase/rollback/v3/` **fuera del repositorio** (por ejemplo en tu unidad de
 backup): el directorio está ignorado por git y un `git clean -xdf` lo borraría.
 
 1. **Guardar la Fase B antes de sobrescribirla:**
 
    ```bash
-   mkdir -p supabase/rollback/fase-b
-   cp supabase/functions/sync/*.ts supabase/rollback/fase-b/
+   mkdir -p experimental/supabase/rollback/fase-b
+   cp experimental/supabase/functions/sync/*.ts experimental/supabase/rollback/fase-b/
    ```
 
 2. **Restaurar v3** (los 5 ficheros; `audiences.ts` puede quedarse, v3 no lo importa):
 
    ```bash
-   cp supabase/rollback/v3/*.ts supabase/functions/sync/
+   cp experimental/supabase/rollback/v3/*.ts experimental/supabase/functions/sync/
    ```
 
    Esto deja `audiences.ts` y `audiences.test.ts` en la carpeta. Son inocuos: el
    despliegue empaqueta lo que importa `index.ts`, y `index.ts` de v3 no los importa.
-   Si prefieres limpieza total, muévelos a `supabase/rollback/fase-b/`.
+   Si prefieres limpieza total, muévelos a `experimental/supabase/rollback/fase-b/`.
 
 3. **Desplegar:**
 
@@ -354,7 +354,7 @@ Solo es válido **antes** de desplegar la Fase B: en ese momento lo desplegado s
 siendo v3 y se puede descargar:
 
 ```bash
-mkdir -p build-tmp/v3/supabase && cp supabase/config.toml build-tmp/v3/supabase/
+mkdir -p build-tmp/v3/supabase && cp experimental/supabase/config.toml build-tmp/v3/supabase/
 cd build-tmp/v3 && npx --yes supabase@latest functions download sync --project-ref mdwjcphgidagmasehtsg --yes
 cd ../.. && sha256sum build-tmp/v3/supabase/functions/sync/*.ts
 ```
@@ -364,7 +364,7 @@ versión: la **activa en ese instante**, no una histórica.
 
 **Después de desplegar v4 este atajo ya no sirve**: descargaría v4, no v3. Supabase no
 expone historial de versiones, así que la única garantía es la copia verificada de
-`supabase/rollback/v3/` (y su duplicado fuera del repositorio). Si se perdió, la
+`experimental/supabase/rollback/v3/` (y su duplicado fuera del repositorio). Si se perdió, la
 recuperación pasa por reescribir los cinco módulos a mano desde este runbook y
 `git`/backup del proyecto; no hay comando que devuelva v3 desde la plataforma.
 

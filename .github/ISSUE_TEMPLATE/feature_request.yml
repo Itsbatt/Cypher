@@ -1,0 +1,54 @@
+name: Sugerencia
+description: Propón una función, una mejora de la experiencia o un cambio de comportamiento.
+title: "[Sugerencia] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cypher es un reproductor **sin cuentas y sin nube**: la biblioteca viaja en un ZIP local.
+        Las propuestas que respeten ese principio encajan mejor.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Plataforma
+      options:
+        - Android
+        - Cypher PC (Windows)
+        - Ambas
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qué problema resuelve
+      description: Describe la situación actual y por qué resulta incómoda. Evita proponer solo la solución.
+      placeholder: "Cuando escucho … tengo que …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Cómo te gustaría que funcionara. Bocetos o referencias ayudan.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Cómo lo resuelves hoy, o qué otras opciones has descartado.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: He buscado una sugerencia parecida y no la he encontrado.
+          required: true
+        - label: La propuesta funciona sin cuenta y sin servidores obligatorios.
+          required: true

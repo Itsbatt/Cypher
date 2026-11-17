@@ -125,6 +125,20 @@ Toda la documentación técnica se encuentra organizada en la carpeta [`docs/`](
 - [`docs/releases/`](docs/releases/) — Notas de versión detalladas de cada lanzamiento publicado (Android y PC).
 - [`docs/liquid-glass/`](docs/liquid-glass/) — Especificaciones técnicas de los shaders AGSL/SkSL.
 
+### Código congelado
+
+- [`experimental/supabase/`](experimental/supabase/README.md) — Backend de sincronización en
+  Supabase, retirado del producto en 1.5.0. No forma parte de ningún build; se conserva con su
+  hoja de ruta por si la nube vuelve como función opcional.
+
+---
+
+## 🤝 Comunidad y seguridad
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Cómo compilar, ejecutar los tests, estilo y flujo de ramas.
+- [`SECURITY.md`](SECURITY.md) — Cómo reportar una vulnerabilidad de forma privada.
+- Plantillas de issue para fallos, sugerencias y Pull Requests en [`.github/`](.github/).
+
 ---
 
 ## 📄 Licencia y Autoría

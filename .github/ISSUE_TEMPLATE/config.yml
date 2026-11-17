@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidad de seguridad
+    url: https://github.com/Itsbatt/Cypher/security/advisories/new
+    about: No publiques fallos de seguridad en un issue público. Usa el aviso privado (ver SECURITY.md).
+  - name: Documentación
+    url: https://github.com/Itsbatt/Cypher/tree/main/docs
+    about: Arquitectura, reportes de auditoría y notas de versión antes de abrir un issue.

@@ -1,5 +1,10 @@
 # Backend de sincronización de Cypher (Supabase)
 
+> **OBSOLETO.** La versión 1.5.0 retiró las cuentas y la nube (la biblioteca viaja en un ZIP
+> local), así que la app actual no consume este servidor. El código se conserva **congelado** en
+> [`experimental/supabase/`](../experimental/supabase/README.md) y este documento describe el
+> contrato histórico, no el producto vigente. Se mantiene solo como referencia.
+
 Implementación del servidor que consume la app 1.5.0. Respeta **exactamente** el
 contrato de `app/src/main/kotlin/com/cypher/music/sync/SyncBackend.kt`; no requiere
 ningún cambio en el cliente Android salvo apuntar `cypher.syncBaseUrl`.
@@ -75,8 +80,8 @@ Códigos: `401` token inválido/caducado, `403` cuenta confundida, `400` contrat
 
 ## Base de datos
 
-`supabase/migrations/20261111120000_sync_records.sql` (idéntico a
-`supabase/dashboard/sync_records.sql`) crea:
+`experimental/supabase/migrations/20261111120000_sync_records.sql` (idéntico a
+`experimental/supabase/dashboard/sync_records.sql`) crea:
 
 - `public.sync_records` con PK `(user_id, kind, entity_id)`, `revision` monótona,
   checks de tipo/longitud, índice `(user_id, revision)` para el pull.
@@ -100,7 +105,7 @@ solo envía los cinco tipos de registro de arriba.
 ### 1. Migración
 
 1. Supabase Dashboard → **SQL Editor** → *New query*.
-2. Pega el contenido completo de `supabase/dashboard/sync_records.sql`.
+2. Pega el contenido completo de `experimental/supabase/dashboard/sync_records.sql`.
 3. **Run**. Es idempotente: repetirlo no rompe nada.
 4. Comprobación opcional:
    ```sql
@@ -133,7 +138,7 @@ CLI (una sola vez, en tu máquina):
 ```bash
 npx supabase login                    # abre el navegador; el token se queda en tu equipo
 npx supabase link --project-ref mdwjcphgidagmasehtsg
-npx supabase functions deploy sync    # usa supabase/config.toml (verify_jwt = false)
+npx supabase functions deploy sync    # usa experimental/supabase/config.toml (verify_jwt = false)
 ```
 
 `verify_jwt = false` es imprescindible: la plataforma no debe validar el token de
@@ -165,9 +170,9 @@ No necesitan red, ni Docker, ni Supabase: generan un par RSA efímero y simulan 
 JWKS. Node 24 ejecuta TypeScript directamente.
 
 ```bash
-node --test supabase/functions/sync/verify.test.ts \
-            supabase/functions/sync/handler.test.ts \
-            supabase/functions/sync/validation.test.ts
+node --test experimental/supabase/functions/sync/verify.test.ts \
+            experimental/supabase/functions/sync/handler.test.ts \
+            experimental/supabase/functions/sync/validation.test.ts
 ```
 
 Cubren: firma válida/alterada, payload manipulado, `alg=none`, `aud`/`iss` erróneos,

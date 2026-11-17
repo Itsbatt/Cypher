@@ -69,7 +69,7 @@ Resultado: ninguna carátula tras el borrado.
 
 ## Qué hay hoy en Supabase
 
-Por contrato (validado en `supabase/functions/sync/validation.ts`), un registro PLAYLIST
+Por contrato (validado en `experimental/supabase/functions/sync/validation.ts`), un registro PLAYLIST
 guarda únicamente: `name`, `description`, `createdAt`, `updatedAt`, `isPrivate` y
 `trackIds` (array JSON de ids). **No** guarda títulos, artistas, duraciones ni carátulas de
 las canciones, y las filas escritas antes de este arreglo no tienen `tracks` ni `cover`.

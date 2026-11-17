@@ -7,7 +7,7 @@ Cypher PC 1.2.0 es una gran actualización enfocada en integración de sistema, 
 ### 1. Discord Rich Presence (RPC) Nativo
 - **Integración directa:** Cypher se conecta localmente al cliente de Discord a través de la tubería Win32 (`\\.\pipe\discord-ipc-0`..`9`) sin depender de librerías DLL externas.
 - **Información en tiempo real:** Muestra en tu perfil de Discord la canción que estás escuchando, el artista, el álbum, la carátula en alta resolución y la barra de progreso en vivo.
-- **Botón interactivo:** Permite a tus amigos abrir y escuchar la canción directamente en YouTube Music.
+- **Botón interactivo:** Permite a tus amigos abrir y escuchar la canción directamente con Cypher.
 - **Configurable:** Activable o desactivable desde la pestaña de *Ajustes*, con soporte para indicar un Client ID personalizado.
 
 ### 2. Minimizar a la Bandeja del Sistema (System Tray)

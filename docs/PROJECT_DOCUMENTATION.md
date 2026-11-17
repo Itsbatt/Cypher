@@ -3,8 +3,8 @@
 > **Nombre Oficial:** Cypher  
 > **Propietario / Autor:** itsbatt ([@Itsbatt](https://github.com/Itsbatt))  
 > **Identificador de Paquete (Package Name):** `com.cypher.music`  
-> **Versión Actual Android:** **1.5.0** (`versionCode 21`)  
-> **Versión Actual Cypher PC:** **1.1.0** (`Cypher-1.1.0.msi` / Portable)  
+> **Versión Actual Android:** **1.5.1** (`versionCode 22`)  
+> **Versión Actual Cypher PC:** **1.1.1** (`Cypher-1.1.1.msi` / Portable)  
 > **Licencia:** Código Abierto (GNU General Public License v3.0 — GPL-3.0)  
 > **Compatibilidad Android:** Android 10+ (API 29 a API 36) | `minSdk = 29`, `targetSdk = 36`, `compileSdk = 36`  
 > **Compatibilidad PC:** Windows 10 / 11 (64-bit)  
@@ -106,6 +106,14 @@ El proyecto nace con el objetivo de unificar en una experiencia visualmente cuid
 - **Personalización Integral de Paleta:** Edición en vivo de colores de fondo, paneles, tarjetas, bordes, píldoras y textos.
 - **Empaquetado Nativo:** Distribución mediante instalador por usuario MSI (`Cypher-1.1.0.msi`) y paquete portable sin requisitos previos (`Cypher-1.1.0-windows-portable.zip`).
 
+### Fase 16: Cypher Android 1.5.1 y PC 1.1.1 — Resiliencia de Streaming, CEF Offline y KSP
+- **Room en Kotlin + KSP:** Migración completa de todas las entidades, DAOs y converters a Kotlin puro con KSP (`com.google.devtools.ksp`), conservando al 100% el esquema v9 y su `identityHash`.
+- **Motor de Streaming Modular (`StreamResolver`):** Desacoplamiento total del pipeline de resolución de audio (`YouTubeStreamResolver`, `InnertubeStreamApi`, parser puro y `YouTubeHttp` unificado con DoH).
+- **Fallback de Contingencia por Proxies:** Implementación de `ProxiedStreamResolver` (Piped e Invidious) como Tier 4 resiliente ante bloqueos de IP de YouTube, configurable desde Ajustes y persistido en copias de respaldo ZIP.
+- **Chromium/CEF Pre-Empaquetado en Escritorio:** Extracción en tiempo de compilación de binarios nativos de CEF en el MSI (`Cypher-1.1.1.msi`) y ZIP portable (`Cypher-1.1.1-windows-portable.zip`), garantizando inicio 100% offline y sin descargas en frío.
+- **Diagnóstico y Autochequeo:** Incorporación de tarjeta interactiva de fallos de Chromium (`YouTubeIssueCard`) y parámetro de línea de comandos `--cef-check`.
+- **Higiene del Repositorio:** Archivado formal de Supabase en `experimental/supabase/`, incorporación de `CONTRIBUTING.md`, `SECURITY.md` y plantillas de issues y Pull Requests.
+
 ---
 
 ## 3. Arquitectura del Sistema
@@ -182,7 +190,7 @@ cd desktop
 # Generar instalador MSI
 .\gradlew.bat packageMsi
 
-# Generar versión portable (build\dist\Cypher-1.1.0-windows-portable.zip)
+# Generar versión portable (build\dist\Cypher-1.1.1-windows-portable.zip)
 .\gradlew.bat packagePortable
 ```
 

@@ -33,8 +33,8 @@ android {
     applicationId = "com.cypher.music"
     minSdk = 29
     targetSdk = 36
-    versionCode = 21
-    versionName = "1.5.0"
+    versionCode = 22
+    versionName = "1.5.1"
 
     // Identifies this exact compilation inside the APK. Two builds that only differ in
     // timestamp get a different id, so a rebuilt 1.0.6 can be told apart from the first one.

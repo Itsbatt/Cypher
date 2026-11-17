@@ -6,22 +6,23 @@
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Owner: itsbatt](https://img.shields.io/badge/Owner-itsbatt-7952b3.svg)](https://github.com/Itsbatt)
 [![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20%7C%20Windows-green.svg)](https://github.com/Itsbatt/Cypher)
-[![Android Version](https://img.shields.io/badge/Android-v1.5.0-purple.svg)](https://github.com/Itsbatt/Cypher/releases/tag/v1.5.0)
-[![PC Version](https://img.shields.io/badge/PC-v1.1.0-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.0)
+[![Android Version](https://img.shields.io/badge/Android-v1.5.1-purple.svg)](https://github.com/Itsbatt/Cypher/releases/tag/v1.5.1)
+[![PC Version](https://img.shields.io/badge/PC-v1.1.1-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)
 [![Language](https://img.shields.io/badge/Language-Kotlin%20%7C%20Java%2017-orange.svg)](https://kotlinlang.org)
 
 ---
 
 ## ✨ Características Principales
 
-### 📱 Experiencia en Android (Cypher v1.5.0)
-- **Motor híbrido de streaming y local:** Reproducción de audio local de alta definición sin pérdidas (FLAC, WAV, ALAC, MP3, AAC, Ogg Opus) y streaming de YouTube Music mediante InnerTube / yt-dlp con mecanismos automáticos de resiliencia ante cortes (fallback HTTP 403 / SABR).
+### 📱 Experiencia en Android (Cypher v1.5.1)
+- **Motor híbrido de streaming y local:** Reproducción de audio local de alta definición sin pérdidas (FLAC, WAV, ALAC, MP3, AAC, Ogg Opus) y streaming de YouTube Music mediante arquitectura desacoplada (`StreamResolver`) con InnerTube, DoH y fallback de contingencia mediante proxies (Piped / Invidious) ante bloqueos de red o 403.
 - **Suite de Audio DSP:** Normalización de volumen calibrada a -14 LUFS (`LoudnessEnhancer`), ecualizador gráfico interactivo de 5 bandas con preajustes afinados y amplificación de graves (*Bass Boost*).
 - **Temporizador de sueño con fundido suave:** Apagado inteligente programable con rampa de desvanecimiento (*fade-out*) progresiva durante los últimos 30 segundos en lugar de cortes abruptos.
 - **Acceso rápido desde el lanzador:** Atajos dinámicos en el icono de la aplicación para iniciar instantáneamente canciones favoritas y la última sesión activa.
 - **Portadas personalizadas:** Elección libre de carátulas para listas de reproducción directamente desde la galería del dispositivo.
 - **Descargas privadas y organizadas:** Almacenamiento local (en memoria interna o tarjetas MicroSD extraíbles) protegido con marcador `.nomedia` para evitar la indexación en galerías del sistema. Panel en Ajustes con desglose de espacio y opción de purga completa.
-- **Copia de seguridad en ZIP (con letras incluidas):** Exporta e importa toda tu biblioteca (playlists, favoritos, ajustes y letras descargadas) en un archivo ZIP local en `Descargas/Cypher`. Compatible al 100% con Cypher PC para transferir tu biblioteca sin cuentas ni servidores en la nube.
+- **Copia de seguridad en ZIP (con letras y ajustes):** Exporta e importa toda tu biblioteca (playlists, favoritos, ajustes de streaming/proxy y letras descargadas) en un archivo ZIP local en `Descargas/Cypher`. Compatible al 100% con Cypher PC para transferir tu biblioteca sin cuentas ni servidores en la nube.
+- **Base de datos moderna:** Room migrado al 100% a Kotlin con KSP (`com.google.devtools.ksp`), garantizando máxima velocidad y estabilidad.
 - **Gestos táctiles y cola fluida:** Desliza horizontalmente la carátula o el MiniPlayer para alternar de canción. Búsqueda en vivo dentro de la cola y reordenación de pistas mediante arrastre prolongado (*long-press drag*).
 - **Interfaz líquida (AGSL Liquid Glass):** Shaders orgánicos en tiempo real ejecutados en la GPU con dispersión cromática calculada a partir de la paleta de la carátula, con compatibilidad nativa para el modo de reducción de movimiento (*Reduced Motion*).
 - **Letras en vivo y estudio para compartir:** Sincronización precisa línea a línea desde LRCLIB con guardado local persistente (`LyricsStore`). Estudio integrado de tarjetas: selecciona hasta 6 versos, elige entre 3 estilos (Minimal, Portada o Tipografía) y exporta en 1080 px (Historia 1080×1920 o Cuadrado 1080×1080) para compartir o guardar en `Pictures/Cypher`.
@@ -30,7 +31,7 @@
 - **Android Auto y segundo plano:** Servicio multimedia en primer plano (`MediaLibraryService`) con navegación por biblioteca en sistemas de infoentretenimiento de vehículos.
 - **Actualizaciones integradas:** Verificación directa con GitHub Releases con comprobación de firmas criptográficas e instalación segura.
 
-### 💻 Experiencia en Escritorio (Cypher PC v1.1.0)
+### 💻 Experiencia en Escritorio (Cypher PC v1.1.1)
 - **Fondo líquido animado (SkSL Liquid Glass):** Efectos visuales de cristal líquido acelerados por GPU con tres campos fluidos, filos cáusticos y refracción reactiva a la portada activa.
 - **Streaming de YouTube con Chromium embebido (JCEF):** Reproducción directa mediante iframe embebido, conservando metadatos, barra de progreso y letras sincronizadas sin requerir descargas previas a disco. Chromium viaja dentro del instalador y del ZIP portable, así que el primer arranque funciona también sin conexión, detrás de un proxy o con GitHub bloqueado.
 - **Letras totalmente personalizables:** Selección de color adaptativa (tono de acento, dominante de portada o selector libre HSV/Hex) y efectos visuales animados (*Líquido*, *Neón*).
@@ -46,7 +47,7 @@
 
 Descarga las últimas versiones oficiales desde la sección de **[Releases](https://github.com/Itsbatt/Cypher/releases)**:
 
-### Android (v1.5.0)
+### Android (v1.5.1)
 - **[app-arm64-v8a-release.apk](https://github.com/Itsbatt/Cypher/releases/latest)** — Para dispositivos móviles de 64 bits (recomendado para la gran mayoría de teléfonos y tablets).
 - **[app-universal-release.apk](https://github.com/Itsbatt/Cypher/releases/latest)** — Compatible con todas las arquitecturas ABI admitidas.
 - **`SHA256SUMS.txt`** — Sumas de verificación criptográfica para verificar la integridad del APK.
@@ -56,13 +57,13 @@ Para comprobar la integridad del paquete descargado:
 sha256sum -c SHA256SUMS.txt
 ```
 
-> **Versión actual de Android:** **1.5.0** (`versionCode 21`). Compatible con Android 10 (API 29) hasta Android 16 (API 36).
+> **Versión actual de Android:** **1.5.1** (`versionCode 22`). Compatible con Android 10 (API 29) hasta Android 16 (API 36).
 
-### Cypher PC (v1.1.0)
-- **[Cypher-1.1.0.msi](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.0)** — Instalador por usuario de Windows (no requiere permisos de administrador).
-- **[Cypher-1.1.0-windows-portable.zip](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.0)** — Versión portable empaquetada lista para descomprimir y ejecutar, sin necesidad de tener Java instalado en el sistema.
+### Cypher PC (v1.1.1)
+- **[Cypher-1.1.1.msi](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)** — Instalador por usuario de Windows (no requiere permisos de administrador).
+- **[Cypher-1.1.1-windows-portable.zip](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)** — Versión portable empaquetada lista para descomprimir y ejecutar, con Java y Chromium preinstalados para funcionamiento 100% offline.
 
-> Consulta las notas completas de la versión de escritorio en [`docs/releases/PC-1.1.0.md`](docs/releases/PC-1.1.0.md).
+> Consulta las notas completas de la versión de escritorio en [`docs/releases/PC-1.1.1.md`](docs/releases/PC-1.1.1.md).
 
 ---
 

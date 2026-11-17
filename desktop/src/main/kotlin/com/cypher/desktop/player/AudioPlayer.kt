@@ -1,0 +1,156 @@
+package com.cypher.desktop.player
+
+import com.cypher.desktop.core.Track
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import java.io.File
+
+data class PlaybackState(
+    val track: Track? = null,
+    val playing: Boolean = false,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val volume: Float = 0.8f,
+    val error: String? = null,
+    val seekable: Boolean = true,
+    /** True when playback was stopped by the user or by the end of the queue. */
+    val stopped: Boolean = false
+)
+
+/**
+ * JavaFX Media decodes mp3/m4a/flac/ogg on Windows with its own codecs. When the runtime
+ * cannot load it, [available] stays false and the UI says so instead of faking playback.
+ *
+ * [onFinished] is the player's only coupling to the app: the queue decides what plays next.
+ */
+class AudioPlayer {
+
+    private val _state = MutableStateFlow(PlaybackState())
+    val state: StateFlow<PlaybackState> = _state.asStateFlow()
+
+    private var player: javafx.scene.media.MediaPlayer? = null
+    var available: Boolean = false
+        private set
+
+    /** Called on the JavaFX thread when a track reaches its end. */
+    var onFinished: (() -> Unit)? = null
+
+    fun initialize() {
+        if (available) return
+        runCatching {
+            javafx.application.Platform.startup { }
+            available = true
+        }.onFailure { error ->
+            _state.update { it.copy(error = "Reproductor no disponible: ${error.message}") }
+        }
+    }
+
+    /**
+     * Shows a track in the UI without decoding audio. Used by `--screenshots`, so the
+     * screenshots are the real window with a real player state, not a mock component.
+     */
+    fun preview(track: Track, positionMs: Long = 0, durationMs: Long = 0) {
+        _state.update {
+            it.copy(
+                track = track,
+                playing = true,
+                positionMs = positionMs,
+                durationMs = durationMs.takeIf { ms -> ms > 0 } ?: track.durationMs,
+                error = null,
+                stopped = false
+            )
+        }
+    }
+
+    fun play(track: Track) {
+        if (!available) initialize()
+        if (!available) {
+            _state.update {
+                it.copy(track = track, error = "No se pudo iniciar el motor de audio en este equipo")
+            }
+            return
+        }
+        val remote = track.path.startsWith("http://") || track.path.startsWith("https://")
+        if (!remote && !File(track.path).isFile) {
+            _state.update { it.copy(track = track, playing = false, durationMs = track.durationMs, error = "Archivo no disponible en este equipo") }
+            return
+        }
+        javafx.application.Platform.runLater {
+            runCatching {
+                player?.stop()
+                player?.dispose()
+                val source = if (remote) track.path else File(track.path).toURI().toString()
+                val media = javafx.scene.media.Media(source)
+                player = javafx.scene.media.MediaPlayer(media).apply {
+                    volume = _state.value.volume.toDouble()
+                    setOnEndOfMedia {
+                        _state.update { it.copy(playing = false, positionMs = totalDuration.toMillis().toLong()) }
+                        onFinished?.invoke()
+                    }
+                    setOnError {
+                        _state.update { current ->
+                            current.copy(
+                                playing = false,
+                                error = "No se pudo leer el archivo (${error?.message ?: "formato no soportado"})"
+                            )
+                        }
+                    }
+                    currentTimeProperty().addListener { _, _, value ->
+                        _state.update { it.copy(positionMs = value.toMillis().toLong()) }
+                    }
+                    setOnReady {
+                        _state.update { current ->
+                            current.copy(durationMs = totalDuration.toMillis().toLong().takeIf { it > 0 } ?: track.durationMs)
+                        }
+                    }
+                    play()
+                }
+                _state.update {
+                    it.copy(track = track, playing = true, durationMs = track.durationMs, error = null, positionMs = 0, stopped = false)
+                }
+            }.onFailure { error ->
+                _state.update { it.copy(error = "No se pudo reproducir: ${error.message}") }
+            }
+        }
+    }
+
+    fun toggle() {
+        val current = player ?: return
+        if (current.status == javafx.scene.media.MediaPlayer.Status.PLAYING) {
+            pause()
+        } else {
+            resume()
+        }
+    }
+
+    /** Explicit pause, used by the Windows media controls as well as the in-app button. */
+    fun pause() {
+        player?.pause()
+        _state.update { it.copy(playing = false, stopped = false) }
+    }
+
+    fun resume() {
+        val current = player ?: return
+        current.play()
+        _state.update { it.copy(playing = true, stopped = false) }
+    }
+
+    fun stop() {
+        player?.stop()
+        _state.update { it.copy(playing = false, positionMs = 0, stopped = true) }
+    }
+
+    fun seek(fraction: Float) {
+        val current = player ?: return
+        val total = current.totalDuration.toMillis()
+        if (total > 0) current.seek(javafx.util.Duration.millis(total * fraction.coerceIn(0f, 1f).toDouble()))
+    }
+
+    fun setVolume(volume: Float) {
+        val safe = volume.coerceIn(0f, 1f)
+        player?.volume = safe.toDouble()
+        _state.update { it.copy(volume = safe) }
+    }
+}

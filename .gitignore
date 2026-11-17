@@ -29,3 +29,7 @@ supabase/rollback/
 # artefactos locales de compilacion y estado de la CLI (no versionar)
 build-output/
 supabase/.temp/
+
+# Scratch: captures, logs and drivers used while testing.
+.tmp/
+.cloud-attachments/

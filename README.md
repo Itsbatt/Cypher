@@ -1,7 +1,8 @@
 # Cypher 🎵
 
-> **Cypher** is a modern, high-fidelity music player and resilient streaming client for Android 13+ (API 33-36).
-> Built with **Jetpack Compose**, **Material 3**, **AndroidX Media3**, native **AGSL GPU shaders**, and **Room (Kotlin)**.
+> **Cypher** is a modern, high-fidelity music player and resilient streaming client for Android 13+ (API 33-36) and Windows.
+> Built with **Jetpack Compose**, **Material 3**, **AndroidX Media3**, native **AGSL/SkSL GPU shaders**, **Room (Kotlin)** on the phone
+> and **Compose for Desktop** on the PC.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%2013%2B%20(API%2033%2B)-green.svg)](https://android.com)
@@ -24,6 +25,7 @@
 - **In-app equalizer**, sleep timer, Android Auto media library, QR playlist sharing, and simple history-based recommendations with an honest empty state.
 - **Sharp artwork:** 1280×720 `maxres` YouTube thumbnails with an automatic `hqdefault` fallback, one shared Coil image loader and a bounded palette cache.
 - **In-app updates:** checks GitHub Releases, verifies the APK signature/hash and hands it to the system installer.
+- **Palette you actually own:** beyond the accent, **Cypher PC** lets you repaint every surface and every text level (background, panel, card, pill, border, separator, primary/secondary/tertiary text) with an HSV picker and a hex field, live and per device.
 
 ---
 
@@ -41,7 +43,16 @@ Verify before installing:
 sha256sum -c SHA256SUMS.txt
 ```
 
-Current version: **1.0.9** (`versionCode 12`). Builds are published manually from the Releases page; the app also offers the update in Settings once a newer release exists.
+Current version: **1.5.0** (`versionCode 21`). Builds are published manually from the Releases page; the app also offers the update in Settings once a newer release exists.
+
+### Cypher PC
+
+The desktop build ships from the same Releases page:
+
+- `Cypher-1.0.0.msi` — per-user Windows installer (no administrator prompt).
+- `Cypher-1.0.0-windows-portable.zip` — portable app image, no Java needed.
+
+Both carry the whole local library, the lyrics shader and the full palette editor. Notes: [`docs/releases/PC-1.0.0.md`](docs/releases/PC-1.0.0.md).
 
 ---
 
@@ -60,6 +71,22 @@ adb install -r app/build/outputs/apk/release/app-arm64-v8a-release.apk
 ```
 
 Release builds are signed with the keystore declared in `keystore.properties` (both files are git-ignored).
+
+### Cypher PC (Windows)
+
+Needs **JDK 17+**; no Android SDK and no extra tooling.
+
+The desktop app is its own Gradle build (it does not need the Android module):
+
+```bash
+cd desktop
+./gradlew run                 # open the app
+./gradlew test                # unit tests
+./gradlew packageMsi          # MSI installer
+./gradlew packagePortable     # portable ZIP (build/dist)
+```
+
+The library lives in `%APPDATA%\Cypher Desktop\library.json`; nothing is written anywhere else.
 
 ---
 

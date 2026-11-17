@@ -89,5 +89,7 @@ jobs:
             desktop/build/dist/Cypher-*-windows-portable.zip \
             desktop/build/compose/binaries/main/msi/*.msi --clobber
         # The runner's default shell is PowerShell; this step is the same bash script
-        # the Android workflow already runs, so it needs bash explicitly.
+        # the Android workflow already runs, so it needs bash explicitly. The job runs
+        # from desktop/, but the notes and the artifacts are addressed from the repo.
         shell: bash
+        working-directory: .

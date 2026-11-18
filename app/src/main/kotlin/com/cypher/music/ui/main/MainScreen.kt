@@ -59,6 +59,7 @@ import com.cypher.music.ui.components.PlaylistImportPreviewDialog
 import com.cypher.music.ui.components.SpotifyImportSheet
 import com.cypher.music.ui.components.SpotifySyncSheet
 import com.cypher.music.ui.components.UpdateBanner
+import com.cypher.music.ui.components.CypherDeviceSheet
 import com.cypher.music.ui.components.CypherMiniPlayer
 import com.cypher.music.ui.components.CypherNavBar
 import com.cypher.music.ui.components.CypherNowPlayingModal
@@ -113,6 +114,8 @@ fun MainScreen(
 
     val currentTab by viewModel.currentTab.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
+    val isRemoteActive by viewModel.isRemoteActive.collectAsState()
+    var showDeviceSheet by remember { mutableStateOf(false) }
     val isNowPlayingExpanded by viewModel.isNowPlayingExpanded.collectAsState()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
     val reducedMotion by viewModel.reducedMotion.collectAsState()
@@ -538,6 +541,7 @@ fun MainScreen(
                     onSkipNext = { viewModel.playNext() },
                     onPrevious = { viewModel.playPrevious() },
                     onExpand = { viewModel.setNowPlayingExpanded(true) },
+                    isRemoteActive = isRemoteActive,
                     themePrefs = themePrefs,
                     accentColor = themeColors.accent,
                     currentPositionProvider = { viewModel.playbackProgress.value }
@@ -584,6 +588,8 @@ fun MainScreen(
                 onToggleRepeat = { viewModel.toggleRepeat() },
                 onToggleFavorite = { viewModel.toggleFavorite(it) },
                 onSetVolume = { viewModel.setVolume(it) },
+                isRemoteActive = isRemoteActive,
+                onOpenDevicePicker = { showDeviceSheet = true },
                 onSelectQueueIndex = { viewModel.jumpToQueueIndex(it) },
                 onRemoveQueueIndex = { viewModel.removeFromQueue(it) },
                             onClearQueue = { viewModel.clearQueue() },
@@ -881,6 +887,13 @@ fun MainScreen(
                     accent = CypherLavender
                 ),
                 onClose = { viewModel.closeWrapped() }
+            )
+        }
+
+        if (showDeviceSheet) {
+            CypherDeviceSheet(
+                onDismiss = { showDeviceSheet = false },
+                accentColor = themeColors.accent
             )
         }
     }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -66,6 +67,7 @@ fun CypherMiniPlayer(
     onSkipNext: () -> Unit,
     onPrevious: (() -> Unit)? = null,
     onExpand: () -> Unit,
+    isRemoteActive: Boolean = false,
     themePrefs: ThemePreferences = ThemePreferences(),
     accentColor: Color = Color(0xFFFA243C),
     currentPositionProvider: (() -> Float)? = null,
@@ -204,14 +206,34 @@ fun CypherMiniPlayer(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(1.dp))
-                            Text(
-                                text = shownTrack.artist,
-                                color = IosDarkTextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (isRemoteActive) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Computer,
+                                        contentDescription = "PC",
+                                        tint = Color(0xFF30D158),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Reproduciendo en PC • ${shownTrack.artist}",
+                                        color = Color(0xFF30D158),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = shownTrack.artist,
+                                    color = IosDarkTextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

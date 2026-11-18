@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Airplay
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
@@ -138,6 +139,8 @@ fun CypherNowPlayingModal(
     onOpenEqualizer: () -> Unit = {},
     onDownload: ((Track) -> Unit)? = null,
     onDeleteDownload: ((Track) -> Unit)? = null,
+    isRemoteActive: Boolean = false,
+    onOpenDevicePicker: () -> Unit = {},
     themePrefs: ThemePreferences = ThemePreferences(),
     liquidGlassConfig: LiquidGlassConfig = themePrefs.liquidGlassConfig,
     accentColor: Color = Color(0xFFFA243C),
@@ -414,52 +417,70 @@ fun CypherNowPlayingModal(
                         modifier = Modifier
                             .padding(top = 6.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.12f))
+                            .background(if (isRemoteActive) Color(0xFF30D158).copy(alpha = 0.16f) else Color.White.copy(alpha = 0.12f))
+                            .clickable { onOpenDevicePicker() }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = if (track.sourceType == AudioSourceType.LOCAL) "Lossless ALAC" else "Spatial Audio",
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp
-                            )
-
-                            if (isDownloaded) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                // Subtle, clean green dot indicator
-                                Box(
-                                    modifier = Modifier
-                                        .size(4.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF30D158))
+                            if (isRemoteActive) {
+                                Icon(
+                                    imageVector = Icons.Filled.Computer,
+                                    contentDescription = "PC",
+                                    tint = Color(0xFF30D158),
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Offline",
+                                    text = "Reproduciendo en Cypher PC",
                                     color = Color(0xFF30D158),
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp
                                 )
-                            } else if (isDownloading) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                CircularProgressIndicator(
-                                    strokeWidth = 1.2.dp,
-                                    color = accentColor,
-                                    modifier = Modifier.size(8.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                            } else {
                                 Text(
-                                    text = "$downloadPct%",
-                                    color = accentColor,
+                                    text = if (track.sourceType == AudioSourceType.LOCAL) "Lossless ALAC" else "Spatial Audio",
+                                    color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 0.5.sp
                                 )
+
+                                if (isDownloaded) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    // Subtle, clean green dot indicator
+                                    Box(
+                                        modifier = Modifier
+                                            .size(4.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF30D158))
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "Offline",
+                                        color = Color(0xFF30D158),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                } else if (isDownloading) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    CircularProgressIndicator(
+                                        strokeWidth = 1.2.dp,
+                                        color = accentColor,
+                                        modifier = Modifier.size(8.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "$downloadPct%",
+                                        color = accentColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -598,11 +619,14 @@ fun CypherNowPlayingModal(
                             )
                         }
 
-                        IconButton(onClick = { openSoundSettings(context) }) {
+                        IconButton(onClick = {
+                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                            onOpenDevicePicker()
+                        }) {
                             Icon(
-                                imageVector = Icons.Filled.Airplay,
+                                imageVector = if (isRemoteActive) Icons.Filled.Computer else Icons.Filled.Airplay,
                                 contentDescription = "Dispositivos de audio",
-                                tint = IosDarkTextSecondary,
+                                tint = if (isRemoteActive) Color(0xFF30D158) else IosDarkTextSecondary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

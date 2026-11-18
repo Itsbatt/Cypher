@@ -156,13 +156,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(userProfileStore.user.value))
     val youtubeAccountSession: StateFlow<YouTubeAccountSession> = youtubeAccountManager.session
 
-    val playerState: StateFlow<PlayerState> = playerManager.state
-    val playbackProgress: StateFlow<Float> = playerManager.playbackProgress
-    val playbackPositionMs: StateFlow<Long> = playerManager.playbackPositionMs
+    // Cypher Connect Remote Manager
+    val connectManager = com.cypher.music.playback.CypherConnectManager.getInstance(application)
+    val isRemoteActive: StateFlow<Boolean> = connectManager.isRemoteActive
+
+    val playerState: StateFlow<PlayerState> = combine(
+        playerManager.state,
+        connectManager.isRemoteActive,
+        connectManager.remotePlayerState
+    ) { localState, isRemote, remoteState ->
+        if (isRemote && remoteState.currentTrack != null) remoteState else localState
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, playerManager.state.value)
+
+    val playbackProgress: StateFlow<Float> = combine(
+        playerManager.playbackProgress,
+        connectManager.isRemoteActive,
+        connectManager.remoteProgress
+    ) { localProg, isRemote, remoteProg ->
+        if (isRemote) remoteProg else localProg
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0f)
+
+    val playbackPositionMs: StateFlow<Long> = combine(
+        playerManager.playbackPositionMs,
+        connectManager.isRemoteActive,
+        connectManager.remotePositionMs
+    ) { localPos, isRemote, remotePos ->
+        if (isRemote) remotePos else localPos
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
     val favoriteTracks: StateFlow<List<Track>> = favoritesManager.favoriteTracks
     val favoriteTrackIds: StateFlow<Set<String>> = favoritesManager.favoriteTrackIds
     val downloadedTracks: StateFlow<List<Track>> = libraryViewModel.downloadedTracks
-    val volumeFraction: StateFlow<Float> = volumeManager.volumeFraction
+
+    val volumeFraction: StateFlow<Float> = combine(
+        volumeManager.volumeFraction,
+        connectManager.isRemoteActive,
+        connectManager.remoteVolume
+    ) { localVol, isRemote, remoteVol ->
+        if (isRemote) remoteVol else localVol
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0.8f)
     val themePreferences: StateFlow<ThemePreferences> = themePreferencesManager.preferences
     val liquidGlassConfig: StateFlow<LiquidGlassConfig> = themePreferences
         .map { it.liquidGlassConfig }
@@ -678,6 +710,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playTrack(track: Track, queue: List<Track> = listOf(track)) {
+        if (connectManager.isRemoteActive.value) {
+            connectManager.setRemoteActive(false)
+        }
         playerManager.playTrack(track, queue)
         playlistRepository.recordRecentlyPlayed(
             RecentlyPlayedItem(
@@ -739,19 +774,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun togglePlayPause() {
-        playerManager.togglePlayPause()
+        if (connectManager.isRemoteActive.value) {
+            connectManager.togglePlayPause()
+        } else {
+            playerManager.togglePlayPause()
+        }
     }
 
     fun playNext() {
-        playerManager.playNext()
+        if (connectManager.isRemoteActive.value) {
+            connectManager.playNext()
+        } else {
+            playerManager.playNext()
+        }
     }
 
     fun playPrevious() {
-        playerManager.playPrevious()
+        if (connectManager.isRemoteActive.value) {
+            connectManager.playPrevious()
+        } else {
+            playerManager.playPrevious()
+        }
     }
 
     fun seekToProgress(fraction: Float) {
-        playerManager.seekToProgress(fraction)
+        if (connectManager.isRemoteActive.value) {
+            connectManager.seek(fraction)
+        } else {
+            playerManager.seekToProgress(fraction)
+        }
     }
 
     fun toggleShuffle() {
@@ -807,7 +858,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setVolume(fraction: Float) {
-        volumeManager.setVolumeFraction(fraction)
+        if (connectManager.isRemoteActive.value) {
+            connectManager.setVolume(fraction)
+        } else {
+            volumeManager.setVolumeFraction(fraction)
+        }
     }
 
     fun downloadTrack(track: Track, onComplete: ((Boolean) -> Unit)? = null) {

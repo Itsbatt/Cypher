@@ -2181,7 +2181,7 @@ fun SettingsScreen(
     }
 
     if (showCypherRemote) {
-        com.cypher.music.ui.components.CypherRemoteSheet(
+        com.cypher.music.ui.components.CypherDeviceSheet(
             onDismiss = { showCypherRemote = false }
         )
     }

@@ -253,13 +253,95 @@ fun ExpandedPlayer(playback: PlaybackState, ui: UiState, accent: Color, state: A
                     Modifier.weight(1f).fillMaxHeight()
                         .padding(horizontal = 6.dp, vertical = 8.dp)
                 ) {
+                    var sleepTimerMenuOpen by remember { mutableStateOf(false) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "LETRAS", color = Color.White.copy(alpha = 0.55f), fontSize = 10.sp,
                             letterSpacing = 1.6.sp, fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = state::collapsePlayer) {
+
+                        if (track != null) {
+                            // Start Radio button
+                            IconButton(onClick = { state.startRadio(track) }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Lucide.Radio,
+                                    contentDescription = "Iniciar Radio infinita basada en esta canción",
+                                    tint = if (ui.radioLoading) accent else Color.White.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+
+                            // Share Lyric Card button
+                            IconButton(onClick = { state.openLyricCardDialog(track) }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Lucide.Share2,
+                                    contentDescription = "Exportar tarjeta estética de letra",
+                                    tint = Color.White.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                        }
+
+                        // Sleep Timer button + Dropdown
+                        Box {
+                            IconButton(onClick = { sleepTimerMenuOpen = true }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Lucide.Timer,
+                                    contentDescription = "Temporizador de apagado",
+                                    tint = if (ui.sleepTimerRemainingSeconds != null || ui.sleepTimerMinutes != null) accent else Color.White.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = sleepTimerMenuOpen,
+                                onDismissRequest = { sleepTimerMenuOpen = false },
+                                modifier = Modifier.background(Color(0xFF1A1424))
+                            ) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("15 minutos", color = Color.White, fontSize = 12.sp) },
+                                    onClick = { state.setSleepTimer(15); sleepTimerMenuOpen = false }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("30 minutos", color = Color.White, fontSize = 12.sp) },
+                                    onClick = { state.setSleepTimer(30); sleepTimerMenuOpen = false }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("45 minutos", color = Color.White, fontSize = 12.sp) },
+                                    onClick = { state.setSleepTimer(45); sleepTimerMenuOpen = false }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("60 minutos", color = Color.White, fontSize = 12.sp) },
+                                    onClick = { state.setSleepTimer(60); sleepTimerMenuOpen = false }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Al terminar la canción", color = Color.White, fontSize = 12.sp) },
+                                    onClick = { state.setSleepTimer(0); sleepTimerMenuOpen = false }
+                                )
+                                if (ui.sleepTimerRemainingSeconds != null || ui.sleepTimerMinutes != null) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Desactivar temporizador", color = CypherColors.Danger, fontSize = 12.sp) },
+                                        onClick = { state.setSleepTimer(null); sleepTimerMenuOpen = false }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(6.dp))
+
+                        // Fullscreen Karaoke F11
+                        IconButton(onClick = { state.setFullscreenKaraoke(true) }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Lucide.Maximize,
+                                contentDescription = "Modo Karaoke F11",
+                                tint = Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+
+                        IconButton(onClick = state::collapsePlayer, modifier = Modifier.size(32.dp)) {
                             Icon(
                                 Icons.Rounded.KeyboardArrowDown, "Volver a la ventana",
                                 tint = Color.White.copy(alpha = 0.8f)

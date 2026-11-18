@@ -1786,7 +1786,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ZIP backup: the JSON above plus the lyrics, in one file the desktop imports directly.
+    // CypherPack backup: universal manifest + library + lyrics interoperable with PC.
     // It lands in Descargas/Cypher so it can be pulled to a PC without a share sheet.
     suspend fun exportBackupZip(): String? = withContext(Dispatchers.IO) {
         try {
@@ -1794,11 +1794,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (library.isBlank()) return@withContext null
             val lyrics = com.cypher.music.data.LyricsStore.exportJson(getApplication())
 
+            val manifest = """
+                {
+                    "format": "cypherpack",
+                    "version": 1,
+                    "app": "Cypher",
+                    "appVersion": "1.3.0",
+                    "createdAt": ${System.currentTimeMillis()},
+                    "device": "Android",
+                    "description": "Copia de seguridad y sincronización de Cypher"
+                }
+            """.trimIndent()
+
             val buffer = java.io.ByteArrayOutputStream()
             java.util.zip.ZipOutputStream(buffer).use { zip ->
+                zip.putNextEntry(java.util.zip.ZipEntry("manifest.json"))
+                zip.write(manifest.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+
+                zip.putNextEntry(java.util.zip.ZipEntry("library.json"))
+                zip.write(library.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+
                 zip.putNextEntry(java.util.zip.ZipEntry("cypher-library.json"))
                 zip.write(library.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
+
                 zip.putNextEntry(java.util.zip.ZipEntry("cypher-lyrics.json"))
                 zip.write(lyrics.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
@@ -1806,11 +1827,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
                 .format(java.util.Date())
-            val name = "cypher-backup-$stamp.zip"
+            val name = "cypher-backup-$stamp.cypherpack"
             val resolver = getApplication<Application>().contentResolver
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
-                put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
+                put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
                 put(
                     android.provider.MediaStore.Downloads.RELATIVE_PATH,
                     android.os.Environment.DIRECTORY_DOWNLOADS + "/Cypher"
@@ -1823,11 +1844,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             values.clear()
             values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
-            com.cypher.music.utils.DiagnosticsLog.info("Copia de seguridad", "ZIP exportado: $name")
+            com.cypher.music.utils.DiagnosticsLog.info("Copia de seguridad", "Paquete .cypherpack exportado: $name")
             "Descargas/Cypher/$name"
         } catch (e: Exception) {
-            Log.e("MainViewModel", "No se pudo exportar el ZIP", e)
-            com.cypher.music.utils.DiagnosticsLog.error("Copia de seguridad", "Falló el ZIP", e)
+            Log.e("MainViewModel", "No se pudo exportar el paquete .cypherpack", e)
+            com.cypher.music.utils.DiagnosticsLog.error("Copia de seguridad", "Falló el paquete .cypherpack", e)
             null
         }
     }

@@ -409,37 +409,50 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
         Spacer(Modifier.height(12.dp))
         SettingsCard {
             Text(
-                "Respaldo del móvil", color = CypherColors.TextPrimary,
+                "Sincronización Universal (.cypherpack)", color = CypherColors.TextPrimary,
                 fontSize = 13.sp, fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Acepta el ZIP que exporta Cypher en Android (contiene cypher-library.json) " +
-                    "o ese mismo JSON suelto. Se fusiona por id: nada se duplica.",
+                "Empaqueta toda tu biblioteca, playlists, favoritos, ajustes y carátulas en un único archivo " +
+                    ".cypherpack interoperable entre Windows y Android. Al hacer doble clic en un .cypherpack en Windows se importa automáticamente.",
                 color = CypherColors.TextTertiary, fontSize = 10.sp
             )
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(accent)
+                        .clickable {
+                            val userDownloads = File(System.getProperty("user.home"), "Downloads")
+                            val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmm").format(java.util.Date())
+                            val packFile = File(userDownloads, "cypher_backup_$stamp.cypherpack")
+                            state.exportCypherPack(packFile)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                ) {
+                    Text("Exportar .cypherpack", color = Color(0xFF14101A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
                 Box(
                     Modifier.clip(RoundedCornerShape(10.dp)).background(accent.copy(alpha = 0.18f))
                         .clickable {
                             state.openFilePicker(
                                 FilePickerConfig(
-                                    title = "Elige el respaldo de Cypher",
-                                    subtitle = "El ZIP exportado desde el móvil o su JSON.",
-                                    extensions = setOf("zip", "json"),
-                                    onPick = { files -> files.firstOrNull()?.let(state::importBackup) }
+                                    title = "Elige el paquete Cypher (.cypherpack)",
+                                    subtitle = "Paquete .cypherpack exportado desde móvil u otro PC.",
+                                    extensions = setOf("cypherpack", "zip", "json"),
+                                    onPick = { files -> files.firstOrNull()?.let { state.importCypherPack(it) } }
                                 )
                             )
                         }
                         .padding(horizontal = 14.dp, vertical = 9.dp)
                 ) {
-                    Text("Elegir archivo…", color = accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Importar paquete…", color = accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            if (ui.backupNotice != null) {
+            if (ui.backupNotice != null || ui.notice != null) {
                 Spacer(Modifier.height(8.dp))
-                Text(ui.backupNotice, color = CypherColors.TextSecondary, fontSize = 10.sp)
+                Text(ui.notice ?: ui.backupNotice.orEmpty(), color = CypherColors.TextSecondary, fontSize = 10.sp)
             }
         }
 
@@ -614,6 +627,174 @@ fun SettingsView(ui: UiState, accent: Color, state: AppState) {
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Scroll de volumen en barra de tareas", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Gira la rueda del ratón sobre el icono de Cypher junto al reloj para regular el volumen rápidamente.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.trayVolumeScroll) accent else CypherColors.Pill)
+                        .clickable { state.setTrayVolumeScroll(!ui.data.preferences.trayVolumeScroll) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.trayVolumeScroll) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.trayVolumeScroll) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Calibración acústica ReplayGain (EBU R128)", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Nivelación perceptual de volumen para que canciones de cualquier época suenen con igual presión sonora.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.replayGain) accent else CypherColors.Pill)
+                        .clickable { state.setReplayGain(!ui.data.preferences.replayGain) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.replayGain) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.replayGain) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Transición suave (Crossfade)", color = CypherColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (ui.data.preferences.crossfadeSeconds > 0) "${ui.data.preferences.crossfadeSeconds} seg" else "Desactivado",
+                        color = accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text("Mezcla progresiva de audio entre canciones consecutivas para evitar cortes abruptos.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0 to "Off", 2 to "2s", 3 to "3s", 4 to "4s", 6 to "6s").forEach { (secs, label) ->
+                        Pill(label, ui.data.preferences.crossfadeSeconds == secs, accent) {
+                            state.setCrossfadeSeconds(secs)
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionHeader("ECUALIZADOR Y PROCESAMIENTO NATIVO", accent)
+        SettingsCard {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Ecualizador de audio (10 bandas)", color = CypherColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Calibración de audio en tiempo real integrada en el motor de sonido.", color = CypherColors.TextTertiary, fontSize = 10.sp)
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (ui.data.preferences.equalizerEnabled) accent else CypherColors.Pill)
+                        .clickable { state.setEqualizerEnabled(!ui.data.preferences.equalizerEnabled) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (ui.data.preferences.equalizerEnabled) "Activado" else "Desactivado",
+                        color = if (ui.data.preferences.equalizerEnabled) Color(0xFF14101A) else CypherColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (ui.data.preferences.equalizerEnabled) {
+                Spacer(Modifier.height(14.dp))
+                Text("Perfiles de sonido", color = CypherColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "FLAT" to "Plano",
+                        "BASS_BOOST" to "Bass Boost",
+                        "ROCK" to "Rock",
+                        "POP" to "Pop",
+                        "VOCAL" to "Vocal",
+                        "ELECTRONIC" to "Electrónica"
+                    ).forEach { (presetKey, presetName) ->
+                        Pill(presetName, ui.data.preferences.equalizerPreset == presetKey, accent) {
+                            state.setEqualizerPreset(presetKey)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Refuerzo de graves (Bass Boost)", color = CypherColors.TextPrimary, fontSize = 11.sp)
+                    Text("${(ui.data.preferences.bassBoost * 100).toInt()}%", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                androidx.compose.material3.Slider(
+                    value = ui.data.preferences.bassBoost,
+                    onValueChange = { state.setBassBoost(it) },
+                    colors = androidx.compose.material3.SliderDefaults.colors(
+                        thumbColor = accent,
+                        activeTrackColor = accent
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(22.dp)
+                )
+            }
+        }
+
+        SectionHeader("CYPHER CONNECT", accent)
+        SettingsCard {
+            Text("Control remoto desde el móvil (Cypher Remote)", color = CypherColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Controla la música, pasa canciones, ajusta el volumen y ve la letra en tiempo real desde la app de Cypher en Android o cualquier navegador en tu red local.",
+                color = CypherColors.TextTertiary, fontSize = 10.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accent)
+                        .clickable { state.openConnectServerDialog() }
+                        .padding(horizontal = 14.dp, vertical = 9.dp)
+                ) {
+                    Text("Mostrar código QR de conexión", color = Color(0xFF14101A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Text("IP LAN: ${state.connectServer.lanIp}:8484", color = CypherColors.TextSecondary, fontSize = 11.sp)
             }
         }
 

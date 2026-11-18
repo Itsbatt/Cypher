@@ -201,7 +201,24 @@ data class Preferences(
     /** System-wide hotkeys (Ctrl+Alt+Space/Arrows) via Win32. */
     val globalHotkeys: Boolean = true,
     /** Dynamic volume leveling to prevent volume jumps between tracks. */
-    val normalizeVolume: Boolean = true
+    val normalizeVolume: Boolean = true,
+    // ------------------------------------------------------------- desktop v1.3.0
+    /** Crossfade duration in seconds (0 = disabled, 2..6 = crossfade). */
+    val crossfadeSeconds: Int = 3,
+    /** Whether EBU R128 / ReplayGain loudness normalization is active. */
+    val replayGain: Boolean = true,
+    /** Whether Equalizer is enabled. */
+    val equalizerEnabled: Boolean = false,
+    /** Preset name: FLAT, ROCK, POP, BASS_BOOST, VOCAL, ELECTRONIC, CUSTOM. */
+    val equalizerPreset: String = "FLAT",
+    /** 10 band gains in dB (-12.0..+12.0). */
+    val equalizerGains: List<Float> = listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+    /** Bass boost level 0.0..1.0. */
+    val bassBoost: Float = 0f,
+    /** Volume scroll on Windows System Tray / taskbar icon. */
+    val trayVolumeScroll: Boolean = true,
+    /** Cypher Connect LAN remote server port (default 8484, 0 = disabled). */
+    val connectServerPort: Int = 8484
 )
 
 /**

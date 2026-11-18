@@ -198,9 +198,14 @@ fun CypherApp(state: AppState) {
                         searchFocus.requestFocus()
                         state.openSearch()
                         true
+                    } else if (event.type == KeyEventType.KeyDown && event.key == Key.F11) {
+                        state.setFullscreenKaraoke(!ui.fullscreenKaraoke)
+                        true
                     } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-                        // Esc leaves the expanded screen first, then the search dropdown.
-                        if (ui.playerExpanded) {
+                        if (ui.fullscreenKaraoke) {
+                            state.setFullscreenKaraoke(false)
+                            true
+                        } else if (ui.playerExpanded) {
                             state.collapsePlayer()
                             true
                         } else {
@@ -268,6 +273,27 @@ fun CypherApp(state: AppState) {
                 // The expanded screen sits above the shell: same player, more room.
                 if (ui.playerExpanded) {
                     ExpandedPlayer(playback, ui, accent, state)
+                }
+
+                if (ui.fullscreenKaraoke) {
+                    FullscreenKaraokeView(playback, ui, accent, state)
+                }
+
+                ui.lyricCardDialogTrack?.let { cardTrack ->
+                    LyricCardDialog(
+                        track = cardTrack,
+                        ui = ui,
+                        accent = accent,
+                        onDismiss = { state.closeLyricCardDialog() }
+                    )
+                }
+
+                if (ui.connectServerDialogOpen) {
+                    ConnectServerDialog(
+                        state = state,
+                        accent = accent,
+                        onDismiss = { state.closeConnectServerDialog() }
+                    )
                 }
 
                 // First run: the local name, straight away. Also reachable later from

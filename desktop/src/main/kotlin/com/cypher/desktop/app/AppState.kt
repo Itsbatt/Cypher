@@ -144,6 +144,12 @@ data class UiState(
     val ytSetupIssue: com.cypher.desktop.player.YouTubeSetupIssue? = null,
     /** The song that could not open; Retry replays it once Chromium is available. */
     val ytPending: EmbedSession? = null,
+    val fullscreenKaraoke: Boolean = false,
+    val lyricCardDialogTrack: Track? = null,
+    val sleepTimerMinutes: Int? = null,
+    val sleepTimerRemainingSeconds: Int? = null,
+    val connectServerDialogOpen: Boolean = false,
+    val radioLoading: Boolean = false,
     val updateState: UpdateState = UpdateState(
         isMsi = com.cypher.desktop.core.DesktopUpdater.isMsiInstalled(),
         isPortable = com.cypher.desktop.core.Storage.isPortable
@@ -157,6 +163,17 @@ data class UiState(
  * the app keeps working offline and never depends on the account to remember anything.
  */
 class AppState {
+
+    companion object {
+        val EQUALIZER_PRESETS = mapOf(
+            "FLAT" to listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "BASS_BOOST" to listOf(7.0f, 6.0f, 4.5f, 2.0f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "ROCK" to listOf(4.5f, 3.5f, 2.0f, -1.0f, -2.0f, -1.0f, 2.0f, 4.0f, 4.5f, 5.0f),
+            "POP" to listOf(-1.5f, 1.0f, 3.0f, 4.0f, 3.5f, 1.5f, -1.0f, -1.5f, -1.0f, -1.0f),
+            "VOCAL" to listOf(-3.0f, -2.0f, 0f, 2.5f, 4.0f, 4.0f, 3.0f, 1.5f, 0f, -2.0f),
+            "ELECTRONIC" to listOf(5.0f, 4.5f, 2.0f, 0f, -2.0f, 2.0f, 1.0f, 2.5f, 4.0f, 4.5f)
+        )
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow(
@@ -178,12 +195,15 @@ class AppState {
     private val smtc = com.cypher.desktop.player.SmtcBridge()
     val trayBridge = com.cypher.desktop.ui.SystemTrayBridge()
     private val globalHotkeys = com.cypher.desktop.player.GlobalHotkeys()
+    val connectServer = com.cypher.desktop.connect.ConnectServer(this, _state.value.data.preferences.connectServerPort)
     var onRestoreWindow: (() -> Unit)? = null
     var onExitRequested: (() -> Unit)? = null
 
     private var remoteJob: Job? = null
     private var embedJob: Job? = null
     private var resolveJob: Job? = null
+    private var sleepTimerJob: Job? = null
+    private var sleepAtSongEnd: Boolean = false
     /** Consent for the importer only: memory-only, never written to disk or logged. */
     private var youtubeTokens: YouTubeOAuth.Tokens? = null
 
@@ -193,6 +213,11 @@ class AppState {
     init {
         val prefs = _state.value.data.preferences
         player.normalizeVolume = prefs.normalizeVolume
+        player.replayGain = prefs.replayGain
+        player.crossfadeSeconds = prefs.crossfadeSeconds
+        player.equalizerEnabled = prefs.equalizerEnabled
+        player.equalizerGains = prefs.equalizerGains
+        player.bassBoost = prefs.bassBoost
         com.cypher.desktop.player.DiscordRpc.enabled = prefs.discordRpc
         com.cypher.desktop.player.DiscordRpc.customClientId = prefs.discordClientId
 
@@ -202,6 +227,18 @@ class AppState {
         trayBridge.onPrevious = { playPrevious() }
         trayBridge.onRestore = { onRestoreWindow?.invoke() }
         trayBridge.onExit = { onExitRequested?.invoke() }
+        trayBridge.onVolumeUp = {
+            if (_state.value.data.preferences.trayVolumeScroll) {
+                val v = (_state.value.data.preferences.volume + 0.05f).coerceIn(0f, 1f)
+                setVolume(v)
+            }
+        }
+        trayBridge.onVolumeDown = {
+            if (_state.value.data.preferences.trayVolumeScroll) {
+                val v = (_state.value.data.preferences.volume - 0.05f).coerceIn(0f, 1f)
+                setVolume(v)
+            }
+        }
         trayBridge.initialize()
 
         // Global hotkeys (Ctrl+Alt+Space, Ctrl+Alt+Arrows)
@@ -220,9 +257,30 @@ class AppState {
             globalHotkeys.start()
         }
 
-        player.onFinished = { playNext(auto = true) }
+        player.onFinished = {
+            if (sleepAtSongEnd) {
+                sleepAtSongEnd = false
+                _state.update { it.copy(sleepTimerMinutes = null, sleepTimerRemainingSeconds = null) }
+                player.stop()
+            } else {
+                playNext(auto = true)
+            }
+        }
+        player.onCrossfadeTriggered = {
+            if (!sleepAtSongEnd) {
+                playNext(auto = true)
+            }
+        }
         YouTubeEmbed.onEnded = {
-            scope.launch { playNext(auto = true) }
+            scope.launch {
+                if (sleepAtSongEnd) {
+                    sleepAtSongEnd = false
+                    _state.update { it.copy(sleepTimerMinutes = null, sleepTimerRemainingSeconds = null) }
+                    player.stop()
+                } else {
+                    playNext(auto = true)
+                }
+            }
         }
         // A real file taking over means the embed is no longer the source of sound.
         player.onLocalPlay = {
@@ -248,6 +306,9 @@ class AppState {
             }
         }
         _state.update { it.copy(ytDlpAvailable = YouTubeMusic.binary(it.data.preferences.ytDlpPath) != null) }
+        if (_state.value.data.preferences.connectServerPort > 0) {
+            connectServer.start()
+        }
         if (com.cypher.desktop.core.DesktopUpdater.isMsiInstalled()) {
             checkForUpdates()
         }
@@ -255,6 +316,8 @@ class AppState {
 
     /** Called when the window closes so Windows drops the media session. */
     fun shutdown() {
+        sleepTimerJob?.cancel()
+        connectServer.close()
         globalHotkeys.close()
         trayBridge.close()
         com.cypher.desktop.player.DiscordRpc.close()
@@ -1483,6 +1546,185 @@ class AppState {
     fun setNormalizeVolume(enabled: Boolean) {
         player.normalizeVolume = enabled
         mutate { it.copy(preferences = it.preferences.copy(normalizeVolume = enabled)) }
+    }
+
+    fun setCrossfadeSeconds(seconds: Int) {
+        val s = seconds.coerceIn(0, 6)
+        player.crossfadeSeconds = s
+        mutate { it.copy(preferences = it.preferences.copy(crossfadeSeconds = s)) }
+    }
+
+    fun setReplayGain(enabled: Boolean) {
+        player.replayGain = enabled
+        mutate { it.copy(preferences = it.preferences.copy(replayGain = enabled)) }
+    }
+
+    fun setEqualizerEnabled(enabled: Boolean) {
+        player.equalizerEnabled = enabled
+        mutate { it.copy(preferences = it.preferences.copy(equalizerEnabled = enabled)) }
+    }
+
+    fun setEqualizerPreset(preset: String) {
+        val gains = EQUALIZER_PRESETS[preset] ?: player.equalizerGains
+        player.equalizerGains = gains
+        mutate { it.copy(preferences = it.preferences.copy(equalizerPreset = preset, equalizerGains = gains)) }
+    }
+
+    fun setEqualizerGain(index: Int, gain: Float) {
+        val current = _state.value.data.preferences.equalizerGains.toMutableList()
+        if (index in current.indices) {
+            current[index] = gain.coerceIn(-12f, 12f)
+            player.equalizerGains = current
+            mutate { it.copy(preferences = it.preferences.copy(equalizerPreset = "CUSTOM", equalizerGains = current)) }
+        }
+    }
+
+    fun setBassBoost(level: Float) {
+        val coerced = level.coerceIn(0f, 1f)
+        player.bassBoost = coerced
+        mutate { it.copy(preferences = it.preferences.copy(bassBoost = coerced)) }
+    }
+
+    fun setTrayVolumeScroll(enabled: Boolean) {
+        mutate { it.copy(preferences = it.preferences.copy(trayVolumeScroll = enabled)) }
+    }
+
+    fun setConnectServerPort(port: Int) {
+        mutate { it.copy(preferences = it.preferences.copy(connectServerPort = port)) }
+    }
+
+    fun setSleepTimer(minutes: Int?) {
+        sleepTimerJob?.cancel()
+        sleepAtSongEnd = false
+        player.sleepTimerFade = 1.0f
+
+        if (minutes == null) {
+            _state.update { it.copy(sleepTimerMinutes = null, sleepTimerRemainingSeconds = null) }
+            return
+        }
+
+        if (minutes == 0) {
+            sleepAtSongEnd = true
+            _state.update { it.copy(sleepTimerMinutes = 0, sleepTimerRemainingSeconds = null) }
+            return
+        }
+
+        val totalSeconds = minutes * 60
+        _state.update { it.copy(sleepTimerMinutes = minutes, sleepTimerRemainingSeconds = totalSeconds) }
+
+        sleepTimerJob = scope.launch {
+            var rem = totalSeconds
+            while (rem > 0) {
+                delay(1000L)
+                rem--
+                _state.update { it.copy(sleepTimerRemainingSeconds = rem) }
+
+                if (rem <= 30) {
+                    player.sleepTimerFade = (rem / 30f).coerceIn(0f, 1f)
+                }
+            }
+            player.pause()
+            player.sleepTimerFade = 1.0f
+            _state.update { it.copy(sleepTimerMinutes = null, sleepTimerRemainingSeconds = null) }
+        }
+    }
+
+    fun startRadio(seedTrack: Track) {
+        scope.launch {
+            _state.update { it.copy(radioLoading = true, notice = "Iniciando radio basada en «${seedTrack.title}»…") }
+            val videoId = if (seedTrack.id.startsWith("yt:")) {
+                seedTrack.id.removePrefix("yt:")
+            } else {
+                withContext(Dispatchers.IO) {
+                    YouTubeMusic.search("${seedTrack.artist} ${seedTrack.title}", limit = 1).firstOrNull()?.videoId
+                }
+            }
+
+            if (videoId.isNullOrBlank()) {
+                _state.update { it.copy(radioLoading = false, notice = "No se pudo encontrar la radio para esta canción.") }
+                return@launch
+            }
+
+            val hits = withContext(Dispatchers.IO) {
+                YouTubeMusic.radio(videoId, limit = 25, configured = _state.value.data.preferences.ytDlpPath)
+            }
+            if (hits.isEmpty()) {
+                _state.update { it.copy(radioLoading = false, notice = "No se pudieron obtener canciones recomendadas.") }
+                return@launch
+            }
+
+            val seedHit = MusicHit(
+                videoId = videoId,
+                title = seedTrack.title,
+                artist = seedTrack.artist,
+                durationMs = seedTrack.durationMs,
+                thumbnail = seedTrack.artwork
+            )
+
+            val fullQueue = listOf(seedHit) + hits
+            _state.update {
+                it.copy(
+                    onlineHits = fullQueue,
+                    onlineQueue = fullQueue,
+                    onlineIndex = 0,
+                    radioLoading = false,
+                    notice = "Radio iniciada: ${hits.size + 1} canciones añadidas a la cola."
+                )
+            }
+            playOnline(seedHit)
+        }
+    }
+
+    fun exportCypherPack(targetFile: File): Boolean {
+        return runCatching {
+            com.cypher.desktop.core.CypherPack.export(
+                data = snapshot(),
+                targetFile = targetFile,
+                onStatus = { s -> _state.update { it.copy(notice = s) } }
+            )
+            _state.update { it.copy(notice = "Biblioteca exportada exitosamente a ${targetFile.name}") }
+            true
+        }.getOrElse {
+            _state.update { ui -> ui.copy(notice = "Error al exportar paquete: ${it.message}") }
+            false
+        }
+    }
+
+    fun importCypherPack(file: File, merge: Boolean = true): Boolean {
+        return runCatching {
+            val updated = com.cypher.desktop.core.CypherPack.importPack(
+                file = file,
+                current = snapshot(),
+                merge = merge,
+                onStatus = { s -> _state.update { it.copy(notice = s) } }
+            )
+            mutate { updated }
+            _state.update { it.copy(notice = "Paquete ${file.name} restaurado correctamente.") }
+            true
+        }.getOrElse {
+            _state.update { ui -> ui.copy(notice = "Error al restaurar paquete: ${it.message}") }
+            false
+        }
+    }
+
+    fun setFullscreenKaraoke(enabled: Boolean) {
+        _state.update { it.copy(fullscreenKaraoke = enabled) }
+    }
+
+    fun openLyricCardDialog(track: Track) {
+        _state.update { it.copy(lyricCardDialogTrack = track) }
+    }
+
+    fun closeLyricCardDialog() {
+        _state.update { it.copy(lyricCardDialogTrack = null) }
+    }
+
+    fun openConnectServerDialog() {
+        _state.update { it.copy(connectServerDialogOpen = true) }
+    }
+
+    fun closeConnectServerDialog() {
+        _state.update { it.copy(connectServerDialogOpen = false) }
     }
 
     fun toggleShuffle() {

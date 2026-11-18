@@ -225,6 +225,8 @@ fun SettingsScreen(
     }
 
 
+    var showCypherRemote by remember { mutableStateOf(false) }
+
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -278,7 +280,24 @@ fun SettingsScreen(
         if (uri != null) {
             try {
                 val json = context.contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.bufferedReader(Charsets.UTF_8).readText()
+                    val bytes = stream.readBytes()
+                    if (bytes.size > 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()) {
+                        // ZIP / .cypherpack archive
+                        var extracted = ""
+                        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { zis ->
+                            var entry = zis.nextEntry
+                            while (entry != null) {
+                                if (entry.name == "library.json" || entry.name == "cypher-library.json") {
+                                    extracted = zis.bufferedReader(Charsets.UTF_8).readText()
+                                    break
+                                }
+                                entry = zis.nextEntry
+                            }
+                        }
+                        extracted
+                    } else {
+                        String(bytes, Charsets.UTF_8)
+                    }
                 } ?: ""
                 val summary = onImportBackup(json)
                 val settingsNote = if (summary.settingsRestored) " y los ajustes" else ""
@@ -1746,23 +1765,65 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
+        // Section: Cypher Connect (Control Remoto)
         item {
             SettingsSectionHeader(
-                title = "Datos y Almacenamiento",
-                icon = Icons.Filled.Storage,
+                title = "Cypher Connect",
+                icon = Icons.Filled.Dns,
                 tint = themeColors.accent
             )
 
             SettingsCard(themeColors = themeColors) {
                 Text(
-                    text = "Respaldo y Restauración de Base de Datos",
+                    text = "Control Remoto de PC (Cypher Remote)",
                     color = themeColors.textPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Exporta o importa playlists, favoritos y ajustes (tema, letras, pantalla de inicio y movimiento). El botón ZIP guarda además las letras descargadas en Descargas/Cypher, listo para llevarlo al PC con Cypher Desktop. El perfil, las estadísticas y los archivos de audio no se incluyen.",
+                    text = "Controla la música de tu ordenador (Cypher PC) desde este móvil en tiempo real sin moverte de la cama o el sofá.",
+                    color = themeColors.textSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(bottom = 14.dp)
+                )
+                Button(
+                    onClick = {
+                        AppHaptics.actionClick(themePrefs.hapticsEnabled)
+                        showCypherRemote = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Icon(imageVector = Icons.Filled.Dns, contentDescription = null, tint = Color(0xFF14101A), modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Abrir Cypher Remote", color = Color(0xFF14101A), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Section: Datos y Sincronización (.cypherpack)
+        item {
+            SettingsSectionHeader(
+                title = "Sincronización y Datos (.cypherpack)",
+                icon = Icons.Filled.Storage,
+                tint = themeColors.accent
+            )
+
+            SettingsCard(themeColors = themeColors) {
+                Text(
+                    text = "Sincronización Universal (.cypherpack)",
+                    color = themeColors.textPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "Empaqueta toda tu biblioteca, playlists y ajustes en un archivo .cypherpack universal compatible entre este móvil y el PC. Al abrirlo o importarlo en cualquier dispositivo se sincroniza todo al instante.",
                     color = themeColors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
@@ -1776,8 +1837,14 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            val name = "cypher_backup_${user?.username ?: "backup"}_${System.currentTimeMillis()}.json"
-                            exportLauncher.launch(name)
+                            scope.launch {
+                                val path = withContext(Dispatchers.IO) { onExportZip() }
+                                Toast.makeText(
+                                    context,
+                                    if (path != null) "Paquete guardado en $path" else "No se pudo exportar el paquete",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
                         shape = RoundedCornerShape(12.dp),
@@ -1788,45 +1855,17 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Filled.FileDownload,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = Color(0xFF14101A),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Exportar", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Exportar .cypherpack", color = Color(0xFF14101A), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
                         onClick = {
                             AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            scope.launch {
-                                val path = withContext(Dispatchers.IO) { onExportZip() }
-                                Toast.makeText(
-                                    context,
-                                    if (path != null) "ZIP guardado en $path" else "No se pudo exportar el ZIP",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent.copy(alpha = 0.18f)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.FileDownload,
-                            contentDescription = null,
-                            tint = themeColors.accent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("ZIP", color = themeColors.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Button(
-                        onClick = {
-                            AppHaptics.actionClick(themePrefs.hapticsEnabled)
-                            importLauncher.launch(arrayOf("application/json", "*/*"))
+                            importLauncher.launch(arrayOf("*/*"))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = themeColors.background),
                         shape = RoundedCornerShape(12.dp),
@@ -1842,7 +1881,7 @@ fun SettingsScreen(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Importar", color = themeColors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Importar", color = themeColors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -2138,6 +2177,12 @@ fun SettingsScreen(
                 showProxyDialog = false
             },
             onDismiss = { showProxyDialog = false }
+        )
+    }
+
+    if (showCypherRemote) {
+        com.cypher.music.ui.components.CypherRemoteSheet(
+            onDismiss = { showCypherRemote = false }
         )
     }
 }

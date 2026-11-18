@@ -26,6 +26,8 @@ class SystemTrayBridge : AutoCloseable {
     var onPrevious: (() -> Unit)? = null
     var onRestore: (() -> Unit)? = null
     var onExit: (() -> Unit)? = null
+    var onVolumeUp: (() -> Unit)? = null
+    var onVolumeDown: (() -> Unit)? = null
 
     fun initialize(iconImage: Image? = null) {
         if (!SystemTray.isSupported()) return

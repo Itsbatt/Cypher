@@ -1,6 +1,7 @@
 package com.cypher.desktop
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,8 +91,28 @@ fun main(args: Array<String>) {
     }
     application {
         val state = remember { AppState() }
-        val accent = state.state.value.data.preferences.accent
+        val ui by state.state.collectAsState()
+        val accent = ui.data.preferences.accent
         var isVisible by remember { androidx.compose.runtime.mutableStateOf(true) }
+        val windowState = rememberWindowState(size = DpSize(1320.dp, 860.dp))
+
+        LaunchedEffect(ui.fullscreenKaraoke) {
+            windowState.placement = if (ui.fullscreenKaraoke) {
+                androidx.compose.ui.window.WindowPlacement.Fullscreen
+            } else {
+                androidx.compose.ui.window.WindowPlacement.Floating
+            }
+        }
+
+        val cypherPackArg = args.firstOrNull { it.endsWith(".cypherpack", ignoreCase = true) }
+        LaunchedEffect(cypherPackArg) {
+            if (cypherPackArg != null) {
+                val packFile = java.io.File(cypherPackArg)
+                if (packFile.isFile) {
+                    state.importCypherPack(packFile)
+                }
+            }
+        }
 
         androidx.compose.runtime.DisposableEffect(state) {
             state.onRestoreWindow = {
@@ -116,7 +137,7 @@ fun main(args: Array<String>) {
             },
             title = "Cypher",
             icon = painterResource("cypher.png"),
-            state = rememberWindowState(size = DpSize(1320.dp, 860.dp))
+            state = windowState
         ) {
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(1120, 720)

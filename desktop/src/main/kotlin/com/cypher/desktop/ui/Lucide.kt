@@ -175,4 +175,20 @@ object Lucide {
             "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v5h5M10 9v1M10 12v1M10 15v1M10 18v1"
         )
     }
+
+    val Radio: ImageVector by lazy {
+        icon("lucide-radio", "M4.9 19.1C1 15.2 1 8.8 4.9 4.9M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5M12 12h.01M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5M19.1 4.9C23 8.8 23 15.2 19.1 19.1")
+    }
+
+    val Share2: ImageVector by lazy {
+        icon("lucide-share-2", "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98")
+    }
+
+    val Timer: ImageVector by lazy {
+        icon("lucide-timer", "M10 2h4M12 14v-4M4 13a8 8 0 0 1 8-7 8 8 0 1 1-5.3 14L4 17.7")
+    }
+
+    val Maximize: ImageVector by lazy {
+        icon("lucide-maximize", "M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3")
+    }
 }

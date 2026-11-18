@@ -93,6 +93,27 @@ object YouTubeMusic {
     }
 
     /**
+     * Fetches the infinite radio mix generated for [videoId].
+     * Uses YouTube's official RD playlist (`list=RD<videoId>`).
+     */
+    fun radio(videoId: String, limit: Int = 25, configured: String? = null): List<MusicHit> {
+        val cleanId = videoId.trim()
+        if (cleanId.isEmpty()) return emptyList()
+        val bin = requireBinary(configured)
+        val radioUrl = "https://www.youtube.com/watch?v=$cleanId&list=RD$cleanId"
+        return runCatching {
+            val out = run(
+                bin,
+                listOf("--flat-playlist", "--no-warnings", "-J", radioUrl),
+                timeoutSeconds = 60
+            )
+            parseEntries(out, includeUnavailable = false)
+                .filter { it.videoId.isNotBlank() && it.videoId != cleanId }
+                .take(limit)
+        }.getOrDefault(emptyList())
+    }
+
+    /**
      * ytsearch happily returns gameplay, reaction videos and 4-hour compilations before the
      * song. Very short clips and very long uploads are dropped, and titles that look like
      * anything but music are pushed to the end instead of removed (the user may still want them).

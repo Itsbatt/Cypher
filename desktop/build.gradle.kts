@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.cypher"
-version = "1.2.0"
+version = "1.3.0"
 
 kotlin {
     jvmToolchain(17)
@@ -121,7 +121,7 @@ compose.desktop {
             // leaves out unless the module is requested explicitly.
             modules("jdk.httpserver", "java.net.http")
             packageName = "CypherMusic"
-            packageVersion = "1.2.0"
+            packageVersion = "1.3.0"
             description = "Cypher Music Desktop"
             vendor = "itsbatt"
             windows {

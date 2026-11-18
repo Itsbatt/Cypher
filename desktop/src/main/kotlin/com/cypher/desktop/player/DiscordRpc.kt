@@ -138,8 +138,8 @@ object DiscordRpc : AutoCloseable {
             ?: "https://raw.githubusercontent.com/Itsbatt/Cypher/main/desktop/packaging/cypher.ico"
 
         val displayAlbum = track.album
-            .takeIf { it.isNotBlank() && !it.equals("YouTube Music", ignoreCase = true) }
-            ?: "Cypher"
+            .takeIf { it.isNotBlank() }
+            ?: "YouTube Music"
 
         val activity = buildJsonObject {
             put("type", 2) // 2 = Listening to

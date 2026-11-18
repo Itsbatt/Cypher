@@ -5,5 +5,11 @@
     connection fails instead of leaking playback URLs or share codes.
 -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- Cypher Connect allows HTTP communication with Cypher Desktop on the local LAN (port 8484) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

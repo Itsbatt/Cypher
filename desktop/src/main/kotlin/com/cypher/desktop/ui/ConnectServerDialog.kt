@@ -25,6 +25,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,8 +50,9 @@ fun ConnectServerDialog(
     accent: Color,
     onDismiss: () -> Unit
 ) {
-    val connectUrl = state.connectServer.connectUrl
-    val lanIp = state.connectServer.lanIp
+    var activeIp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(state.connectServer.lanIp) }
+    val allIps = androidx.compose.runtime.remember { state.connectServer.findAllLanIps() }
+    val connectUrl = "http://$activeIp:${state.connectServer.port}?token=${state.connectServer.token}"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -139,6 +142,37 @@ fun ConnectServerDialog(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
+                    }
+
+                    if (allIps.size > 1) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Adaptador:", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
+                            allIps.forEach { ip ->
+                                val isSelected = ip == activeIp
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSelected) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f))
+                                        .border(1.dp, if (isSelected) accent else Color.Transparent, RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            activeIp = ip
+                                            state.connectServer.activeIp = ip
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        ip,
+                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(Modifier.height(18.dp))

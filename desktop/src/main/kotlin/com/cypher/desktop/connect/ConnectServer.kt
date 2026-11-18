@@ -37,7 +37,7 @@ data class ConnectStatus(
  */
 class ConnectServer(
     private val appState: AppState,
-    private val port: Int = 8484
+    val port: Int = 8484
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(Dispatchers.Default)
@@ -49,12 +49,13 @@ class ConnectServer(
         ignoreUnknownKeys = true
     }
 
-    val lanIp: String by lazy {
-        findLanIp()
-    }
+    var activeIp: String = findLanIp()
+
+    val lanIp: String
+        get() = activeIp
 
     val connectUrl: String
-        get() = "http://$lanIp:$port?token=$token"
+        get() = "http://$activeIp:$port?token=$token"
 
     fun start() {
         if (server != null) return
@@ -235,18 +236,34 @@ class ConnectServer(
         exchange.responseBody.use { it.write(bytes) }
     }
 
-    private fun findLanIp(): String {
+    fun findLanIp(): String {
+        // 1. Direct OS routing table query for the outbound interface
+        runCatching {
+            java.net.DatagramSocket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("1.1.1.1", 80))
+                val addr = socket.localAddress.hostAddress
+                if (!addr.isNullOrBlank() && addr != "0.0.0.0" && !addr.startsWith("127.")) {
+                    return addr
+                }
+            }
+        }
+        // 2. Iterate network interfaces, filtering out virtual / vmware / vbox / wsl / docker
         return runCatching {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             var fallback = "127.0.0.1"
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
+                val name = (iface.name + " " + iface.displayName).lowercase()
                 if (iface.isLoopback || !iface.isUp) continue
+                if (name.contains("vbox") || name.contains("virtual") || name.contains("vmware") ||
+                    name.contains("wsl") || name.contains("docker") || name.contains("pseudo") ||
+                    name.contains("bluetooth") || name.contains("loopback")) continue
                 val addresses = iface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val addr = addresses.nextElement()
                     if (addr is InetAddress && !addr.isLoopbackAddress && addr.hostAddress.contains(".")) {
                         val ip = addr.hostAddress
+                        if (ip.startsWith("192.168.56.")) continue // Ignore default VirtualBox subnet
                         if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
                             return ip
                         }
@@ -256,5 +273,33 @@ class ConnectServer(
             }
             fallback
         }.getOrDefault("127.0.0.1")
+    }
+
+    fun findAllLanIps(): List<String> {
+        val list = mutableListOf<String>()
+        val primary = findLanIp()
+        if (primary != "127.0.0.1") list.add(primary)
+        runCatching {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                val name = (iface.name + " " + iface.displayName).lowercase()
+                if (iface.isLoopback || !iface.isUp) continue
+                if (name.contains("vbox") || name.contains("virtual") || name.contains("vmware") ||
+                    name.contains("wsl") || name.contains("docker") || name.contains("pseudo") ||
+                    name.contains("bluetooth")) continue
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (addr is InetAddress && !addr.isLoopbackAddress && addr.hostAddress.contains(".")) {
+                        val ip = addr.hostAddress
+                        if (ip.startsWith("192.168.56.")) continue
+                        if (!list.contains(ip)) list.add(ip)
+                    }
+                }
+            }
+        }
+        if (list.isEmpty()) list.add("127.0.0.1")
+        return list
     }
 }

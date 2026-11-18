@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.cypher.music.ui.theme.CypherLavender
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,8 +92,17 @@ fun CypherRemoteSheet(
     var isPlaying by remember { mutableStateOf(false) }
     var volume by remember { mutableFloatStateOf(0.8f) }
 
+    fun cleanIp(raw: String): String {
+        return raw.trim()
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .substringBefore(":")
+            .substringBefore("?")
+            .substringBefore("/")
+    }
+
     fun sendAction(action: String, value: String? = null) {
-        val ip = pcIp.trim().removePrefix("http://").removeSuffix("/")
+        val ip = cleanIp(pcIp)
         scope.launch(Dispatchers.IO) {
             runCatching {
                 val url = URL("http://$ip:8484/api/action")
@@ -111,11 +122,90 @@ fun CypherRemoteSheet(
         }
     }
 
+    fun testAndConnect(targetIp: String, showToastOnFail: Boolean = true) {
+        val ip = cleanIp(targetIp)
+        if (ip.isBlank()) return
+        isConnecting = true
+        scope.launch(Dispatchers.IO) {
+            val ok = runCatching {
+                val url = URL("http://$ip:8484/api/status")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 2500
+                conn.readTimeout = 2500
+                conn.responseCode == 200
+            }.getOrDefault(false)
+
+            withContext(Dispatchers.Main) {
+                isConnecting = false
+                if (ok) {
+                    pcIp = ip
+                    isConnected = true
+                    prefs.edit().putString("last_pc_ip", ip).apply()
+                    Toast.makeText(context, "¡Conectado con Cypher PC ($ip)!", Toast.LENGTH_SHORT).show()
+                } else if (showToastOnFail) {
+                    Toast.makeText(context, "No se pudo conectar con $ip:8484. Verifica que Cypher PC esté abierto en la misma red Wi-Fi.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun autoScan() {
+        isConnecting = true
+        scope.launch(Dispatchers.IO) {
+            val baseSubnet = runCatching {
+                val wm = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                val ipInt = wm?.connectionInfo?.ipAddress ?: 0
+                if (ipInt != 0) {
+                    "${ipInt and 0xFF}.${(ipInt shr 8) and 0xFF}.${(ipInt shr 16) and 0xFF}."
+                } else "192.168.1."
+            }.getOrDefault("192.168.1.")
+
+            var found: String? = null
+            coroutineScope {
+                val deferreds = (1..254).map { i ->
+                    async {
+                        val candidate = "$baseSubnet$i"
+                        val ok = runCatching {
+                            val conn = URL("http://$candidate:8484/api/status").openConnection() as HttpURLConnection
+                            conn.connectTimeout = 700
+                            conn.readTimeout = 700
+                            conn.responseCode == 200
+                        }.getOrDefault(false)
+                        if (ok) candidate else null
+                    }
+                }
+                for (d in deferreds) {
+                    val candidate = d.await()
+                    if (candidate != null) {
+                        found = candidate
+                        break
+                    }
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                isConnecting = false
+                if (found != null) {
+                    testAndConnect(found!!, showToastOnFail = false)
+                } else {
+                    Toast.makeText(context, "No se encontró ningún Cypher PC activo en $baseSubnet*. Introduce la IP manualmente.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val saved = prefs.getString("last_pc_ip", null)
+        if (!saved.isNullOrBlank() && saved.count { it == '.' } == 3) {
+            testAndConnect(saved, showToastOnFail = false)
+        }
+    }
+
     // Polling status loop
     LaunchedEffect(isConnected, pcIp) {
         if (!isConnected) return@LaunchedEffect
         while (isConnected) {
-            val ip = pcIp.trim().removePrefix("http://").removeSuffix("/")
+            val ip = cleanIp(pcIp)
             withContext(Dispatchers.IO) {
                 runCatching {
                     val url = URL("http://$ip:8484/api/status")
@@ -198,33 +288,28 @@ fun CypherRemoteSheet(
 
                 Button(
                     onClick = {
-                        isConnecting = true
-                        val ip = pcIp.trim().removePrefix("http://").removeSuffix("/")
-                        scope.launch(Dispatchers.IO) {
-                            val ok = runCatching {
-                                val url = URL("http://$ip:8484/api/status")
-                                val conn = url.openConnection() as HttpURLConnection
-                                conn.connectTimeout = 2500
-                                conn.responseCode == 200
-                            }.getOrDefault(false)
-
-                            withContext(Dispatchers.Main) {
-                                isConnecting = false
-                                if (ok) {
-                                    isConnected = true
-                                    prefs.edit().putString("last_pc_ip", ip).apply()
-                                    Toast.makeText(context, "¡Conectado con Cypher PC!", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "No se pudo conectar con $ip:8484. Verifica que Cypher PC esté abierto en la misma red Wi-Fi.", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        testAndConnect(pcIp, showToastOnFail = true)
                     },
+                    enabled = !isConnecting,
                     colors = ButtonDefaults.buttonColors(containerColor = accentColor),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
                     Text(if (isConnecting) "Conectando…" else "Conectar con PC", color = Color(0xFF14101A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        autoScan()
+                    },
+                    enabled = !isConnecting,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.10f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Text("🔍 Buscar PC automáticamente en Wi-Fi", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             } else {
                 // Connected Remote Control Panel

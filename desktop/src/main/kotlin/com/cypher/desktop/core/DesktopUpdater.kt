@@ -47,7 +47,7 @@ data class AvailableUpdate(
  */
 object DesktopUpdater {
 
-    const val CURRENT_VERSION = "1.2.0"
+    const val CURRENT_VERSION = "1.3.0"
     private const val GITHUB_RELEASES_API = "https://api.github.com/repos/Itsbatt/Cypher/releases"
     private const val CYPHER_MSI_UPGRADE_CODE = "25A9F1C7B1F695C4B9E0F2F5F2B7A601"
 
@@ -99,10 +99,19 @@ object DesktopUpdater {
             if (response.statusCode() !in 200..299) return@withContext null
 
             val releases = json.decodeFromString<List<GithubRelease>>(response.body())
-            val latestPcRelease = releases.firstOrNull { it.tagName.startsWith("pc-v") && !it.prerelease }
-                ?: return@withContext null
+            val pcReleases = releases.filter { release ->
+                val isPcTag = release.tagName.startsWith("pc-v", ignoreCase = true) ||
+                              release.tagName.startsWith("pc-", ignoreCase = true)
+                isPcTag && !release.prerelease && release.assets.any { it.name.endsWith(".msi", ignoreCase = true) }
+            }
 
-            val remoteVersion = latestPcRelease.tagName.removePrefix("pc-v")
+            val latestPcRelease = pcReleases.maxWithOrNull { a, b ->
+                val verA = a.tagName.removePrefix("pc-v").removePrefix("pc-")
+                val verB = b.tagName.removePrefix("pc-v").removePrefix("pc-")
+                compareVersions(verA, verB)
+            } ?: return@withContext null
+
+            val remoteVersion = latestPcRelease.tagName.removePrefix("pc-v").removePrefix("pc-")
             if (!isNewerVersion(CURRENT_VERSION, remoteVersion)) return@withContext null
 
             val msiAsset = latestPcRelease.assets.firstOrNull { it.name.endsWith(".msi", ignoreCase = true) }
@@ -171,16 +180,17 @@ object DesktopUpdater {
         }
     }
 
-    fun isNewerVersion(current: String, remote: String): Boolean {
-        val cParts = current.split(".").mapNotNull { it.toIntOrNull() }
-        val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val maxLen = maxOf(cParts.size, rParts.size)
+    fun compareVersions(a: String, b: String): Int {
+        val aParts = a.split(".").mapNotNull { it.toIntOrNull() }
+        val bParts = b.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(aParts.size, bParts.size)
         for (i in 0 until maxLen) {
-            val c = cParts.getOrElse(i) { 0 }
-            val r = rParts.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
+            val partA = aParts.getOrElse(i) { 0 }
+            val partB = bParts.getOrElse(i) { 0 }
+            if (partA != partB) return partA.compareTo(partB)
         }
-        return false
+        return 0
     }
+
+    fun isNewerVersion(current: String, remote: String): Boolean = compareVersions(remote, current) > 0
 }

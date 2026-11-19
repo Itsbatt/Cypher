@@ -101,4 +101,31 @@ class UpdateParsingTest {
         assertEquals(hash, UpdateInstaller.parseChecksum(hash, "Cypher-v1.0.2-arm64-v8a-release.apk"))
         assertNull(UpdateInstaller.parseChecksum(named, "missing.apk"))
     }
+
+    @Test
+    fun `ignores pc releases and desktop tags`() {
+        val mixedJson = """
+            [
+              {
+                "tag_name": "pc-v1.3.0",
+                "name": "Cypher PC 1.3.0",
+                "body": "Desktop release",
+                "assets": [
+                  { "name": "CypherMusic-1.3.0.msi", "browser_download_url": "https://example.com/Cypher.msi", "size": 100 }
+                ]
+              },
+              {
+                "tag_name": "v1.5.1",
+                "name": "Cypher 1.5.1",
+                "body": "Mobile release",
+                "assets": [
+                  { "name": "Cypher-v1.5.1-arm64-v8a-release.apk", "browser_download_url": "https://example.com/Cypher.apk", "size": 100 }
+                ]
+              }
+            ]
+        """.trimIndent()
+        val releases = GitHubUpdateClient.parseReleases(mixedJson)
+        assertEquals(1, releases.size)
+        assertEquals("1.5.1", releases.first().versionName)
+    }
 }

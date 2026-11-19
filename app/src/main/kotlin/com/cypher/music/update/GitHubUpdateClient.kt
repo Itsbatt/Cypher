@@ -69,7 +69,9 @@ object GitHubUpdateClient {
                     throw IOException("GitHub respondió HTTP ${response.code}")
                 }
                 val body = response.body?.string().orEmpty()
-                Result.success(parseReleases(body).maxByOrNull { it.version })
+                val releases = parseReleases(body)
+                    .filter { release -> release.assets.any { it.name.endsWith(".apk", ignoreCase = true) } }
+                Result.success(releases.maxByOrNull { it.version })
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -108,6 +110,8 @@ object GitHubUpdateClient {
             if (item.optBoolean("draft", false)) continue
 
             val tag = item.optString("tag_name").ifBlank { item.optString("name") }
+            // Ignore PC / Desktop releases
+            if (tag.startsWith("pc-", ignoreCase = true) || tag.startsWith("desktop-", ignoreCase = true)) continue
             val version = AppVersion.parse(tag) ?: continue
 
             val assetsJson = item.optJSONArray("assets") ?: JSONArray()

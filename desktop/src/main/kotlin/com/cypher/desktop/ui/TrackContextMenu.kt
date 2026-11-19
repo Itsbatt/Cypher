@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -240,29 +240,28 @@ private fun PlaylistSubmenuPanel(
             modifier = Modifier.padding(vertical = 4.dp)
         )
 
-        // Scrollable list of playlists
+        // Scrollable list of playlists (using Column + verticalScroll to support intrinsic measurement inside DropdownMenu)
         val filtered = remember(playlists, query) {
             if (query.isBlank()) playlists
             else playlists.filter { it.name.contains(query, ignoreCase = true) }
         }
 
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 220.dp),
+                .heightIn(max = 220.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             if (filtered.isEmpty()) {
-                item {
-                    Text(
-                        if (playlists.isEmpty()) "No hay playlists creadas" else "No se encontraron listas",
-                        color = CypherColors.TextTertiary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
-                    )
-                }
+                Text(
+                    if (playlists.isEmpty()) "No hay playlists creadas" else "No se encontraron listas",
+                    color = CypherColors.TextTertiary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
+                )
             } else {
-                items(filtered, key = { it.id }) { playlist ->
+                filtered.forEach { playlist ->
                     val isInPlaylist = playlist.trackIds.contains(trackId)
                     val interaction = remember { MutableInteractionSource() }
                     val hovered by interaction.collectIsHoveredAsState()

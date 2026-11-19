@@ -570,6 +570,7 @@ fun SlimSlider(
             }
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            if (size.width <= 0f || size.height <= 0f) return@Canvas
             val centerY = size.height / 2f
             val track = trackHeight.toPx()
             val radius = track / 2f
@@ -583,14 +584,22 @@ fun SlimSlider(
                 drawRoundRect(
                     color = if (enabled) color else color.copy(alpha = 0.4f),
                     topLeft = Offset(0f, centerY - radius),
-                    size = Size(size.width * fraction, track),
+                    size = Size((size.width * fraction).coerceIn(0f, size.width), track),
                     cornerRadius = CornerRadius(radius)
                 )
             }
+            val r = thumbRadius.toPx()
+            val minX = r
+            val maxX = size.width - r
+            val cx = if (maxX >= minX) {
+                (size.width * fraction).coerceIn(minX, maxX)
+            } else {
+                size.width / 2f
+            }
             drawCircle(
                 color = if (enabled) color else color.copy(alpha = 0.4f),
-                radius = thumbRadius.toPx(),
-                center = Offset((size.width * fraction).coerceIn(thumbRadius.toPx(), size.width - thumbRadius.toPx()), centerY)
+                radius = r,
+                center = Offset(cx, centerY)
             )
         }
     }

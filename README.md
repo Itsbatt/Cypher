@@ -7,7 +7,7 @@
 [![Owner: itsbatt](https://img.shields.io/badge/Owner-itsbatt-7952b3.svg)](https://github.com/Itsbatt)
 [![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20%7C%20Windows-green.svg)](https://github.com/Itsbatt/Cypher)
 [![Android Version](https://img.shields.io/badge/Android-v1.5.1-purple.svg)](https://github.com/Itsbatt/Cypher/releases/tag/v1.5.1)
-[![PC Version](https://img.shields.io/badge/PC-v1.2.0-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.2.0)
+[![PC Version](https://img.shields.io/badge/PC-v1.3.0-informational.svg)](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.3.0)
 [![Language](https://img.shields.io/badge/Language-Kotlin%20%7C%20Java%2017-orange.svg)](https://kotlinlang.org)
 
 ---
@@ -31,15 +31,20 @@
 - **Android Auto y segundo plano:** Servicio multimedia en primer plano (`MediaLibraryService`) con navegación por biblioteca en sistemas de infoentretenimiento de vehículos.
 - **Actualizaciones integradas:** Verificación directa con GitHub Releases con comprobación de firmas criptográficas e instalación segura.
 
-### 💻 Experiencia en Escritorio (Cypher PC v1.1.1)
-- **Fondo líquido animado (SkSL Liquid Glass):** Efectos visuales de cristal líquido acelerados por GPU con tres campos fluidos, filos cáusticos y refracción reactiva a la portada activa.
-- **Streaming de YouTube con Chromium embebido (JCEF):** Reproducción directa mediante iframe embebido, conservando metadatos, barra de progreso y letras sincronizadas sin requerir descargas previas a disco. Chromium viaja dentro del instalador y del ZIP portable, así que el primer arranque funciona también sin conexión, detrás de un proxy o con GitHub bloqueado.
-- **Letras totalmente personalizables:** Selección de color adaptativa (tono de acento, dominante de portada o selector libre HSV/Hex) y efectos visuales animados (*Líquido*, *Neón*).
-- **Vista ampliada renovada:** Carátula a gran escala con controles flotantes y barra de scrubbing integrados directamente sobre la portada al posicionar el cursor, con pausa/reanudación táctil o por clic.
-- **Personalización total de paleta:** Control minucioso y en vivo de cada superficie y nivel tipográfico (fondos, paneles laterales, tarjetas, bordes, píldoras y textos primarios/secundarios).
-- **Reproducción local de alta fidelidad:** Soporte nativo para formatos de audio mediante JavaFX Media y lectura de metadatos con jaudiotagger.
-- **Integración con Windows:** Estilizado nativo de barra de título oscura mediante llamadas a Windows DWM (JNA).
-- **Privacidad y portabilidad:** Configuración y biblioteca local almacenada en `%APPDATA%\Cypher Desktop\library.json`, sin rastreadores ni servicios externos.
+### 💻 Experiencia en Escritorio (Cypher PC v1.3.0)
+- **Cypher Connect (Control Remoto Wi-Fi / LAN):** Controla la reproducción de Cypher PC desde el móvil o navegador mediante emparejamiento con código QR o detección automática local.
+- **Menú contextual compuesto con submenú en cascada:** Menú limpio para cada pista con buscador en tiempo real («Busca una lista»), botón rápido «+ Nueva lista», indicador de canciones ya añadidas, estética con bordes redondeados y soporte para clic derecho.
+- **Ecualizador nativo de 10 bandas y perfiles DSP:** Ajuste de frecuencias de audio con presets afinados (*Bass Boost, Rock, Pop, Vocal, Acoustic, Flat*).
+- **Radio infinita dinámica (Mix / Start Radio):** Generación automática de cola continua con recomendaciones basadas en la canción actual aprovechando el motor de InnerTube.
+- **Modo Pantalla Completa Inmersivo / Karaoke (F11):** Fondo líquido fluido reactivo a la carátula con letras gigantes sincronizadas en tiempo real.
+- **Temporizador de apagado con fundido suave:** Programable (15, 30, 45, 60 min o al terminar la canción actual) con atenuación progresiva de volumen.
+- **Exportación de tarjetas de letras:** Estudio para exportar fragmentos de letras sincronizadas a 1080p o copiarlas directamente al portapapeles.
+- **Transición suave (Crossfade & Gapless):** Mezcla progresiva ajustable entre canciones para eliminar silencios bruscos.
+- **Formato universal `.cypherpack` y doble clic:** Respaldo completo de biblioteca en un solo archivo con asociación en Windows para importación directa con doble clic.
+- **Discord Rich Presence nativo (Win32 RPC):** Muestra la música, artista, álbum, progreso y carátula en tu perfil de Discord sin dependencias DLL externas.
+- **Minimizar a la bandeja del sistema (System Tray):** Segundo plano limpio junto al reloj con menú contextual rápido y atajos globales de teclado.
+- **Streaming de YouTube con Chromium embebido (JCEF):** Reproducción directa con Chromium integrado, metadatos y letras sincronizadas offline y online.
+- **Fondo líquido animado (SkSL Liquid Glass):** Efectos visuales de cristal líquido acelerados por GPU con tres campos fluidos y refracción reactiva.
 
 ---
 
@@ -59,11 +64,11 @@ sha256sum -c SHA256SUMS.txt
 
 > **Versión actual de Android:** **1.5.1** (`versionCode 22`). Compatible con Android 10 (API 29) hasta Android 16 (API 36).
 
-### Cypher PC (v1.1.1)
-- **[Cypher-1.1.1.msi](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)** — Instalador por usuario de Windows (no requiere permisos de administrador).
-- **[Cypher-1.1.1-windows-portable.zip](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.1.1)** — Versión portable empaquetada lista para descomprimir y ejecutar, con Java y Chromium preinstalados para funcionamiento 100% offline.
+### Cypher PC (v1.3.0)
+- **[CypherMusic-1.3.0.msi](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.3.0)** — Instalador por usuario de Windows (no requiere permisos de administrador).
+- **[CypherMusic-1.3.0-windows-portable.zip](https://github.com/Itsbatt/Cypher/releases/tag/pc-v1.3.0)** — Versión portable empaquetada lista para descomprimir y ejecutar, con Java y Chromium preinstalados para funcionamiento 100% offline.
 
-> Consulta las notas completas de la versión de escritorio en [`docs/releases/PC-1.1.1.md`](docs/releases/PC-1.1.1.md).
+> Consulta las notas completas de la versión de escritorio en [`docs/releases/PC-1.3.0.md`](docs/releases/PC-1.3.0.md).
 
 ---
 

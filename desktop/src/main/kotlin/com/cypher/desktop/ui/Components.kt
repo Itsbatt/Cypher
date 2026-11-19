@@ -7,6 +7,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.layout.onSizeChanged
 
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 
 import androidx.compose.ui.geometry.Size
 
@@ -337,6 +340,7 @@ fun PlaylistArtwork(
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun TrackRow(
     view: TrackView,
@@ -367,6 +371,11 @@ fun TrackRow(
                 }
             )
             .hoverable(interaction)
+            .onPointerEvent(PointerEventType.Press) { event ->
+                if (event.buttons.isSecondaryPressed) {
+                    menu = true
+                }
+            }
             .clickable(enabled = view.playable) { state.playQueue(listOf(view.id)) }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -415,36 +424,17 @@ fun TrackRow(
             IconButton(onClick = { menu = true }) {
                 Icon(Icons.Rounded.MoreVert, "Más opciones", tint = CypherColors.TextTertiary, modifier = Modifier.size(18.dp))
             }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                data.playlists.forEach { playlist ->
-                    DropdownMenuItem(
-                        text = { Text("Añadir a ${playlist.name}", fontSize = 12.sp) },
-                        onClick = { state.addToPlaylist(playlist.id, view.id); menu = false }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Reproducir a continuación", fontSize = 12.sp) },
-                    onClick = { state.playQueue(listOf(view.id)); menu = false }
-                )
-                if (onMoveUp != null) {
-                    DropdownMenuItem(
-                        text = { Text("Subir en la playlist", fontSize = 12.sp) },
-                        onClick = { onMoveUp(); menu = false }
-                    )
-                }
-                if (onMoveDown != null) {
-                    DropdownMenuItem(
-                        text = { Text("Bajar en la playlist", fontSize = 12.sp) },
-                        onClick = { onMoveDown(); menu = false }
-                    )
-                }
-                if (onRemove != null) {
-                    DropdownMenuItem(
-                        text = { Text("Quitar de la playlist", fontSize = 12.sp) },
-                        onClick = { onRemove(); menu = false }
-                    )
-                }
-            }
+            TrackContextMenu(
+                expanded = menu,
+                onDismissRequest = { menu = false },
+                view = view,
+                data = data,
+                accent = accent,
+                state = state,
+                onRemove = onRemove,
+                onMoveUp = onMoveUp,
+                onMoveDown = onMoveDown
+            )
         }
     }
 }

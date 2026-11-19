@@ -1201,6 +1201,29 @@ class AppState {
 
     fun play(track: Track) = playQueue(listOf(track.id))
 
+    fun addToQueue(trackId: String) {
+        val current = _state.value
+        if (current.queue.isEmpty()) {
+            playQueue(listOf(trackId))
+            return
+        }
+        val nextQueue = if (current.queue.contains(trackId)) current.queue else current.queue + trackId
+        _state.update { it.copy(queue = nextQueue, notice = "Añadida a la cola") }
+    }
+
+    fun playNext(trackId: String) {
+        val current = _state.value
+        if (current.queue.isEmpty()) {
+            playQueue(listOf(trackId))
+            return
+        }
+        val q = current.queue.toMutableList()
+        q.remove(trackId)
+        val insertAt = (current.queueIndex + 1).coerceIn(0, q.size)
+        q.add(insertAt, trackId)
+        _state.update { it.copy(queue = q, notice = "Se reproducirá a continuación") }
+    }
+
     fun playPlaylist(playlistId: String, shuffled: Boolean = false) {
         val data = snapshot()
         val playlist = data.playlist(playlistId) ?: return

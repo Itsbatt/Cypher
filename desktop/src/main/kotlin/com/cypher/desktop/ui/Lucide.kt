@@ -123,7 +123,26 @@ object Lucide {
 
     val ChevronDown: ImageVector by lazy { icon("lucide-chevron-down", "m6 9 6 6 6-6") }
 
+    val ChevronLeft: ImageVector by lazy { icon("lucide-chevron-left", "m15 18-6-6 6-6") }
+
     val ChevronRight: ImageVector by lazy { icon("lucide-chevron-right", "m9 18 6-6-6-6") }
+
+    val ArrowDown: ImageVector by lazy { icon("lucide-arrow-down", "m19 12-7 7-7-7M12 5v14") }
+
+    val Trash2: ImageVector by lazy {
+        icon("lucide-trash-2", "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2")
+    }
+
+    val Quote: ImageVector by lazy {
+        icon(
+            "lucide-quote",
+            "M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2zM5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"
+        )
+    }
+
+    val ListPlus: ImageVector by lazy {
+        icon("lucide-list-plus", "M11 12H3M16 6H3M16 18H3M18 9v6M21 12h-6")
+    }
 
     val List: ImageVector by lazy { icon("lucide-list", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01") }
 
